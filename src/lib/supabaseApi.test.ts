@@ -1,0 +1,72 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { newRequestId } from "./attendance";
+import { fetchWithTimeout, fromPostgrest } from "./supabaseApi";
+
+// Error shapes as returned by PostgREST for the real Waqti functions (verified on production 2026-10-29).
+describe("server error mapping", () => {
+  it("account errors raised with 42501 keep their own reason", () => {
+    expect(fromPostgrest({ code: "42501", message: "employee_inactive" }).code).toBe("employee_inactive");
+    expect(fromPostgrest({ code: "42501", message: "must_change_password" }).code).toBe("must_change_password");
+    expect(fromPostgrest({ code: "42501", message: "not_authenticated" }).code).toBe("not_authenticated");
+  });
+
+  it("a real permission error stays forbidden", () => {
+    expect(fromPostgrest({ code: "42501", message: "permission denied for function employee_punch" }).code).toBe("forbidden");
+  });
+
+  it("attendance decisions map by message whatever the SQLSTATE", () => {
+    expect(fromPostgrest({ code: "22023", message: "outside_geofence" }).code).toBe("outside_geofence");
+    expect(fromPostgrest({ code: "22023", message: "location_required" }).code).toBe("location_required");
+    expect(fromPostgrest({ code: "22023", message: "geofence_not_configured" }).code).toBe("geofence_not_configured");
+    expect(fromPostgrest({ code: "P0001", message: "state_changed" }).code).toBe("state_changed");
+    expect(fromPostgrest({ code: "P0001", message: "rate_limited" }).code).toBe("rate_limited");
+  });
+
+  it("expired token = not_authenticated", () => {
+    expect(fromPostgrest({ code: "PGRST303", message: "JWT expired" }).code).toBe("not_authenticated");
+  });
+
+  it("no SQLSTATE = no server answer = network (unknown outcome)", () => {
+    expect(fromPostgrest({ code: "", message: "TypeError: Failed to fetch" }).code).toBe("network");
+  });
+
+  it("anything else = unknown", () => {
+    expect(fromPostgrest({ code: "XX000", message: "boom" }).code).toBe("unknown");
+  });
+});
+
+describe("fetchWithTimeout (no AbortSignal.any needed)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("aborts a request that takes too long", async () => {
+    vi.stubGlobal("fetch", (_: unknown, init: RequestInit) =>
+      new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))));
+    await expect(fetchWithTimeout("https://x.test", {}, 20)).rejects.toThrow("aborted");
+  });
+
+  it("also aborts when the caller's own signal aborts", async () => {
+    vi.stubGlobal("fetch", (_: unknown, init: RequestInit) =>
+      new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))));
+    const outer = new AbortController();
+    const p = fetchWithTimeout("https://x.test", { signal: outer.signal }, 10_000);
+    outer.abort();
+    await expect(p).rejects.toThrow("aborted");
+  });
+
+  it("returns the response when the server answers in time", async () => {
+    vi.stubGlobal("fetch", async () => new Response("ok"));
+    await expect((await fetchWithTimeout("https://x.test", {}, 1000)).text()).resolves.toBe("ok");
+  });
+});
+
+describe("request id", () => {
+  it("falls back to getRandomValues when randomUUID is missing (older phones)", () => {
+    const id = newRequestId({ getRandomValues: (a) => crypto.getRandomValues(a) });
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it("is different every time", () => {
+    const fake = { getRandomValues: (a: Uint8Array<ArrayBuffer>) => crypto.getRandomValues(a) } as Pick<Crypto, "getRandomValues">;
+    expect(newRequestId(fake)).not.toBe(newRequestId(fake));
+  });
+});
