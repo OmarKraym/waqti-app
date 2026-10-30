@@ -6,7 +6,7 @@
 //   must_change = 1  (first login: forced password change)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
-// one-sided monotonic check, 24 h limit, time order.
+// one-sided monotonic check, 72 h limit, time order.
 
 import type { SessionUser, WaqtiApi } from "./api";
 import { newRequestId } from "./attendance";
@@ -18,7 +18,7 @@ const policy = (q.get("policy") ?? "geofence") as AttendanceState["location_poli
 const outside = (q.get("outside") ?? "flag") as AttendanceState["outside_action"];
 const pos = q.get("pos") ?? "inside";
 const flaky = q.get("net") === "flaky";
-const MAX_OFFLINE_MS = 24 * 3_600_000;
+const MAX_OFFLINE_MS = 72 * 3_600_000;
 const TOLERANCE_MS = 120_000;
 
 /** Stand-in for the server's signed token (the mock has nothing to protect). */

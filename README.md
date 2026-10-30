@@ -11,7 +11,7 @@ Employee attendance app for Waqti. Arabic, RTL, mobile-first, installable.
 - ✅ Connected to production (Phase 2 applied 2026-10-29). Server contract: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 - ✅ Works on older phones (no `AbortSignal.any` / `crypto.randomUUID` needed). Phone test: [`docs/PHONE_TEST.md`](docs/PHONE_TEST.md).
 - ✅ **Offline punches** (2026-10-30): saved on the phone, sent automatically when online, accepted only if
-  the phone clock is consistent and within 24 h. See `docs/API_CONTRACT.md` §3 and `docs/DECISIONS.md`.
+  the phone clock is consistent and within 72 h. See `docs/API_CONTRACT.md` §3 and `docs/DECISIONS.md`.
 
 ## Run
 

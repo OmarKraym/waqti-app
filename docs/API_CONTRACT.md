@@ -122,7 +122,7 @@ A response with **no** SQLSTATE (lost connection, timeout) is treated as `networ
 ## 3. Offline punches (Phase 3, live 2026-10-30)
 
 Decided by Omar: accepted **only if the phone clock is consistent** (no admin review), refused if it
-reaches the server **more than 24 h** after the punch, same location rules as online.
+reaches the server **more than 72 h** after the punch, same location rules as online.
 
 ### Signed time token
 
@@ -149,11 +149,11 @@ Server checks, in order (any failure = refused, nothing written):
 4. Claimed time = `p_device_time` + offset. With a monotonic value: the claimed time may not be
    more than 120 s **earlier** than `token time + monotonic` (one-sided: phones may pause that clock
    while asleep), else `clock_changed`.
-5. Token time − 5 s ≤ claimed ≤ now + 5 s, else `clock_changed`; claimed ≥ now − 24 h, else `offline_too_old`.
+5. Token time − 5 s ≤ claimed ≤ now + 5 s, else `clock_changed`; claimed ≥ now − 72 h, else `offline_too_old`.
 6. Then exactly the online rules at the claimed time: `time_order` (must be after the last event),
    `rate_limited`, `state_changed`, location policy (`outside_geofence` / `location_required` / …).
 
 The event keeps `occurred_at` = claimed time and `created_at` = receive time; `metadata.source = 'pwa_offline'`.
 
 **Residual risk (cannot be closed on the web):** someone who hand-crafts API requests can still pick a
-time between their last server contact and the sync (≤ 24 h). Normal phone-clock changes are caught.
+time between their last server contact and the sync (≤ 72 h). Normal phone-clock changes are caught.

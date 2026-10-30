@@ -48,7 +48,8 @@ Date: 2026-10-29. "Assumption" = temporary, must be confirmed (memorandum or Oma
 
 17. **Acceptance rule:** only if the phone clock is consistent (signed server-time token + offset check +
     one-sided monotonic check). No admin review flag.
-18. **Limit:** refused if it reaches the server more than 24 h after the punch.
+18. **Limit:** refused if it reaches the server more than 72 h after the punch
+    (was 24 h; raised to 72 h by Omar on 2026-10-30 to cover the Friday–Saturday weekend).
 19. **Location:** same rules as online; geofence + reject → refused at sync and shown to the employee.
 20. **Queue:** in localStorage, per user, survives logout and app restarts; same request_id forever.
     Sent when the app is open and online (on start, on reconnect, every 30 s). No background sync
@@ -60,7 +61,7 @@ Date: 2026-10-29. "Assumption" = temporary, must be confirmed (memorandum or Oma
 ### Known risks
 - R1. A phone whose clock is corrected automatically while offline (e.g. wrong manual time fixed by
   the network later) is refused as `clock_changed`. Employees should keep "automatic time" on.
-- R2. **Weekend gap:** a check-out made offline on Thursday evening and sent on Sunday morning is older
-  than 24 h and is refused. The app warns the employee to open it with internet within 24 h.
-- R3. Hand-crafted API requests can choose a time inside [last server contact, sync] (≤ 24 h).
+- ~~R2. Weekend gap~~ — closed by the 72 h limit (Thursday evening → Sunday morning ≈ 60 h).
+  A longer gap (e.g. a holiday) is still refused; the app tells the employee to open it within 72 h.
+- R3. Hand-crafted API requests can choose a time inside [last server contact, sync] (≤ 72 h — wider than before).
 - R4. Clearing the browser data or uninstalling the app before sync loses the queued punches.

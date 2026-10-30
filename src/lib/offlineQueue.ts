@@ -2,7 +2,7 @@
 //
 // Rules (decided by Omar, 2026-10-30)
 // - Accepted ONLY if the phone clock is consistent (checked by the server, no admin review).
-// - Refused if it reaches the server more than 24 hours after the punch.
+// - Refused if it reaches the server more than 72 hours after the punch (covers the weekend).
 // - Location rules are the same as online (geofence + reject = refused, and the employee sees why).
 //
 // How the time is proven
