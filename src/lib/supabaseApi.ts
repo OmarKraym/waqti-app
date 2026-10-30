@@ -1,5 +1,6 @@
 import {
   createClient,
+  isAuthRetryableFetchError,
   FunctionsFetchError,
   FunctionsHttpError,
   type PostgrestError,
@@ -8,9 +9,13 @@ import {
 } from "@supabase/supabase-js";
 import type { SessionUser, WaqtiApi } from "./api";
 import { AppError, toKnownCode } from "./errors";
-import type { AttendanceState, PunchInput, PunchResult } from "./types";
+import type { AttendanceState, OfflinePunchInput, PunchInput, PunchResult } from "./types";
 
 const REQUEST_TIMEOUT_MS = 15_000;
+/** Longest wait for the saved login at app start before falling back to the copy on the phone. */
+const SESSION_WAIT_MS = 4_000;
+/** Whole request including a token refresh. A timeout counts as "no answer" (outcome unknown). */
+const RPC_TIMEOUT_MS = 25_000;
 
 /**
  * fetch with a hard timeout, so a dead connection never leaves the button spinning forever.
@@ -56,6 +61,43 @@ export function fromPostgrest(error: Pick<PostgrestError, "code" | "message">): 
   return new AppError("unknown", error.message);
 }
 
+/** Same key supabase-js uses by default: sb-<project ref>-auth-token. */
+export function authStorageKey(url: string): string {
+  return `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
+}
+
+/**
+ * The user saved on this phone, read straight from storage.
+ * Used ONLY when the app opens with no internet and the 1-hour access token has expired: supabase-js
+ * then cannot refresh it and reports "no session", although the employee never logged out.
+ * Nothing is trusted from this on the server: every request still needs a valid token, which
+ * supabase-js gets again as soon as the connection is back.
+ */
+export function storedSessionUser(storage: Pick<Storage, "getItem"> | null, storageKey: string): SessionUser | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { user?: User | null; refresh_token?: string };
+    let user = parsed.user ?? null;
+    if (!user) {
+      const rawUser = storage.getItem(`${storageKey}-user`);
+      user = rawUser ? ((JSON.parse(rawUser) as { user?: User }).user ?? null) : null;
+    }
+    return user && parsed.refresh_token ? toSessionUser(user) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function createSupabaseApi(url: string, key: string): WaqtiApi {
   const sb: SupabaseClient = createClient(url, key, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
@@ -63,11 +105,20 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
   });
 
   async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
+    // No connection: fail at once. Otherwise supabase-js first waits for its token refresh, which
+    // retries for a long time offline, and the screen would hang instead of using the saved state.
+    if (!navigator.onLine) throw new AppError("network", "offline");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new AppError("network", "timeout")), RPC_TIMEOUT_MS);
+    });
     let result;
     try {
-      result = await sb.rpc(fn, args);
+      result = await Promise.race([sb.rpc(fn, args), timeout]);
     } catch (e) {
-      throw new AppError("network", String(e));
+      throw e instanceof AppError ? e : new AppError("network", String(e));
+    } finally {
+      clearTimeout(timer);
     }
     if (result.error) throw fromPostgrest(result.error);
     return result.data as T;
@@ -75,8 +126,28 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
   return {
     async getSessionUser() {
-      const { data } = await sb.auth.getSession();
-      return data.session ? toSessionUser(data.session.user) : null;
+      const stored = () => storedSessionUser(safeLocalStorage(), authStorageKey(url));
+      // No internet: do not wait for supabase-js. With an expired access token it keeps retrying the
+      // refresh (long backoff), and the app would stay on a blank screen. Use the login saved here.
+      if (!navigator.onLine) {
+        const user = stored();
+        if (user) return user;
+      }
+      type Result = { data: { session: { user: User } | null }; error?: unknown };
+      const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), SESSION_WAIT_MS));
+      const result: Result | "timeout" = await Promise.race([
+        sb.auth.getSession().then(
+          (r) => r as Result,
+          (e) => ({ data: { session: null }, error: e }) as Result,
+        ),
+        timeout,
+      ]);
+      // Too slow (bad connection): same as offline.
+      if (result === "timeout") return stored();
+      if (result.data.session) return toSessionUser(result.data.session.user);
+      // Offline with an expired access token: keep the employee signed in on this phone.
+      const offline = !navigator.onLine || isAuthRetryableFetchError(result.error);
+      return offline ? stored() : null;
     },
 
     onAuthChange(cb) {
@@ -125,6 +196,23 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
         p_lat: r.kind === "ok" ? r.lat : null,
         p_lng: r.kind === "ok" ? r.lng : null,
         p_accuracy_m: r.kind === "ok" ? r.accuracy_m : null,
+      });
+    },
+
+    punchOffline(input: OfflinePunchInput) {
+      const r = input.reading;
+      return rpc<PunchResult>("employee_punch_offline", {
+        p_request_id: input.request_id,
+        p_expected_action: input.expected_action,
+        p_reading: r.kind,
+        p_lat: r.kind === "ok" ? r.lat : null,
+        p_lng: r.kind === "ok" ? r.lng : null,
+        p_accuracy_m: r.kind === "ok" ? r.accuracy_m : null,
+        p_time_token: input.time_token,
+        p_token_device_time: input.token_device_time,
+        p_device_time: input.device_time,
+        p_monotonic_ms: input.monotonic_ms,
+        p_device_now: input.device_now,
       });
     },
   };

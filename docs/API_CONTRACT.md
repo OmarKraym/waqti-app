@@ -115,3 +115,45 @@ A response with **no** SQLSTATE (lost connection, timeout) is treated as `networ
 |---|---|
 | Supabase Auth (email + password) | Login, persistent session |
 | Edge Function `change-password` | First-login forced password change (`app_metadata.must_change_password`) |
+
+
+---
+
+## 3. Offline punches (Phase 3, live 2026-10-30)
+
+Decided by Omar: accepted **only if the phone clock is consistent** (no admin review), refused if it
+reaches the server **more than 24 h** after the punch, same location rules as online.
+
+### Signed time token
+
+`employee_attendance_state()`, `employee_punch()` and `employee_punch_offline()` now also return
+`time_token` (`v1.<server ms>.<HMAC-SHA256>`, key in `private.app_secrets`, never exposed).
+The phone keeps the latest token as its anchor, with the phone clock (and `performance.now()`) when it arrived.
+
+### `employee_punch_offline(...)` → same result as `employee_punch` (+ `time_token`)
+
+| Argument | Notes |
+|---|---|
+| `p_request_id`, `p_expected_action`, `p_reading`, `p_lat`, `p_lng`, `p_accuracy_m` | As online. |
+| `p_time_token` | Latest token received before the tap. |
+| `p_token_device_time` | Phone clock when that token arrived. |
+| `p_device_time` | Phone clock at the tap. |
+| `p_monotonic_ms` | ms since the token on the monotonic clock; `null` if the app was restarted. |
+| `p_device_now` | Phone clock when sending. |
+
+Server checks, in order (any failure = refused, nothing written):
+
+1. Same `p_request_id` already saved → returns it with `duplicate: true` (no other check).
+2. Token valid for this employee, else `time_unverified`.
+3. Phone offset at token time = phone offset now (±120 s), else `clock_changed`.
+4. Claimed time = `p_device_time` + offset. With a monotonic value: the claimed time may not be
+   more than 120 s **earlier** than `token time + monotonic` (one-sided: phones may pause that clock
+   while asleep), else `clock_changed`.
+5. Token time − 5 s ≤ claimed ≤ now + 5 s, else `clock_changed`; claimed ≥ now − 24 h, else `offline_too_old`.
+6. Then exactly the online rules at the claimed time: `time_order` (must be after the last event),
+   `rate_limited`, `state_changed`, location policy (`outside_geofence` / `location_required` / …).
+
+The event keeps `occurred_at` = claimed time and `created_at` = receive time; `metadata.source = 'pwa_offline'`.
+
+**Residual risk (cannot be closed on the web):** someone who hand-crafts API requests can still pick a
+time between their last server contact and the sync (≤ 24 h). Normal phone-clock changes are caught.

@@ -197,3 +197,11 @@ p { margin: 0; }
   background: #fde68a; color: #78350f;
   text-align: center; font-size: .8rem; font-weight: 600; padding: 2px 8px;
 }
+
+/* Offline punches */
+.cache-note { text-align: center; }
+.queue-count { color: #92400e; font-weight: 600; font-size: .9rem; }
+.chip.queued { background: var(--surface-2); color: var(--primary); border: 1px dashed var(--primary); }
+.failed-card { border: 1px solid #fecaca; }
+.failed-card .section-title { color: var(--error); }
+.failed-item .failed-reason { grid-column: 2 / -1; color: var(--error); font-size: .85rem; }

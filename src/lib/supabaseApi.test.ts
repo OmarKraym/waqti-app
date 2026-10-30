@@ -70,3 +70,32 @@ describe("request id", () => {
     expect(newRequestId(fake)).not.toBe(newRequestId(fake));
   });
 });
+
+import { authStorageKey, storedSessionUser } from "./supabaseApi";
+
+describe("staying signed in when the app opens offline", () => {
+  const key = authStorageKey("https://fgnbdlqmtezneznwvahf.supabase.co");
+  const store = (entries: Record<string, string>) => ({ getItem: (k: string) => entries[k] ?? null });
+  const user = { id: "u1", email: "e@x.ly", app_metadata: { must_change_password: false } };
+
+  it("uses the same storage key as supabase-js", () => {
+    expect(key).toBe("sb-fgnbdlqmtezneznwvahf-auth-token");
+  });
+
+  it("reads the saved user even when the access token has expired", () => {
+    const raw = JSON.stringify({ access_token: "old", refresh_token: "r", expires_at: 1, user });
+    expect(storedSessionUser(store({ [key]: raw }), key)).toEqual({ id: "u1", email: "e@x.ly", mustChangePassword: false });
+  });
+
+  it("also works when supabase-js keeps the user in a separate key", () => {
+    const raw = JSON.stringify({ access_token: "old", refresh_token: "r", expires_at: 1 });
+    expect(storedSessionUser(store({ [key]: raw, [`${key}-user`]: JSON.stringify({ user }) }), key)?.id).toBe("u1");
+  });
+
+  it("no saved session, no refresh token, or broken data = signed out", () => {
+    expect(storedSessionUser(store({}), key)).toBeNull();
+    expect(storedSessionUser(store({ [key]: JSON.stringify({ user }) }), key)).toBeNull();
+    expect(storedSessionUser(store({ [key]: "{broken" }), key)).toBeNull();
+    expect(storedSessionUser(null, key)).toBeNull();
+  });
+});

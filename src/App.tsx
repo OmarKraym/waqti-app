@@ -37,7 +37,7 @@ export function App() {
       ) : gate.user.mustChangePassword ? (
         <ChangePassword email={gate.user.email} />
       ) : (
-        <Home />
+        <Home user={gate.user} />
       )}
     </>
   );

@@ -10,6 +10,8 @@ Employee attendance app for Waqti. Arabic, RTL, mobile-first, installable.
 - ✅ Safe on bad networks: a lost reply is shown as *unconfirmed*, and retry can never record twice.
 - ✅ Connected to production (Phase 2 applied 2026-10-29). Server contract: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 - ✅ Works on older phones (no `AbortSignal.any` / `crypto.randomUUID` needed). Phone test: [`docs/PHONE_TEST.md`](docs/PHONE_TEST.md).
+- ✅ **Offline punches** (2026-10-30): saved on the phone, sent automatically when online, accepted only if
+  the phone clock is consistent and within 24 h. See `docs/API_CONTRACT.md` §3 and `docs/DECISIONS.md`.
 
 ## Run
 
@@ -70,6 +72,7 @@ src/
     supabaseApi.ts   real API (Supabase)
     mockApi.ts       fake API for demo mode
     attendance.ts    screen state machine (pure, tested)
+    offlineQueue.ts  offline punches: queue, time anchor, sync (pure, tested)
     location.ts      one-shot location reading
     errors.ts        error codes + Arabic messages
   screens/           Login, ChangePassword, Home

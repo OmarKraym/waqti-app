@@ -1,4 +1,4 @@
-import type { AttendanceState, PunchInput, PunchResult } from "./types";
+import type { AttendanceState, OfflinePunchInput, PunchInput, PunchResult } from "./types";
 
 /** Everything the screens need from the server. Real and fake versions implement it. */
 export interface WaqtiApi {
@@ -9,6 +9,8 @@ export interface WaqtiApi {
   changeTemporaryPassword(newPassword: string): Promise<void>;
   getAttendanceState(): Promise<AttendanceState>;
   punch(input: PunchInput): Promise<PunchResult>;
+  /** Sends a punch that was saved on the phone without internet. */
+  punchOffline(input: OfflinePunchInput): Promise<PunchResult>;
 }
 
 export interface SessionUser {

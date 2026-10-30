@@ -7,8 +7,12 @@
 //                 └──────── refresh ◄──────────────────────────────────────┘ │
 //                                                    retry (SAME request_id) ◄┘
 //
+// Offline (company allows it): a tap with no connection, or a tap whose reply is lost, is saved on the
+// phone (QUEUED) and sent later by the offline queue. See offlineQueue.ts.
+//
 // Rules:
-// - The button label always comes from the SERVER (next_action). No local guessing.
+// - Online, the button label comes from the SERVER (next_action). Offline, it is the last server
+//   state plus the punches still waiting on the phone (withQueue).
 // - Success is shown only after the server answers.
 // - After a network error we do not know if the punch was saved, so we never say "failed" or
 //   "saved". A retry reuses the same request_id, so the server can never record it twice.
@@ -40,7 +44,8 @@ export type ScreenEvent =
   | { type: "LOAD_START" }
   | { type: "LOAD_OK"; data: AttendanceState }
   | { type: "LOAD_FAIL"; error: AppError }
-  | { type: "TAP"; request_id: string }
+  | { type: "TAP"; request_id: string; action: AttendanceAction }
+  | { type: "QUEUED"; at: string }
   | { type: "LOCATED"; reading: LocationReading }
   | { type: "PUNCH_OK"; result: PunchResult }
   | { type: "PUNCH_FAIL"; error: AppError }
@@ -70,7 +75,7 @@ export function reduce(state: ScreenState, event: ScreenEvent): ScreenState {
 
     case "TAP": {
       if (state.phase !== "ready") return state; // ignores double taps while busy
-      const pending: Pending = { request_id: event.request_id, action: state.data.next_action, reading: null };
+      const pending: Pending = { request_id: event.request_id, action: event.action, reading: null };
       return { phase: "locating", data: state.data, pending };
     }
 
@@ -97,6 +102,15 @@ export function reduce(state: ScreenState, event: ScreenEvent): ScreenState {
         refreshing: false,
       };
 
+    case "QUEUED":
+      if (state.phase !== "locating" && state.phase !== "submitting" && state.phase !== "unconfirmed") return state;
+      return {
+        phase: "ready",
+        data: state.data,
+        notice: queuedNotice(state.pending.action, event.at, state.data.company.timezone),
+        refreshing: false,
+      };
+
     case "RETRY":
       if (state.phase !== "unconfirmed") return state;
       return { phase: "submitting", data: state.data, pending: state.pending };
@@ -114,6 +128,7 @@ function applyResult(data: AttendanceState, r: PunchResult): AttendanceState {
     server_time: r.server_time,
     location_status: r.location_status,
     needs_review: r.needs_review,
+    recorded_offline: r.recorded_offline ?? false,
   };
   return {
     ...data,
@@ -138,6 +153,14 @@ export function successNotice(r: PunchResult, timeZone: string): Notice {
     return { kind: "warning", text: `تم تسجيل ${what} الساعة ${at}، مع ملاحظة للمراجعة: ${why}.` };
   }
   return { kind: "success", text: `تم تسجيل ${what} الساعة ${at}.` };
+}
+
+export function queuedNotice(action: AttendanceAction, at: string, timeZone: string): Notice {
+  const what = action === "check_in" ? "الحضور" : "الانصراف";
+  return {
+    kind: "warning",
+    text: `لا يوجد اتصال: حُفظ ${what} على هذا الجهاز الساعة ${formatTime(at, timeZone)}، ولم يُعتمد بعد. سيُرسل تلقائيًا عند عودة الإنترنت — افتح التطبيق مع الإنترنت خلال 24 ساعة، ولا تغيّر ساعة الهاتف ولا تحذف التطبيق.`,
+  };
 }
 
 export function actionLabel(a: AttendanceAction): string {

@@ -14,6 +14,7 @@ const base: AttendanceState = {
   max_accuracy_m: 100,
   recent_events: [],
   server_time: "2026-10-29T06:00:00Z",
+  time_token: "tok",
 };
 
 const ready: ScreenState = { phase: "ready", data: base, notice: null, refreshing: false };
@@ -28,21 +29,21 @@ const ok: PunchResult = {
 };
 
 function toSubmitting(): ScreenState {
-  let s = reduce(ready, { type: "TAP", request_id: "r1" });
+  let s = reduce(ready, { type: "TAP", request_id: "r1", action: "check_in" });
   s = reduce(s, { type: "LOCATED", reading: { kind: "ok", lat: 1, lng: 2, accuracy_m: 10 } });
   return s;
 }
 
 describe("attendance state machine", () => {
   it("the action comes from the server state", () => {
-    const s = reduce(ready, { type: "TAP", request_id: "r1" });
+    const s = reduce(ready, { type: "TAP", request_id: "r1", action: "check_in" });
     expect(s.phase).toBe("locating");
     if (s.phase === "locating") expect(s.pending.action).toBe("check_in");
   });
 
   it("ignores a second tap while a punch is in progress", () => {
-    const s1 = reduce(ready, { type: "TAP", request_id: "r1" });
-    const s2 = reduce(s1, { type: "TAP", request_id: "r2" });
+    const s1 = reduce(ready, { type: "TAP", request_id: "r1", action: "check_in" });
+    const s2 = reduce(s1, { type: "TAP", request_id: "r2", action: "check_in" });
     expect(s2).toBe(s1);
   });
 

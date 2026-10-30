@@ -23,6 +23,8 @@ export interface AttendanceEvent {
   server_time: string; // ISO timestamp from the server clock
   location_status: LocationStatus;
   needs_review: boolean;
+  /** true = punched on the phone without internet and sent later. */
+  recorded_offline?: boolean;
 }
 
 export interface AttendanceState {
@@ -36,6 +38,8 @@ export interface AttendanceState {
   max_accuracy_m: number;
   recent_events: AttendanceEvent[];
   server_time: string;
+  /** Signed server-time token. An offline punch can never be dated before it (see API_CONTRACT). */
+  time_token: string;
 }
 
 /** What the device managed to read. The server makes the final decision. */
@@ -53,12 +57,28 @@ export interface PunchInput {
   reading: LocationReading;
 }
 
+/** A punch made without internet, sent later. The server checks the phone clock against the token. */
+export interface OfflinePunchInput extends PunchInput {
+  time_token: string;
+  /** Phone clock when the token was received (ISO). */
+  token_device_time: string;
+  /** Phone clock at the tap (ISO). */
+  device_time: string;
+  /** ms since the token on the monotonic clock, or null if the app was restarted since. */
+  monotonic_ms: number | null;
+  /** Phone clock when sending (ISO). */
+  device_now: string;
+}
+
 export interface PunchResult {
   event_id: string;
   action: AttendanceAction;
   server_time: string;
   location_status: LocationStatus;
   needs_review: boolean;
+  recorded_offline?: boolean;
   /** true = the server had already processed this request_id (safe retry). */
   duplicate: boolean;
+  /** Fresh signed server-time token. */
+  time_token?: string;
 }

@@ -18,6 +18,10 @@ export type AppErrorCode =
   | "rate_limited"
   | "geofence_not_configured"
   | "invalid_input"
+  | "clock_changed"
+  | "time_unverified"
+  | "time_order"
+  | "offline_too_old"
   // change password
   | "password_too_short"
   | "password_too_long"
@@ -37,7 +41,8 @@ export class AppError extends Error {
 const KNOWN = new Set<AppErrorCode>([
   "not_authenticated", "invalid_credentials", "employee_inactive", "must_change_password", "forbidden",
   "state_changed", "outside_geofence", "location_required", "location_inaccurate", "rate_limited",
-  "geofence_not_configured", "invalid_input", "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
+  "geofence_not_configured", "invalid_input", "clock_changed", "time_unverified", "time_order", "offline_too_old",
+  "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -59,6 +64,10 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   rate_limited: "محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.",
   geofence_not_configured: "لم يُحدَّد نطاق مكان العمل لحسابك بعد. تواصل مع إدارة شركتك.",
   invalid_input: "طلب غير صالح. حدّث الصفحة وحاول مرة أخرى.",
+  clock_changed: "تغيّرت ساعة الهاتف بعد آخر اتصال بالإنترنت، فلم يُقبل هذا التسجيل. اجعل الوقت على «تلقائي» وتواصل مع الإدارة.",
+  time_unverified: "تعذّر التحقق من وقت هذا التسجيل، فلم يُقبل. تواصل مع الإدارة.",
+  time_order: "وقت هذا التسجيل قبل آخر حركة مسجّلة لك، فلم يُقبل. تواصل مع الإدارة.",
+  offline_too_old: "وصل هذا التسجيل بعد أكثر من 24 ساعة، فلم يُقبل. تواصل مع الإدارة.",
   password_too_short: "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
   password_too_long: "كلمة المرور طويلة جدًا.",
   password_too_weak: "كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل.",
