@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reduce, successNotice, type ScreenState } from "./attendance";
+import { formatClock, reduce, successNotice, type ScreenState } from "./attendance";
 import { AppError } from "./errors";
 import { readLocation } from "./location";
 import type { AttendanceState, PunchResult } from "./types";
@@ -126,5 +126,11 @@ describe("location reading", () => {
 
   it("returns rounded accuracy with the coordinates", async () => {
     expect(await readLocation("geofence", fakeGeo("ok"))).toEqual({ kind: "ok", lat: 32.75, lng: 12.72, accuracy_m: 18 });
+  });
+});
+
+describe("live clock", () => {
+  it("shows seconds, 24-hour, Western digits, company time zone", () => {
+    expect(formatClock("2026-10-30T18:05:09Z", "Africa/Tripoli")).toBe("20:05:09");
   });
 });

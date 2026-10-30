@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { SessionUser } from "../lib/api";
 import {
   actionLabel,
+  formatClock,
   formatDate,
   formatTime,
   initialState,
@@ -440,13 +441,20 @@ function statusHeadline(data: AttendanceState, rows: CardRow[], nowMs: number, t
 function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: string }) {
   const [now, setNow] = useState(() => Date.now() + offsetMs);
   useEffect(() => {
-    setNow(Date.now() + offsetMs);
-    const t = setInterval(() => setNow(Date.now() + offsetMs), 1000);
-    return () => clearInterval(t);
+    // Tick on each new SERVER second (not every 1000 ms from an arbitrary start), so the
+    // seconds never skip or stall.
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const server = Date.now() + offsetMs;
+      setNow(server);
+      t = setTimeout(tick, 1000 - (((server % 1000) + 1000) % 1000) + 5);
+    };
+    tick();
+    return () => clearTimeout(t);
   }, [offsetMs]);
   return (
     <p className="clock-line">
-      الساعة الآن <span dir="ltr">{formatTime(new Date(now).toISOString(), timeZone)}</span>
+      الساعة الآن <span dir="ltr">{formatClock(new Date(now).toISOString(), timeZone)}</span>
     </p>
   );
 }

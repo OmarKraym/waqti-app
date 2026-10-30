@@ -177,6 +177,18 @@ export function formatTime(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
+/** Live clock with seconds (HH:MM:SS). Stamps and history keep HH:MM (formatTime). */
+export function formatClock(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("ar-LY", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    numberingSystem: "latn",
+  }).format(new Date(iso));
+}
+
 export function formatDate(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("ar-LY", {
     timeZone,
