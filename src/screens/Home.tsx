@@ -30,7 +30,8 @@ import {
   type QueuedPunch,
   type TimeAnchor,
 } from "../lib/offlineQueue";
-import type { AttendanceEvent, AttendanceState, LocationStatus } from "../lib/types";
+import { dayKey, earlierDays, formatDuration, todayRows, type CardRow, type DayRow } from "../lib/timecard";
+import type { AttendanceState, LocationStatus } from "../lib/types";
 import { useInstallPrompt, useIosInstallHint, useOnline } from "./hooks";
 
 const SYNC_EVERY_MS = 30_000;
@@ -65,6 +66,8 @@ export function Home({ user }: { user: SessionUser }) {
   }, []);
   const [fromCache, setFromCache] = useState<number | null>(null); // time of the cached copy, or null when live
   const [syncNote, setSyncNote] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  // The event just confirmed by the server: its stamp "lands" once (the only animation).
+  const [freshId, setFreshId] = useState<string | null>(null);
   const syncing = useRef(false);
 
   const load = useCallback(async () => {
@@ -99,6 +102,7 @@ export function Home({ user }: { user: SessionUser }) {
     try {
       const r = await syncQueue(queueRef.current, (input) => api.punchOffline(input));
       setQueue(r.queue);
+      if (r.sent.length > 0) setFreshId(r.sent[r.sent.length - 1].event_id);
       // The "saved on this phone" notice is out of date once the server has answered.
       if (r.sent.length > 0 || r.refused.length > 0) dispatch({ type: "DISMISS_NOTICE" });
       if (r.refused.length > 0) {
@@ -166,6 +170,7 @@ export function Home({ user }: { user: SessionUser }) {
           reading: pending.reading ?? { kind: "not_requested" },
         });
         if (result.time_token) setAnchor(anchorFromServer(result.time_token, result.server_time));
+        setFreshId(result.event_id);
         dispatch({ type: "PUNCH_OK", result });
         load(); // confirm the new state from the server
       } catch (e) {
@@ -266,6 +271,10 @@ export function Home({ user }: { user: SessionUser }) {
   const working = state.phase === "locating" || state.phase === "submitting";
   const action = state.phase === "ready" ? data.next_action : state.pending.action;
   const canTap = !working && (online || allowQueue);
+  const tz = data.company.timezone;
+  const nowMs = Date.now() + offsetMs;
+  const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
+  const days = earlierDays(data.recent_events.filter((e) => !isQueuedEvent(e)), nowMs, tz);
 
   return (
     <div className="app">
@@ -281,94 +290,111 @@ export function Home({ user }: { user: SessionUser }) {
         {!online && (
           <div className={`banner ${allowQueue ? "warning" : "error"}`} role="alert">
             {allowQueue
-              ? "لا يوجد اتصال بالإنترنت. يمكنك التسجيل، وسيُحفظ على الجهاز ويُرسل تلقائيًا عند عودة الاتصال (خلال 72 ساعة). لا تغيّر ساعة الهاتف."
+              ? "لا يوجد اتصال بالإنترنت. يمكنك التسجيل وسيُحفظ على الجهاز. افتح التطبيق مع الإنترنت خلال 3 أيام ليُعتمد، ولا تغيّر ساعة الهاتف ولا تحذف التطبيق."
               : "لا يوجد اتصال بالإنترنت. تسجيل الحضور يحتاج اتصالًا."}
           </div>
         )}
-        {fromCache !== null && (
-          <p className="muted small cache-note">
-            تعرض آخر حالة محفوظة على الجهاز ({formatTime(new Date(fromCache).toISOString(), data.company.timezone)}).
+
+        <section className="status" aria-live="polite">
+          <p className="who">
+            <span className="truncate">{data.employee.full_name}</span>
+            {data.employee.employee_number && <span className="who-number" dir="ltr">{data.employee.employee_number}</span>}
           </p>
-        )}
-
-        <section className="card hello">
-          <div className="min-w-0">
-            <p className="muted small">مرحبًا</p>
-            <h2 className="truncate">{data.employee.full_name}</h2>
-          </div>
-          {data.employee.employee_number && <span className="chip" dir="ltr">#{data.employee.employee_number}</span>}
-        </section>
-
-        <ServerClock offsetMs={offsetMs} timeZone={data.company.timezone} />
-
-        <section className="card punch-card">
-          <p className="status-line">
-            {data.open_session
-              ? `حاضر منذ ${formatTime(data.open_session.started_at, data.company.timezone)}`
-              : "لا يوجد حضور مسجّل الآن"}
-            {waiting.length > 0 && " (لم يُرسل بعد)"}
-          </p>
-
-          {state.phase === "unconfirmed" ? (
-            <div className="unconfirmed" role="alert">
-              <p>{ERROR_TEXT.network}</p>
-              <div className="row">
-                <button className="btn primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
-                <button className="btn ghost" onClick={refresh}>تحديث الحالة</button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className={`punch ${action === "check_in" ? "in" : "out"}`}
-              onClick={() => onTap(data, allowQueue)}
-              disabled={!canTap /* a stale tap is still safe: the server checks expected_action */}
-              aria-busy={working}
-            >
-              <span className="punch-label">{actionLabel(action)}</span>
-              <span className="punch-sub">
-                {state.phase === "locating"
-                  ? "جارٍ تحديد الموقع…"
-                  : state.phase === "submitting"
-                    ? "جارٍ الإرسال للخادم…"
-                    : online
-                      ? "اضغط مرة واحدة"
-                      : "سيُحفظ على الجهاز"}
-              </span>
-            </button>
-          )}
-
-          <PolicyNote data={data} />
-          {hint && working && <p className="hint">{hint}</p>}
-
-          {state.phase === "ready" && state.notice && (
-            <div className={`banner ${state.notice.kind}`} role="status">
-              <span>{state.notice.text}</span>
-              <button className="x" aria-label="إغلاق" onClick={() => dispatch({ type: "DISMISS_NOTICE" })}>×</button>
-            </div>
-          )}
-          {syncNote && (
-            <div className={`banner ${syncNote.kind} sync-note`} role="status">
-              <span>{syncNote.text}</span>
-              <button className="x" aria-label="إغلاق" onClick={() => setSyncNote(null)}>×</button>
-            </div>
-          )}
-          {waiting.length > 0 && (
-            <p className="queue-count" role="status">
-              بانتظار الإرسال: {waiting.length} {online ? "— جارٍ الإرسال…" : ""}
+          <h1 className="status-head">{statusHeadline(data, rows, nowMs, tz)}</h1>
+          <ServerClock offsetMs={offsetMs} timeZone={tz} />
+          {fromCache !== null && (
+            <p className="cache-note">
+              تعرض آخر حالة محفوظة على الجهاز ({formatTime(new Date(fromCache).toISOString(), tz)}).
             </p>
           )}
         </section>
 
+        <section className="timecard" aria-label="بطاقة اليوم">
+          <h2 className="timecard-day">{formatDate(new Date(nowMs).toISOString(), tz)}</h2>
+          <ol className="slots">
+            {rows.map((r) => (
+              <li key={r.key} className="slot">
+                <span className="slot-label">{r.action === "check_in" ? "حضور" : "انصراف"}</span>
+                {r.kind === "empty" ? (
+                  <span className="slot-empty" aria-label="لم يُسجَّل بعد" />
+                ) : (
+                  <span className="slot-mark">
+                    <span
+                      className={`${r.kind === "stamped" ? "stamp" : "pencil"} ${r.action === "check_in" ? "in" : "out"}${r.key === freshId ? " fresh" : ""}`}
+                      dir="ltr"
+                    >
+                      {formatTime(r.time!, tz)}
+                    </span>
+                    {r.kind === "pencil" && <span className="slot-note">لم يُرسل بعد</span>}
+                    {r.kind === "stamped" && r.needsReview && (
+                      <span className="slot-note review">{STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
+                    )}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {state.phase === "unconfirmed" ? (
+          <div className="unconfirmed" role="alert">
+            <p>{ERROR_TEXT.network}</p>
+            <div className="row">
+              <button className="btn primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
+              <button className="btn ghost" onClick={refresh}>تحديث الحالة</button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className={`punch ${action === "check_in" ? "in" : "out"}`}
+            onClick={() => onTap(data, allowQueue)}
+            disabled={!canTap /* a stale tap is still safe: the server checks expected_action */}
+            aria-busy={working}
+          >
+            <span className="punch-label">{actionLabel(action)}</span>
+            <span className="punch-sub">
+              {state.phase === "locating"
+                ? "جارٍ تحديد الموقع…"
+                : state.phase === "submitting"
+                  ? "جارٍ الإرسال للخادم…"
+                  : online
+                    ? null
+                    : "سيُحفظ على الجهاز"}
+            </span>
+          </button>
+        )}
+
+        <PolicyNote data={data} />
+        {hint && working && <p className="hint">{hint}</p>}
+
+        {state.phase === "ready" && state.notice && (
+          <div className={`banner ${state.notice.kind}`} role="status">
+            <span>{state.notice.text}</span>
+            <button className="x" aria-label="إغلاق" onClick={() => dispatch({ type: "DISMISS_NOTICE" })}>×</button>
+          </div>
+        )}
+        {syncNote && (
+          <div className={`banner ${syncNote.kind} sync-note`} role="status">
+            <span>{syncNote.text}</span>
+            <button className="x" aria-label="إغلاق" onClick={() => setSyncNote(null)}>×</button>
+          </div>
+        )}
+        {waiting.length > 0 && (
+          <p className="queue-count" role="status">
+            بانتظار الإرسال: {waiting.length} {online ? "— جارٍ الإرسال…" : ""}
+          </p>
+        )}
+
         {failed.length > 0 && (
-          <section className="card failed-card" role="alert">
+          <section className="failed-card" role="alert">
             <h3 className="section-title">تسجيلات لم يقبلها الخادم</h3>
-            <ul className="events">
+            <ul className="failed-list">
               {failed.map((q) => (
                 <li key={q.request_id} className="failed-item">
-                  <span className={`dot ${q.action === "check_in" ? "in" : "out"}`} />
-                  <span className="ev-action">{q.action === "check_in" ? "حضور" : "انصراف"}</span>
-                  <span className="ev-date muted">{formatDate(q.offline_at, data.company.timezone)}</span>
-                  <span className="ev-time" dir="ltr">{formatTime(q.offline_at, data.company.timezone)}</span>
+                  <span className="failed-what">
+                    {q.action === "check_in" ? "حضور" : "انصراف"} {formatDate(q.offline_at, tz)}{" "}
+                    <span dir="ltr">{formatTime(q.offline_at, tz)}</span>
+                  </span>
                   <span className="failed-reason">{ERROR_TEXT[q.error_code ?? "unknown"]}</span>
                 </li>
               ))}
@@ -378,7 +404,7 @@ export function Home({ user }: { user: SessionUser }) {
           </section>
         )}
 
-        <RecentEvents events={data.recent_events} timeZone={data.company.timezone} />
+        <EarlierDays days={days} timeZone={tz} />
 
         {install && (
           <button className="btn ghost block" onClick={install}>تثبيت التطبيق على الجهاز</button>
@@ -394,7 +420,23 @@ export function Home({ user }: { user: SessionUser }) {
   );
 }
 
-/** Shows the server's time (phone clock + the last measured offset), not the phone's own time. */
+function statusHeadline(data: AttendanceState, rows: CardRow[], nowMs: number, tz: string): string {
+  // Nothing counts until the server stamps it: a pencil entry never reads as done.
+  const last = [...rows].reverse().find((r) => r.kind !== "empty");
+  if (last?.kind === "pencil") {
+    return last.action === "check_in" ? "حضورك لم يُرسل بعد" : "انصرافك لم يُرسل بعد";
+  }
+  if (data.open_session) {
+    const start = data.open_session.started_at;
+    const sameDay = dayKey(start, tz) === dayKey(nowMs, tz);
+    return `أنت حاضر منذ ${sameDay ? "" : "أمس "}${formatTime(start, tz)}`;
+  }
+  const lastOut = [...rows].reverse().find((r) => r.action === "check_out" && r.time);
+  if (lastOut?.time) return `سجّلت انصرافك الساعة ${formatTime(lastOut.time, tz)}`;
+  return "لم تسجّل حضورك اليوم";
+}
+
+/** The server's time (phone clock + the last measured offset), not the phone's own time. */
 function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: string }) {
   const [now, setNow] = useState(() => Date.now() + offsetMs);
   useEffect(() => {
@@ -402,12 +444,10 @@ function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: strin
     const t = setInterval(() => setNow(Date.now() + offsetMs), 1000);
     return () => clearInterval(t);
   }, [offsetMs]);
-  const iso = new Date(now).toISOString();
   return (
-    <section className="card clock" aria-label="الوقت الحالي">
-      <div className="clock-time">{formatTime(iso, timeZone)}</div>
-      <div className="muted">{formatDate(iso, timeZone)}</div>
-    </section>
+    <p className="clock-line">
+      الساعة الآن <span dir="ltr">{formatTime(new Date(now).toISOString(), timeZone)}</span>
+    </p>
   );
 }
 
@@ -416,11 +456,11 @@ function PolicyNote({ data }: { data: AttendanceState }) {
     data.location_policy === "geofence"
       ? data.outside_action === "reject"
         ? "يجب أن تكون داخل نطاق مكان العمل."
-        : "سيتم التحقق من موقعك، والتسجيل خارج النطاق يُرسل للمراجعة."
+        : "يُتحقق من موقعك، والتسجيل خارج النطاق يُرسل للمراجعة."
       : data.location_policy === "record"
-        ? "سيتم تسجيل موقعك مع العملية."
+        ? "يُسجَّل موقعك مع كل عملية."
         : "لا يُطلب الموقع لهذا الحساب.";
-  return <p className="policy muted small">📍 {text}</p>;
+  return <p className="policy">{text}</p>;
 }
 
 const STATUS_TEXT: Partial<Record<LocationStatus, string>> = {
@@ -429,29 +469,34 @@ const STATUS_TEXT: Partial<Record<LocationStatus, string>> = {
   inaccurate: "دقة ضعيفة",
 };
 
-function RecentEvents({ events, timeZone }: { events: AttendanceEvent[]; timeZone: string }) {
+function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
+  if (days.length === 0) return null;
   return (
-    <section className="card">
-      <h3 className="section-title">آخر الحركات</h3>
-      {events.length === 0 ? (
-        <p className="muted pad-sm">لا توجد حركات بعد.</p>
-      ) : (
-        <ul className="events">
-          {events.map((e) => (
-            <li key={e.id}>
-              <span className={`dot ${e.action === "check_in" ? "in" : "out"}`} />
-              <span className="ev-action">{e.action === "check_in" ? "حضور" : "انصراف"}</span>
-              <span className="ev-date muted">{formatDate(e.server_time, timeZone)}</span>
-              <span className="ev-time" dir="ltr">{formatTime(e.server_time, timeZone)}</span>
-              {isQueuedEvent(e) ? (
-                <span className="chip queued">بانتظار الإرسال</span>
-              ) : (
-                e.needs_review && <span className="chip warn">{STATUS_TEXT[e.location_status] ?? "مراجعة"}</span>
-              )}
-            </li>
+    <section className="earlier" aria-labelledby="earlier-title">
+      <h3 id="earlier-title" className="section-title">الأيام السابقة</h3>
+      <table className="days">
+        <thead>
+          <tr>
+            <th scope="col">اليوم</th>
+            <th scope="col">حضور</th>
+            <th scope="col">انصراف</th>
+            <th scope="col">المدة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => (
+            <tr key={d.day}>
+              <th scope="row">
+                {formatDate(`${d.day}T12:00:00Z`, timeZone)}
+                {d.needsReview && <span className="day-flag">للمراجعة</span>}
+              </th>
+              <td dir="ltr">{d.firstIn ? formatTime(d.firstIn, timeZone) : "—"}</td>
+              <td dir="ltr">{d.lastOut ? formatTime(d.lastOut, timeZone) : "—"}</td>
+              <td>{d.minutes > 0 ? formatDuration(d.minutes) : d.open ? "بدون انصراف" : "—"}</td>
+            </tr>
           ))}
-        </ul>
-      )}
+        </tbody>
+      </table>
     </section>
   );
 }

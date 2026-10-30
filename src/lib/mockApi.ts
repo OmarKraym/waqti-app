@@ -4,6 +4,7 @@
 //   policy = geofence | record | none        outside = flag | reject
 //   pos    = inside | outside | far-accuracy  net     = ok | flaky (every 2nd punch loses its reply)
 //   must_change = 1  (first login: forced password change)
+//   history = 1      (adds three earlier work days, for screenshots)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
 // one-sided monotonic check, 72 h limit, time order.
@@ -55,6 +56,20 @@ export function createMockApi(): WaqtiApi {
   };
 
   const events: AttendanceEvent[] = [];
+  if (q.get("history") === "1") {
+    // Three earlier days (newest first), times in Tripoli = UTC+2.
+    const day = (daysAgo: number, h: number, m: number) => {
+      const d = new Date(serverNow());
+      d.setUTCDate(d.getUTCDate() - daysAgo);
+      d.setUTCHours(h - 2, m, 0, 0);
+      return d.toISOString();
+    };
+    const add = (id: string, action: "check_in" | "check_out", iso: string, review = false) =>
+      events.push({ id, action, server_time: iso, location_status: review ? "outside" : "inside", needs_review: review });
+    add("h1o", "check_out", day(1, 16, 3)); add("h1i", "check_in", day(1, 8, 1));
+    add("h2o", "check_out", day(2, 16, 10)); add("h2i", "check_in", day(2, 7, 58), true);
+    add("h3o", "check_out", day(4, 15, 47)); add("h3i", "check_in", day(4, 8, 12));
+  }
   const byRequest = new Map<string, PunchResult>();
   let punchCount = 0;
 

@@ -159,7 +159,7 @@ export function queuedNotice(action: AttendanceAction, at: string, timeZone: str
   const what = action === "check_in" ? "الحضور" : "الانصراف";
   return {
     kind: "warning",
-    text: `لا يوجد اتصال: حُفظ ${what} على هذا الجهاز الساعة ${formatTime(at, timeZone)}، ولم يُعتمد بعد. سيُرسل تلقائيًا عند عودة الإنترنت — افتح التطبيق مع الإنترنت خلال 3 أيام (72 ساعة)، ولا تغيّر ساعة الهاتف ولا تحذف التطبيق.`,
+    text: `حُفظ ${what} على هذا الجهاز الساعة ${formatTime(at, timeZone)}، ولم يُعتمد بعد. يُرسل تلقائيًا عند عودة الإنترنت.`,
   };
 }
 
