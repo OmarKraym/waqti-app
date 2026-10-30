@@ -9,7 +9,17 @@ import {
 } from "@supabase/supabase-js";
 import type { SessionUser, WaqtiApi } from "./api";
 import { AppError, toKnownCode } from "./errors";
-import type { AttendanceState, OfflinePunchInput, PunchInput, PunchResult } from "./types";
+import type {
+  AttendanceState,
+  InboxItem,
+  NewRequest,
+  OfflinePunchInput,
+  PunchInput,
+  PunchResult,
+  RequestItem,
+  RequestPreview,
+  RequestsOverview,
+} from "./types";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 /** Longest wait for the saved login at app start before falling back to the copy on the phone. */
@@ -215,5 +225,47 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
         p_device_now: input.device_now,
       });
     },
+
+    getRequestsOverview() {
+      return rpc<RequestsOverview>("employee_requests_overview");
+    },
+
+    previewRequest(request) {
+      return rpc<RequestPreview>("employee_submit_request", submitArgs(PREVIEW_KEY, request, true));
+    },
+
+    submitRequest(key, request) {
+      return rpc<RequestItem>("employee_submit_request", submitArgs(key, request, false));
+    },
+
+    cancelRequest(id) {
+      return rpc<RequestItem>("employee_cancel_request", { p_request_id: id });
+    },
+
+    getInbox() {
+      return rpc<InboxItem[]>("approver_inbox");
+    },
+
+    decide(approvalId, decision, note) {
+      return rpc<RequestItem>("approver_decide", { p_approval_id: approvalId, p_decision: decision, p_note: note });
+    },
+  };
+}
+
+/** A preview saves nothing, so its key is never stored. */
+const PREVIEW_KEY = "00000000-0000-4000-8000-000000000000";
+
+/** Arguments of employee_submit_request (dates for leave/other, instants for permission). */
+export function submitArgs(key: string, r: NewRequest, dryRun: boolean): Record<string, unknown> {
+  return {
+    p_request_key: key,
+    p_type: r.type,
+    p_leave_type: r.type === "leave" ? r.leave_type : null,
+    p_start_date: r.type === "permission" ? null : r.start_date,
+    p_end_date: r.type === "permission" ? null : r.end_date,
+    p_start_at: r.type === "permission" ? r.start_at : null,
+    p_end_at: r.type === "permission" ? r.end_at : null,
+    p_reason: r.reason,
+    p_dry_run: dryRun,
   };
 }

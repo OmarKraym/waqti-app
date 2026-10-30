@@ -5,6 +5,8 @@
 //   pos    = inside | outside | far-accuracy  net     = ok | flaky (every 2nd punch loses its reply)
 //   must_change = 1  (first login: forced password change)
 //   history = 1      (adds three earlier work days, for screenshots)
+//   inbox = 0        (no requests waiting for my approval; default: two, as a manager)
+//   requests = 1     (adds sample requests of my own: approved, pending, rejected)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
 // one-sided monotonic check, 72 h limit, time order.
@@ -12,7 +14,22 @@
 import type { SessionUser, WaqtiApi } from "./api";
 import { newRequestId } from "./attendance";
 import { AppError } from "./errors";
-import type { AttendanceEvent, AttendanceState, LocationStatus, OfflinePunchInput, PunchInput, PunchResult } from "./types";
+import { localDate } from "./requests";
+import type {
+  AttendanceEvent,
+  AttendanceState,
+  InboxItem,
+  LeaveBalance,
+  LeaveType,
+  LocationStatus,
+  NewRequest,
+  OfflinePunchInput,
+  PermissionUsage,
+  PunchInput,
+  PunchResult,
+  RequestItem,
+  RequestPreview,
+} from "./types";
 
 const q = new URLSearchParams(globalThis.location?.search ?? "");
 const policy = (q.get("policy") ?? "geofence") as AttendanceState["location_policy"];
@@ -135,7 +152,10 @@ export function createMockApi(): WaqtiApi {
     return result;
   }
 
+  const req = createMockRequests();
+
   return {
+    ...req,
     async getSessionUser() {
       return user;
     },
@@ -194,6 +214,176 @@ export function createMockApi(): WaqtiApi {
       if (claimed < serverNow() - MAX_OFFLINE_MS) throw new AppError("offline_too_old");
       claimed = Math.min(claimed, serverNow());
       return record(input, claimed, true);
+    },
+  };
+}
+
+// ---------------------------------------------------------------- requests (same rules as the server)
+
+const TZ = "Africa/Tripoli";
+const LEAVE_TYPES: LeaveType[] = ["annual", "sick", "emergency", "marriage", "unpaid"];
+const PERMISSION_LIMIT = 240;
+const ME = { full_name: "أحمد سالم", employee_number: "1024", department: "المبيعات", job_title: "مندوب" };
+
+function createMockRequests() {
+  const today = () => localDate(new Date(serverNow()).toISOString(), TZ);
+  const startOfDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) - 2 * 3_600_000).toISOString(); // Tripoli = UTC+2
+  const plusDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  /** Working days (Friday off), like the employee's weekly schedule on the server. */
+  const workDays = (a: string, b: string) => {
+    let n = 0;
+    for (let d = a; d <= b; d = plusDays(d, 1)) if (new Date(`${d}T12:00:00Z`).getUTCDay() !== 5) n += 1;
+    return n;
+  };
+
+  const mine: RequestItem[] = [];
+  const byKey = new Map<string, string>();
+  const steps = (manager: string, managerStatus: RequestItem["steps"][number]["status"], hrStatus: RequestItem["steps"][number]["status"]) => [
+    { step_order: 1, kind: "direct_manager" as const, status: managerStatus, approver_name: manager, decided_at: null, note: null },
+    { step_order: 2, kind: "hr" as const, status: hrStatus, approver_name: null, decided_at: null, note: null },
+  ];
+  const make = (over: Partial<RequestItem> & Pick<RequestItem, "type" | "start_at" | "end_at">): RequestItem => ({
+    id: newRequestId(), leave_type: null, status: "pending", days: null, minutes: null, reason: null,
+    decision_note: null, decided_at: null, created_at: new Date(serverNow()).toISOString(), current_step: 1,
+    employee: ME, steps: steps("خالد المبروك", "pending", "waiting"), ...over,
+  });
+
+  if (q.get("requests") === "1") {
+    const t = today();
+    mine.push(
+      make({ type: "leave", leave_type: "annual", status: "approved", start_at: startOfDay(plusDays(t, -20)), end_at: startOfDay(plusDays(t, -17)),
+             days: 3, current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -25)) }),
+      make({ type: "permission", status: "rejected", start_at: new Date(Date.parse(startOfDay(plusDays(t, -3))) + 10 * 3_600_000).toISOString(),
+             end_at: new Date(Date.parse(startOfDay(plusDays(t, -3))) + 12 * 3_600_000).toISOString(), minutes: 120, current_step: null,
+             decision_note: "ضغط عمل في هذا اليوم", steps: steps("خالد المبروك", "rejected", "cancelled"), created_at: startOfDay(plusDays(t, -4)) }),
+      make({ type: "leave", leave_type: "annual", start_at: startOfDay(plusDays(t, 12)), end_at: startOfDay(plusDays(t, 15)), days: 3,
+             reason: "سفر عائلي", created_at: startOfDay(plusDays(t, -1)) }),
+    );
+  }
+
+  const inbox: InboxItem[] = [];
+  if (q.get("inbox") !== "0") {
+    const t = today();
+    const other = (name: string, number: string) => ({ full_name: name, employee_number: number, department: "المبيعات", job_title: "مندوب" });
+    inbox.push(
+      { ...make({ type: "leave", leave_type: "annual", start_at: startOfDay(plusDays(t, 5)), end_at: startOfDay(plusDays(t, 8)), days: 3,
+                  reason: "زواج أخي", employee: other("سالم الورفلي", "1031"), steps: steps("أحمد سالم", "pending", "waiting") }),
+        approval_id: newRequestId(), my_step: 1, step_count: 2,
+        balance: { leave_type: "annual", entitled: 30, used: 9, pending: 0, remaining: 21 }, permission: null },
+      { ...make({ type: "permission", start_at: new Date(Date.parse(startOfDay(plusDays(t, 1))) + 9 * 3_600_000).toISOString(),
+                  end_at: new Date(Date.parse(startOfDay(plusDays(t, 1))) + 11 * 3_600_000).toISOString(), minutes: 120,
+                  reason: "مراجعة طبية", employee: other("مريم التاجوري", "1040"), steps: steps("أحمد سالم", "pending", "waiting") }),
+        approval_id: newRequestId(), my_step: 1, step_count: 2, balance: null,
+        permission: { month: t.slice(0, 7), limit: PERMISSION_LIMIT, used: 60, pending: 0 } },
+    );
+  }
+
+  function balance(type: LeaveType, year: string, exclude?: string): LeaveBalance {
+    const entitled = type === "annual" ? 30 : null;
+    const rows = mine.filter((r) => r.type === "leave" && r.leave_type === type && r.id !== exclude && localDate(r.start_at, TZ).startsWith(year));
+    const used = rows.filter((r) => r.status === "approved").reduce((a, r) => a + (r.days ?? 0), 0);
+    const pending = rows.filter((r) => r.status === "pending").reduce((a, r) => a + (r.days ?? 0), 0);
+    return { leave_type: type, entitled, used, pending, remaining: entitled === null ? null : entitled - used - pending };
+  }
+  function permission(month: string): PermissionUsage {
+    const rows = mine.filter((r) => r.type === "permission" && localDate(r.start_at, TZ).startsWith(month));
+    const sum = (st: string) => rows.filter((r) => r.status === st).reduce((a, r) => a + (r.minutes ?? 0), 0);
+    return { month, limit: PERMISSION_LIMIT, used: sum("approved"), pending: sum("pending") };
+  }
+
+  function check(r: NewRequest): RequestPreview {
+    const t = today();
+    let start: string, end: string, days: number | null = null, minutes: number | null = null;
+    let bal: LeaveBalance | null = null, perm: PermissionUsage | null = null;
+    if (r.type === "permission") {
+      const s = Date.parse(r.start_at), e = Date.parse(r.end_at);
+      const day = localDate(r.start_at, TZ);
+      if (!(e > s) || localDate(new Date(e - 1000).toISOString(), TZ) !== day) throw new AppError("invalid_dates");
+      minutes = Math.ceil((e - s) / 60_000);
+      if (minutes < 15 || minutes > 480) throw new AppError("invalid_duration");
+      if (day < plusDays(t, -7) || day > plusDays(t, 90)) throw new AppError("invalid_dates");
+      perm = permission(day.slice(0, 7));
+      if (perm.used + perm.pending + minutes > perm.limit) throw new AppError("permission_limit");
+      start = r.start_at; end = r.end_at;
+    } else {
+      if (r.end_date < r.start_date || r.start_date < plusDays(t, -30) || r.start_date > plusDays(t, 365)) throw new AppError("invalid_dates");
+      if (r.type === "other" && !r.reason) throw new AppError("reason_required");
+      if (r.type === "leave") {
+        if (r.start_date.slice(0, 4) !== r.end_date.slice(0, 4)) throw new AppError("crosses_year");
+        days = workDays(r.start_date, r.end_date);
+        if (days === 0) throw new AppError("no_working_days");
+        bal = balance(r.leave_type, r.start_date.slice(0, 4));
+        if (bal.remaining !== null && bal.remaining < days) throw new AppError("insufficient_balance");
+      }
+      start = startOfDay(r.start_date); end = startOfDay(plusDays(r.end_date, 1));
+    }
+    if (r.type !== "other") {
+      const overlap = mine.some((x) => x.type !== "other" && (x.status === "pending" || x.status === "approved")
+        && Date.parse(x.start_at) < Date.parse(end) && Date.parse(start) < Date.parse(x.end_at));
+      if (overlap) throw new AppError("overlapping_request");
+    }
+    return { start_at: start, end_at: end, days, minutes, balance: bal, permission: perm };
+  }
+
+  const online = async (ms: number) => {
+    await wait(ms);
+    requireNetwork();
+  };
+
+  return {
+    async getRequestsOverview() {
+      await online(350);
+      const t = today();
+      return {
+        balances: LEAVE_TYPES.map((x) => balance(x, t.slice(0, 4))),
+        permission: permission(t.slice(0, 7)),
+        requests: [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        inbox_count: inbox.length,
+        timezone: TZ,
+        today: t,
+      };
+    },
+    async previewRequest(r: NewRequest) {
+      await online(250);
+      return check(r);
+    },
+    async submitRequest(key: string, r: NewRequest) {
+      await online(600);
+      const known = byKey.get(key);
+      if (known) return mine.find((x) => x.id === known)!;
+      const p = check(r);
+      const item = make({ type: r.type, leave_type: r.type === "leave" ? r.leave_type : null, start_at: p.start_at, end_at: p.end_at,
+                          days: p.days, minutes: p.minutes, reason: r.reason });
+      mine.push(item);
+      byKey.set(key, item.id);
+      return item;
+    },
+    async cancelRequest(id: string) {
+      await online(400);
+      const r = mine.find((x) => x.id === id);
+      if (!r) throw new AppError("request_not_found");
+      if (r.status === "cancelled") return r;
+      if (r.status !== "pending") throw new AppError("already_decided");
+      r.status = "cancelled";
+      r.current_step = null;
+      r.steps = r.steps.map((s) => (s.status === "pending" || s.status === "waiting" ? { ...s, status: "cancelled" } : s));
+      return r;
+    },
+    async getInbox() {
+      await online(350);
+      return [...inbox];
+    },
+    async decide(approvalId: string, decision: "approve" | "reject", note: string | null) {
+      await online(500);
+      const i = inbox.findIndex((x) => x.approval_id === approvalId);
+      if (i < 0) throw new AppError("request_not_found");
+      const [item] = inbox.splice(i, 1);
+      const now = new Date(serverNow()).toISOString();
+      const stepsAfter = item.steps.map((s) =>
+        s.step_order === item.my_step ? { ...s, status: decision === "approve" ? ("approved" as const) : ("rejected" as const), decided_at: now, note }
+          : s.status === "waiting" ? { ...s, status: decision === "approve" ? ("pending" as const) : ("cancelled" as const) } : s);
+      return { ...item, steps: stepsAfter, status: decision === "reject" ? "rejected" : "pending",
+               current_step: decision === "reject" ? null : item.my_step + 1, decision_note: decision === "reject" ? note : null } as RequestItem;
     },
   };
 }

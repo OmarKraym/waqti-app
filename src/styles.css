@@ -260,3 +260,125 @@ p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .stamp.fresh, .spinner, .punch { animation: none; transition: none; }
 }
+
+/* ---------- Tabs (Phase 4) ---------- */
+.with-tabs .container { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+.tabbar {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 3;
+  display: grid; grid-template-columns: 1fr 1fr;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  font: inherit; cursor: pointer; border: 0; background: none;
+  position: relative;
+  min-height: 58px;
+  display: grid; justify-items: center; align-content: center; gap: 1px;
+  color: var(--muted); font-size: .8rem; font-weight: 500;
+}
+.tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tab.on { color: var(--ink); font-weight: 700; }
+.tab.on::before { content: ""; position: absolute; top: 0; inset-inline: 30%; height: 3px; border-radius: 0 0 3px 3px; background: var(--ink); }
+.tab:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+.badge {
+  position: absolute; top: 6px; inset-inline-start: calc(50% + 6px);
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--rust); color: #fff; font-size: .75rem; font-weight: 700; line-height: 20px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Requests ---------- */
+.requests { gap: 16px; }
+.req-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
+.screen-title { font-size: 1.5rem; font-weight: 700; }
+.center-block { display: grid; place-items: center; padding: 32px 0; }
+.empty { font-size: .95rem; }
+.section-title .count {
+  display: inline-block; min-width: 22px; padding: 0 7px; border-radius: 11px; margin-inline-start: 4px;
+  background: var(--rust); color: #fff; font-size: .8rem; line-height: 22px; text-align: center; vertical-align: 2px;
+}
+.row.end { justify-content: flex-end; }
+.btn.danger { background: var(--rust); border-color: var(--rust); color: #fff; }
+.btn.danger-text { color: var(--rust); }
+
+.req-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.req-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid; gap: 6px;
+}
+/* Waiting for MY decision: bordered in ink, like the time card (the thing to act on) */
+.approve-card { border: 1.5px solid var(--ink); }
+.req-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.req-who { font-weight: 700; font-size: 1.05rem; }
+.req-title { font-weight: 600; }
+.approve-card .req-title { color: var(--muted); font-weight: 500; font-size: .95rem; }
+.step-of { flex: none; font-size: .8rem; color: var(--muted); white-space: nowrap; padding-top: 3px; }
+.req-period { font-size: .95rem; }
+.req-period span { font-variant-numeric: tabular-nums; }
+.req-reason { color: var(--muted); font-size: .9rem; border-inline-start: 3px solid var(--rule); padding-inline-start: 8px; }
+.req-meta { font-size: .9rem; }
+.req-meta strong { color: var(--ink); }
+.req-progress { font-size: .85rem; color: var(--muted); }
+.req-card .row { margin-top: 4px; }
+.reject-box { display: grid; gap: 8px; margin-top: 4px; }
+.req-card .cancel { justify-self: start; color: var(--rust); }
+
+/* Status chip: approved looks like the ink stamp, pending like pencil */
+.chip {
+  flex: none; font-size: .8rem; font-weight: 700; line-height: 1; white-space: nowrap;
+  padding: 5px 8px 4px; border-radius: 6px; border: 1.5px solid currentColor;
+}
+.chip.pending { color: var(--pencil); border-style: dashed; }
+.chip.approved { color: var(--ink); }
+.chip.rejected { color: var(--alert); }
+.chip.cancelled { color: var(--muted); border-color: var(--rule); }
+.req-card.mine.cancelled { opacity: .7; }
+
+/* Approval path: one dot per step */
+.steps { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 0; }
+.step { display: flex; align-items: center; gap: 5px; font-size: .8rem; color: var(--muted); min-width: 0; }
+.step + .step::before { content: ""; width: 16px; height: 1.5px; background: var(--rule); margin-inline: 4px; }
+.step-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--rule); flex: none; }
+.step-name { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step.approved { color: var(--ink); }
+.step.approved .step-dot { background: var(--ink); border-color: var(--ink); }
+.step.pending { color: var(--text); font-weight: 600; }
+.step.pending .step-dot { border-color: var(--warning); border-width: 2.5px; }
+.step.rejected { color: var(--alert); }
+.step.rejected .step-dot { background: var(--alert); border-color: var(--alert); }
+.step.cancelled .step-dot { border-style: dashed; }
+
+/* Balances */
+.balances { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.balance { background: var(--surface); border-radius: 10px; padding: 10px 12px; display: grid; gap: 0; min-width: 0; }
+.balance-label { font-size: .8rem; color: var(--muted); }
+.balance-value { font-size: 1.35rem; font-weight: 700; color: var(--ink); line-height: 1.35; font-variant-numeric: tabular-nums; }
+.balance-sub { font-size: .78rem; color: var(--muted); }
+.balance-others { grid-column: 1 / -1; font-size: .85rem; color: var(--muted); }
+
+/* New request */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg-btn {
+  font: inherit; cursor: pointer; border: 0; background: none; border-radius: 9px;
+  min-height: 42px; color: var(--muted); font-weight: 600;
+}
+.seg-btn.on { background: var(--ink); color: #fff; }
+.seg-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.form { display: grid; gap: 14px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field select, .field textarea {
+  font: inherit; border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 12px; min-height: 46px; width: 100%; min-width: 0; background: var(--surface); color: var(--text);
+}
+.field textarea { resize: vertical; min-height: 72px; }
+.field select:focus, .field textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.field input[type="date"], .field input[type="time"] { font-variant-numeric: tabular-nums; }
+.preview { text-align: center; font-size: 1rem; min-height: 1.6em; }
+.preview.ok { color: var(--ink); }
+.preview.ok strong { font-weight: 700; }
+.preview.bad { color: var(--alert); font-size: .95rem; }
+.send { min-height: 56px; font-size: 1.1rem; font-weight: 700; }

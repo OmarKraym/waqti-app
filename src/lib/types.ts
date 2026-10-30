@@ -82,3 +82,90 @@ export interface PunchResult {
   /** Fresh signed server-time token. */
   time_token?: string;
 }
+
+// ---------------------------------------------------------------- Requests (Phase 4). See docs/API_CONTRACT.md §4.
+
+export type RequestType = "leave" | "permission" | "other";
+export type LeaveType = "annual" | "sick" | "emergency" | "marriage" | "maternity" | "unpaid";
+export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type ApproverKind = "direct_manager" | "second_manager" | "specific_employee" | "hr";
+export type StepStatus = "waiting" | "pending" | "approved" | "rejected" | "skipped" | "cancelled";
+
+export interface ApprovalStep {
+  step_order: number;
+  kind: ApproverKind;
+  status: StepStatus;
+  approver_name: string | null;
+  decided_at: string | null;
+  note: string | null;
+}
+
+export interface RequestItem {
+  id: string;
+  type: RequestType;
+  leave_type: LeaveType | null;
+  status: RequestStatus;
+  start_at: string;
+  /** Exclusive end: a leave on 3-4 March ends at 5 March 00:00. */
+  end_at: string;
+  days: number | null;
+  minutes: number | null;
+  reason: string | null;
+  decision_note: string | null;
+  decided_at: string | null;
+  created_at: string;
+  current_step: number | null;
+  employee: { full_name: string; employee_number: string | null; department: string | null; job_title: string | null };
+  steps: ApprovalStep[];
+}
+
+/** One leave type for one year. entitled/remaining null = not limited. */
+export interface LeaveBalance {
+  leave_type: LeaveType;
+  entitled: number | null;
+  used: number;
+  pending: number;
+  remaining: number | null;
+}
+
+export interface PermissionUsage {
+  month: string; // YYYY-MM
+  limit: number; // minutes
+  used: number;
+  pending: number;
+}
+
+export interface RequestsOverview {
+  balances: LeaveBalance[];
+  permission: PermissionUsage;
+  requests: RequestItem[];
+  inbox_count: number;
+  timezone: string;
+  today: string; // YYYY-MM-DD in the company time zone
+}
+
+export type NewRequest =
+  | { type: "leave"; leave_type: LeaveType; start_date: string; end_date: string; reason: string | null }
+  | { type: "permission"; start_at: string; end_at: string; reason: string | null }
+  | { type: "other"; start_date: string; end_date: string; reason: string };
+
+/** What the server computed for a request without saving it (dry run). */
+export interface RequestPreview {
+  start_at: string;
+  end_at: string;
+  days: number | null;
+  minutes: number | null;
+  balance: LeaveBalance | null;
+  permission: PermissionUsage | null;
+}
+
+export interface InboxItem extends RequestItem {
+  approval_id: string;
+  my_step: number;
+  step_count: number;
+  /** The requester's balance, NOT counting this request. */
+  balance: LeaveBalance | null;
+  permission: PermissionUsage | null;
+}
+
+export type Decision = "approve" | "reject";

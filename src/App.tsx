@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import type { SessionUser } from "./lib/api";
 import { api, isMock } from "./lib/client";
 import { ChangePassword } from "./screens/ChangePassword";
-import { Home } from "./screens/Home";
 import { Login } from "./screens/Login";
+import { Main } from "./screens/Main";
 
 type Gate = { status: "booting" } | { status: "ready"; user: SessionUser | null };
 
@@ -37,7 +37,7 @@ export function App() {
       ) : gate.user.mustChangePassword ? (
         <ChangePassword email={gate.user.email} />
       ) : (
-        <Home user={gate.user} />
+        <Main user={gate.user} />
       )}
     </>
   );

@@ -22,6 +22,19 @@ export type AppErrorCode =
   | "time_unverified"
   | "time_order"
   | "offline_too_old"
+  // requests
+  | "invalid_dates"
+  | "invalid_duration"
+  | "crosses_year"
+  | "no_working_days"
+  | "insufficient_balance"
+  | "permission_limit"
+  | "overlapping_request"
+  | "reason_required"
+  | "maternity_female_only"
+  | "request_not_found"
+  | "already_decided"
+  | "cannot_decide_own"
   // change password
   | "password_too_short"
   | "password_too_long"
@@ -42,6 +55,9 @@ const KNOWN = new Set<AppErrorCode>([
   "not_authenticated", "invalid_credentials", "employee_inactive", "must_change_password", "forbidden",
   "state_changed", "outside_geofence", "location_required", "location_inaccurate", "rate_limited",
   "geofence_not_configured", "invalid_input", "clock_changed", "time_unverified", "time_order", "offline_too_old",
+  "invalid_dates", "invalid_duration", "crosses_year", "no_working_days", "insufficient_balance", "permission_limit",
+  "overlapping_request", "reason_required", "maternity_female_only", "request_not_found", "already_decided",
+  "cannot_decide_own",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
 ]);
 
@@ -68,6 +84,18 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   time_unverified: "تعذّر التحقق من وقت هذا التسجيل، فلم يُقبل. تواصل مع الإدارة.",
   time_order: "وقت هذا التسجيل قبل آخر حركة مسجّلة لك، فلم يُقبل. تواصل مع الإدارة.",
   offline_too_old: "وصل هذا التسجيل بعد أكثر من 72 ساعة، فلم يُقبل. تواصل مع الإدارة.",
+  invalid_dates: "التاريخ غير صالح. تأكد أن النهاية بعد البداية، وأن التاريخ ليس بعيدًا جدًا في الماضي أو المستقبل.",
+  invalid_duration: "مدة الإذن يجب أن تكون بين ربع ساعة و8 ساعات.",
+  crosses_year: "الإجازة لا يمكن أن تمتد إلى السنة التالية. قسّمها إلى طلبين.",
+  no_working_days: "لا توجد أيام عمل في هذه الفترة حسب جدول دوامك.",
+  insufficient_balance: "رصيدك لا يكفي لهذه الإجازة (الطلبات المعلّقة محسوبة).",
+  permission_limit: "تجاوزت الحد الشهري للأذونات (الطلبات المعلّقة محسوبة).",
+  overlapping_request: "لديك طلب آخر في نفس الفترة.",
+  reason_required: "اكتب سبب الطلب.",
+  maternity_female_only: "إجازة الأمومة غير متاحة لهذا الحساب.",
+  request_not_found: "الطلب غير موجود أو لم يعد بانتظار قرارك.",
+  already_decided: "تم البتّ في هذا الطلب من قبل.",
+  cannot_decide_own: "لا يمكنك اتخاذ قرار في طلبك أنت.",
   password_too_short: "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
   password_too_long: "كلمة المرور طويلة جدًا.",
   password_too_weak: "كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل.",
