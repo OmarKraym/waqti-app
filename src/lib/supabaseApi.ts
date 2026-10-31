@@ -13,6 +13,7 @@ import type {
   AttendanceState,
   InboxItem,
   NewRequest,
+  NotificationSettings,
   OfflinePunchInput,
   PunchInput,
   PunchResult,
@@ -248,6 +249,31 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
     decide(approvalId, decision, note) {
       return rpc<RequestItem>("approver_decide", { p_approval_id: approvalId, p_decision: decision, p_note: note });
+    },
+
+    async savePushSubscription(k) {
+      await rpc<null>("employee_save_push_subscription", {
+        p_endpoint: k.endpoint, p_p256dh: k.p256dh, p_auth: k.auth, p_user_agent: navigator.userAgent.slice(0, 300),
+      });
+    },
+
+    async deletePushSubscription(endpoint) {
+      await rpc<null>("employee_delete_push_subscription", { p_endpoint: endpoint });
+    },
+
+    getNotificationSettings() {
+      return rpc<NotificationSettings>("employee_get_notification_settings");
+    },
+
+    setNotificationSettings(s) {
+      return rpc<NotificationSettings>("employee_set_notification_settings", {
+        p_remind_check_in: s.remind_check_in, p_check_in_before: s.check_in_before,
+        p_remind_check_out: s.remind_check_out, p_check_out_before: s.check_out_before,
+      });
+    },
+
+    async testNotification() {
+      await rpc<null>("employee_test_notification");
     },
   };
 }

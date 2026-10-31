@@ -39,6 +39,7 @@ export type AppErrorCode =
   | "permission_too_long"
   | "outside_window"
   | "not_late"
+  | "no_device"
   // change password
   | "password_too_short"
   | "password_too_long"
@@ -61,7 +62,7 @@ const KNOWN = new Set<AppErrorCode>([
   "geofence_not_configured", "invalid_input", "clock_changed", "time_unverified", "time_order", "offline_too_old",
   "invalid_dates", "invalid_duration", "crosses_year", "no_working_days", "insufficient_balance", "permission_limit",
   "overlapping_request", "reason_required", "maternity_female_only", "request_not_found", "already_decided",
-  "cannot_decide_own", "permission_type_not_found", "permission_too_long", "outside_window", "not_late",
+  "cannot_decide_own", "permission_type_not_found", "permission_too_long", "outside_window", "not_late", "no_device",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
 ]);
 
@@ -104,6 +105,7 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   permission_too_long: "مدة الإذن أطول من المسموح لهذا النوع.",
   outside_window: "لا يمكن طلب هذا النوع من الإذن في هذا اليوم.",
   not_late: "وقت الوصول قبل بداية دوامك، فلا يوجد تأخير.",
+  no_device: "فعّل الإشعارات على هذا الجهاز أولًا.",
   password_too_short: "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
   password_too_long: "كلمة المرور طويلة جدًا.",
   password_too_weak: "كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل.",

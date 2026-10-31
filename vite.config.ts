@@ -15,7 +15,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png"],
+      includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png", "push-sw.js"],
       manifest: {
         name: "وقتي - الحضور والانصراف",
         short_name: "وقتي",
@@ -40,6 +40,8 @@ export default defineConfig({
         // No runtimeCaching on purpose: API requests always go to the network.
         runtimeCaching: [],
         cleanupOutdatedCaches: true,
+        // Web Push handlers (public/push-sw.js): show notifications, open the app when tapped.
+        importScripts: ["push-sw.js"],
       },
     }),
   ],

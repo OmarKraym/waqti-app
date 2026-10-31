@@ -185,3 +185,13 @@ export interface InboxItem extends RequestItem {
 }
 
 export type Decision = "approve" | "reject";
+
+// ---------------------------------------------------------------- Notifications (Phase 5)
+
+export interface NotificationSettings {
+  remind_check_in: boolean;
+  check_in_before: number;   // minutes before the shift start (0 = at the start)
+  remind_check_out: boolean;
+  check_out_before: number;  // minutes before the shift end (0 = at the end)
+  devices: number;           // devices of mine that receive notifications
+}

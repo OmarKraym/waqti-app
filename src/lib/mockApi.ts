@@ -153,9 +153,27 @@ export function createMockApi(): WaqtiApi {
   }
 
   const req = createMockRequests();
+  // notifications: settings in memory; the "server" test shows a local notification
+  let notif = { remind_check_in: false, check_in_before: 10, remind_check_out: false, check_out_before: 0 };
+  const devices = new Set<string>();
 
   return {
     ...req,
+    async savePushSubscription(k) { await wait(200); requireNetwork(); devices.add(k.endpoint); },
+    async deletePushSubscription(endpoint) { await wait(200); requireNetwork(); devices.delete(endpoint); },
+    async getNotificationSettings() { await wait(200); requireNetwork(); return { ...notif, devices: devices.size }; },
+    async setNotificationSettings(s) {
+      await wait(250); requireNetwork();
+      if (s.check_in_before < 0 || s.check_in_before > 120 || s.check_out_before < 0 || s.check_out_before > 120) throw new AppError("invalid_input");
+      notif = { ...s };
+      return { ...notif, devices: devices.size };
+    },
+    async testNotification() {
+      await wait(300); requireNetwork();
+      if (devices.size === 0) throw new AppError("no_device");
+      const reg = await navigator.serviceWorker?.ready;
+      await reg?.showNotification("وقتي", { body: "الإشعارات تعمل على هذا الجهاز.", dir: "rtl", lang: "ar", tag: "test" });
+    },
     async getSessionUser() {
       return user;
     },

@@ -3,6 +3,7 @@ import type {
   Decision,
   InboxItem,
   NewRequest,
+  NotificationSettings,
   OfflinePunchInput,
   PunchInput,
   PunchResult,
@@ -33,6 +34,14 @@ export interface WaqtiApi {
   /** Requests waiting for MY decision (as a manager, a named approver, or the company admin). */
   getInbox(): Promise<InboxItem[]>;
   decide(approvalId: string, decision: Decision, note: string | null): Promise<RequestItem>;
+
+  // ---- notifications (Phase 5)
+  savePushSubscription(keys: { endpoint: string; p256dh: string; auth: string }): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+  getNotificationSettings(): Promise<NotificationSettings>;
+  setNotificationSettings(s: Omit<NotificationSettings, "devices">): Promise<NotificationSettings>;
+  /** Sends a test notification to my devices (server-side, like the real ones). */
+  testNotification(): Promise<void>;
 }
 
 export interface SessionUser {
