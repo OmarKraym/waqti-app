@@ -67,7 +67,6 @@ alter table public.approval_steps
   add column permission_type_id uuid,
   add constraint approval_steps_permission_type_same_company
     foreign key (company_id, permission_type_id) references public.permission_types (company_id, id) on delete cascade,
-  add constraint approval_steps_permission_type_required check ((request_type = 'permission') = (permission_type_id is not null)),
   drop constraint approval_steps_order_key;
 create unique index approval_steps_order_uidx on public.approval_steps
   (company_id, request_type, coalesce(permission_type_id, '00000000-0000-0000-0000-000000000000'::uuid), step_order);
@@ -111,6 +110,9 @@ from public.approval_steps s
 join public.permission_types t on t.company_id = s.company_id
 where s.request_type = 'permission' and s.permission_type_id is null;
 delete from public.approval_steps where request_type = 'permission' and permission_type_id is null;
+-- only now can every permission path be required to name its type
+alter table public.approval_steps
+  add constraint approval_steps_permission_type_required check ((request_type = 'permission') = (permission_type_id is not null));
 
 -- ---------------------------------------------------------------- 4. Remove the general monthly limit
 drop function public.admin_set_request_settings(integer);

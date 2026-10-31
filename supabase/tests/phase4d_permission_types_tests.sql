@@ -41,6 +41,8 @@ begin
   perform pg_temp.ok(not exists (select 1 from information_schema.columns where table_name = 'companies' and column_name = 'permission_minutes_per_month')
                      and to_regprocedure('public.admin_set_request_settings(integer)') is null, 'the general monthly limit is gone');
 
+  -- start from the default paths (production may have saved ones; rolled back at the end)
+  delete from public.approval_steps;
   perform pg_temp.as_user(v_admin);
   perform public.admin_set_employee_manager(a, b);
 

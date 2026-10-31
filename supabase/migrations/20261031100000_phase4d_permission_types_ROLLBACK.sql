@@ -27,6 +27,7 @@ alter table public.companies
     check (permission_minutes_per_month between 0 and 20000);
 
 -- one general permission path per company, from its first type's custom path (if any)
+alter table public.approval_steps drop constraint if exists approval_steps_permission_type_required;
 insert into public.approval_steps (company_id, request_type, step_order, approver_kind, approver_employee_id, permission_type_id)
 select s.company_id, s.request_type, s.step_order, s.approver_kind, s.approver_employee_id, null
 from public.approval_steps s
@@ -36,7 +37,6 @@ join lateral (select t.id from public.permission_types t where t.company_id = s.
 delete from public.approval_steps where permission_type_id is not null;
 drop index if exists public.approval_steps_order_uidx;
 alter table public.approval_steps
-  drop constraint if exists approval_steps_permission_type_required,
   drop constraint if exists approval_steps_permission_type_same_company,
   drop column permission_type_id,
   add constraint approval_steps_order_key unique (company_id, request_type, step_order);

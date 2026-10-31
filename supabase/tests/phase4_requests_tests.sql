@@ -36,6 +36,8 @@ begin
   v_mon := v_today + 21 + ((8 - extract(isodow from v_today + 21)::int) % 7);
 
   -- ---------------------------------------------------------------- managers
+  -- start from the default paths (production may have saved ones; rolled back at the end)
+  delete from public.approval_steps;
   perform pg_temp.as_user(v_admin);
   perform public.admin_set_employee_manager(a, b);
   perform public.admin_set_employee_manager(b, c);
