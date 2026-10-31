@@ -27,14 +27,31 @@ import {
   type Draft,
 } from "../lib/requests";
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
+import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "./useRequests";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
 
 export function Requests({ data, online }: { data: RequestsData; online: boolean }) {
-  const { overview, inbox, loading, error, reload } = data;
+  const { overview, inbox, overtime, loading, error, reload } = data;
   const [composing, setComposing] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
+  const done = (text: string, kind: "success" | "error") => { setNote({ kind, text }); reload(); };
+
+  if (assigning && overtime) {
+    return (
+      <AssignOvertimeForm
+        data={overtime}
+        online={online}
+        onClose={() => setAssigning(false)}
+        onSent={(o) => {
+          setAssigning(false);
+          done(`كُلِّف ${o.employee.full_name}، ووصله إشعار.`, "success");
+        }}
+      />
+    );
+  }
 
   if (composing && overview) {
     return (
@@ -82,6 +99,7 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
           {inbox.length > 0 && (
             <Inbox items={inbox} timeZone={overview.timezone} online={online} onDone={(text, kind) => { setNote({ kind, text }); reload(); }} />
           )}
+          {overtime && <MyOvertime data={overtime} online={online} onDone={done} />}
           <Balances overview={overview} />
           <MyRequests
             items={overview.requests}
@@ -89,6 +107,7 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
             online={online}
             onChanged={(text, kind) => { setNote({ kind, text }); reload(); }}
           />
+          {overtime && <TeamOvertime data={overtime} online={online} onDone={done} onAssign={() => { setNote(null); setAssigning(true); }} />}
         </>
       )}
     </main>

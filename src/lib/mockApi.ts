@@ -7,6 +7,7 @@
 //   history = 1      (adds three earlier work days, for screenshots)
 //   inbox = 0        (no requests waiting for my approval; default: two, as a manager)
 //   requests = 1     (adds sample requests of my own: approved, pending, rejected)
+//   overtime = 1     (I manage a team of 3 and have one assignment of my own)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
 // one-sided monotonic check, 72 h limit, time order.
@@ -16,6 +17,11 @@ import { newRequestId } from "./attendance";
 import { AppError } from "./errors";
 import { localDate } from "./requests";
 import type {
+  OvertimeInput,
+  OvertimeItem,
+  OvertimeOverview,
+  OvertimePreview,
+  TeamMember,
   AttendanceEvent,
   AttendanceState,
   InboxItem,
@@ -153,12 +159,14 @@ export function createMockApi(): WaqtiApi {
   }
 
   const req = createMockRequests();
+  const ot = createMockOvertime();
   // notifications: settings in memory; the "server" test shows a local notification
   let notif = { remind_check_in: false, check_in_before: 10, remind_check_out: false, check_out_before: 0 };
   const devices = new Set<string>();
 
   return {
     ...req,
+    ...ot,
     async savePushSubscription(k) { await wait(200); requireNetwork(); devices.add(k.endpoint); },
     async deletePushSubscription(endpoint) { await wait(200); requireNetwork(); devices.delete(endpoint); },
     async getNotificationSettings() { await wait(200); requireNetwork(); return { ...notif, devices: devices.size }; },
@@ -430,6 +438,110 @@ function createMockRequests() {
           : s.status === "waiting" ? { ...s, status: decision === "approve" ? ("pending" as const) : ("cancelled" as const) } : s);
       return { ...item, steps: stepsAfter, status: decision === "reject" ? "rejected" : "pending",
                current_step: decision === "reject" ? null : item.my_step + 1, decision_note: decision === "reject" ? note : null } as RequestItem;
+    },
+  };
+}
+
+// ---------------------------------------------------------------- overtime (same rules as the server)
+
+function createMockOvertime() {
+  const TZ_ = "Africa/Tripoli";
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const today = () => localDate(iso(serverNow()), TZ_);
+  const at = (day: string, h: number, m = 0) => iso(Date.parse(`${day}T00:00:00Z`) - 2 * 3_600_000 + (h * 60 + m) * 60_000);
+  const plusDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const SHIFT = [8, 16]; // every day except Friday
+  const isWorkday = (day: string) => new Date(`${day}T12:00:00Z`).getUTCDay() !== 5;
+  const limits = { day_minutes: 180 as number | null, month_minutes: 1200 as number | null };
+  const ME = { id: "me", full_name: "أحمد سالم" };
+  const team: TeamMember[] = q.get("overtime") === "1" ? [
+    { id: "t1", full_name: "سالم الورفلي", employee_number: "1031", department: "المبيعات", direct: true },
+    { id: "t2", full_name: "مريم التاجوري", employee_number: "1040", department: "المبيعات", direct: true },
+    { id: "t3", full_name: "علي الزوي", employee_number: "1052", department: "المخازن", direct: false },
+  ] : [];
+  const items: OvertimeItem[] = [];
+  const byKey = new Map<string, string>();
+  const phaseOf = (o: OvertimeItem): OvertimeItem["phase"] =>
+    o.status === "cancelled" ? "cancelled" : serverNow() < Date.parse(o.start_at) ? "upcoming" : serverNow() < Date.parse(o.end_at) ? "now" : "done";
+  const make = (emp: { id: string; full_name: string }, by: { id: string; full_name: string }, s: string, e: string, task: string | null): OvertimeItem => ({
+    id: newRequestId(), status: "assigned", phase: "upcoming", start_at: s, end_at: e, minutes: Math.ceil((Date.parse(e) - Date.parse(s)) / 60_000), task,
+    employee: { id: emp.id, full_name: emp.full_name, employee_number: null, department: null }, assigned_by: by,
+    employee_note: null, employee_noted_at: null, cancelled_at: null, cancelled_by_name: null, created_at: iso(serverNow()), actual_minutes: null,
+  });
+  if (q.get("overtime") === "1") {
+    const d = plusDays(today(), 2);
+    items.push(make(ME, { id: "boss", full_name: "خالد المبروك" }, at(d, 16, 30), at(d, 18, 30), "جرد المخزن الرئيسي"));
+    const past = make({ id: "t1", full_name: "سالم الورفلي" }, ME, at(plusDays(today(), -3), 16), at(plusDays(today(), -3), 18), null);
+    past.actual_minutes = 95;
+    items.push(past);
+  }
+  const view = (o: OvertimeItem) => ({ ...o, phase: phaseOf(o) });
+
+  function check(i: OvertimeInput): OvertimePreview {
+    const member = team.find((t) => t.id === i.employee_id);
+    if (!member) throw new AppError("not_your_team");
+    const s = Date.parse(i.start_at), e = Date.parse(i.end_at);
+    const day = localDate(i.start_at, TZ_);
+    if (!(e > s) || localDate(iso(e - 1000), TZ_) !== day) throw new AppError("invalid_dates");
+    if (s < serverNow() - 15 * 60_000 || day > plusDays(today(), 60)) throw new AppError("invalid_dates");
+    const minutes = Math.ceil((e - s) / 60_000);
+    if (minutes < 15) throw new AppError("invalid_duration");
+    const shift = isWorkday(day) ? [Date.parse(at(day, SHIFT[0])), Date.parse(at(day, SHIFT[1]))] : null;
+    if (shift && s < shift[1] && shift[0] < e) throw new AppError("overlaps_shift");
+    const active = items.filter((o) => o.employee.id === i.employee_id && o.status === "assigned");
+    if (active.some((o) => Date.parse(o.start_at) < e && s < Date.parse(o.end_at))) throw new AppError("overlapping_overtime");
+    const usedDay = active.filter((o) => localDate(o.start_at, TZ_) === day).reduce((a, o) => a + o.minutes, 0);
+    const usedMonth = active.filter((o) => localDate(o.start_at, TZ_).slice(0, 7) === day.slice(0, 7)).reduce((a, o) => a + o.minutes, 0);
+    if (limits.day_minutes !== null && usedDay + minutes > limits.day_minutes) throw new AppError("overtime_day_limit");
+    if (limits.month_minutes !== null && usedMonth + minutes > limits.month_minutes) throw new AppError("overtime_month_limit");
+    return { minutes, used_day: usedDay, used_month: usedMonth, limit_day: limits.day_minutes, limit_month: limits.month_minutes,
+             shift_start: shift ? iso(shift[0]) : null, shift_end: shift ? iso(shift[1]) : null };
+  }
+  const online = async (ms: number) => {
+    await wait(ms);
+    requireNetwork();
+  };
+
+  return {
+    async getOvertimeOverview(): Promise<OvertimeOverview> {
+      await online(300);
+      return {
+        mine: items.filter((o) => o.employee.id === ME.id).map(view),
+        team,
+        assigned_by_me: items.filter((o) => o.assigned_by.id === ME.id).map(view).sort((a, b) => b.start_at.localeCompare(a.start_at)),
+        limits: { ...limits }, timezone: TZ_, today: today(),
+      };
+    },
+    async previewOvertime(i: OvertimeInput) {
+      await online(250);
+      return check(i);
+    },
+    async assignOvertime(key: string, i: OvertimeInput) {
+      await online(500);
+      const known = byKey.get(key);
+      if (known) return view(items.find((o) => o.id === known)!);
+      check(i);
+      const member = team.find((t) => t.id === i.employee_id)!;
+      const o = make(member, ME, i.start_at, i.end_at, i.task);
+      items.push(o);
+      byKey.set(key, o.id);
+      return view(o);
+    },
+    async cancelOvertime(id: string) {
+      await online(350);
+      const o = items.find((x) => x.id === id);
+      if (!o) throw new AppError("overtime_not_found");
+      if (serverNow() >= Date.parse(o.start_at)) throw new AppError("overtime_started");
+      o.status = "cancelled"; o.cancelled_at = iso(serverNow()); o.cancelled_by_name = ME.full_name;
+      return view(o);
+    },
+    async noteOvertime(id: string, note: string) {
+      await online(350);
+      const o = items.find((x) => x.id === id && x.employee.id === ME.id);
+      if (!o) throw new AppError("overtime_not_found");
+      if (o.status === "cancelled" || serverNow() >= Date.parse(o.end_at)) throw new AppError("overtime_closed");
+      o.employee_note = note.trim(); o.employee_noted_at = iso(serverNow());
+      return view(o);
     },
   };
 }

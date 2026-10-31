@@ -195,3 +195,60 @@ export interface NotificationSettings {
   check_out_before: number;  // minutes before the shift end (0 = at the end)
   devices: number;           // devices of mine that receive notifications
 }
+
+// ---------------------------------------------------------------- Overtime (Phase 6)
+
+export interface OvertimeItem {
+  id: string;
+  status: "assigned" | "cancelled";
+  /** upcoming / now (running) / done / cancelled, decided by the server clock */
+  phase: "upcoming" | "now" | "done" | "cancelled";
+  start_at: string;
+  end_at: string;
+  minutes: number;
+  task: string | null;
+  employee: { id: string; full_name: string; employee_number: string | null; department: string | null };
+  assigned_by: { id: string; full_name: string };
+  employee_note: string | null;
+  employee_noted_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by_name: string | null;
+  created_at: string;
+  /** Minutes covered by his punches inside the window (null before it starts). */
+  actual_minutes: number | null;
+}
+
+export interface TeamMember {
+  id: string;
+  full_name: string;
+  employee_number: string | null;
+  department: string | null;
+  /** true = I am his direct manager; false = he is lower in my chain */
+  direct: boolean;
+}
+
+export interface OvertimeOverview {
+  mine: OvertimeItem[];
+  team: TeamMember[];
+  assigned_by_me: OvertimeItem[];
+  limits: { day_minutes: number | null; month_minutes: number | null };
+  timezone: string;
+  today: string;
+}
+
+export interface OvertimeInput {
+  employee_id: string;
+  start_at: string;
+  end_at: string;
+  task: string | null;
+}
+
+export interface OvertimePreview {
+  minutes: number;
+  used_day: number;
+  used_month: number;
+  limit_day: number | null;
+  limit_month: number | null;
+  shift_start: string | null;
+  shift_end: string | null;
+}

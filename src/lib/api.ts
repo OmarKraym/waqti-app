@@ -4,6 +4,10 @@ import type {
   InboxItem,
   NewRequest,
   NotificationSettings,
+  OvertimeInput,
+  OvertimeItem,
+  OvertimeOverview,
+  OvertimePreview,
   OfflinePunchInput,
   PunchInput,
   PunchResult,
@@ -42,6 +46,16 @@ export interface WaqtiApi {
   setNotificationSettings(s: Omit<NotificationSettings, "devices">): Promise<NotificationSettings>;
   /** Sends a test notification to my devices (server-side, like the real ones). */
   testNotification(): Promise<void>;
+
+  // ---- overtime (Phase 6)
+  getOvertimeOverview(): Promise<OvertimeOverview>;
+  /** Checks an assignment with the server's rules without saving it. */
+  previewOvertime(input: OvertimeInput): Promise<OvertimePreview>;
+  /** Saves it. The same key never creates two assignments. */
+  assignOvertime(key: string, input: OvertimeInput): Promise<OvertimeItem>;
+  cancelOvertime(id: string): Promise<OvertimeItem>;
+  /** The assigned employee writes a note (e.g. he cannot do it). */
+  noteOvertime(id: string, note: string): Promise<OvertimeItem>;
 }
 
 export interface SessionUser {

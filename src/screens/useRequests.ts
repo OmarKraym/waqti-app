@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/client";
 import { AppError } from "../lib/errors";
-import type { InboxItem, RequestsOverview } from "../lib/types";
+import type { InboxItem, OvertimeOverview, RequestsOverview } from "../lib/types";
 
 export interface RequestsData {
   overview: RequestsOverview | null;
   inbox: InboxItem[];
+  /** Overtime assigned to me / by me (null until loaded, or if it failed: requests still work). */
+  overtime: OvertimeOverview | null;
   loading: boolean;
   error: AppError | null;
   reload: () => Promise<void>;
@@ -18,6 +20,7 @@ export interface RequestsData {
 export function useRequests(): RequestsData {
   const [overview, setOverview] = useState<RequestsOverview | null>(null);
   const [inbox, setInbox] = useState<InboxItem[]>([]);
+  const [overtime, setOvertime] = useState<OvertimeOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
   const run = useRef(0);
@@ -26,12 +29,13 @@ export function useRequests(): RequestsData {
     const mine = ++run.current;
     setLoading(true);
     try {
-      const o = await api.getRequestsOverview();
+      const [o, ot] = await Promise.all([api.getRequestsOverview(), api.getOvertimeOverview().catch(() => null)]);
       // Only approvers have an inbox: skip the second call for everyone else.
       const box = o.inbox_count > 0 ? await api.getInbox() : [];
       if (mine !== run.current) return;
       setOverview(o);
       setInbox(box);
+      if (ot) setOvertime(ot);
       setError(null);
     } catch (e) {
       if (mine !== run.current) return;
@@ -54,5 +58,5 @@ export function useRequests(): RequestsData {
     };
   }, [reload]);
 
-  return { overview, inbox, loading, error, reload };
+  return { overview, inbox, overtime, loading, error, reload };
 }

@@ -425,3 +425,16 @@ p { margin: 0; }
 .switch input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .switch input:disabled { opacity: .5; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .switch input, .switch input::after { transition: none; } }
+
+/* Overtime (phase 6) */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.section-head .section-title { margin: 0; }
+.ot-card.upcoming, .ot-card.now { border-color: var(--ink); }
+.ot-card.has-note { border-color: var(--rust); }
+.ot-note { font-size: .9rem; color: var(--rust); font-weight: 600; }
+.chip.ot-upcoming { color: var(--ink); border-style: dashed; }
+.chip.ot-now { color: #fff; background: var(--ink); border-color: var(--ink); }
+.chip.ot-done { color: var(--muted); border-color: var(--rule); }
+.chip.ot-cancelled { color: var(--muted); border-color: var(--rule); text-decoration: line-through; }
+.ot-card.cancelled { opacity: .7; }
+div.preview { display: grid; gap: 2px; }

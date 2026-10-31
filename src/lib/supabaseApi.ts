@@ -14,6 +14,9 @@ import type {
   InboxItem,
   NewRequest,
   NotificationSettings,
+  OvertimeItem,
+  OvertimeOverview,
+  OvertimePreview,
   OfflinePunchInput,
   PunchInput,
   PunchResult,
@@ -274,6 +277,30 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
     async testNotification() {
       await rpc<null>("employee_test_notification");
+    },
+
+    getOvertimeOverview() {
+      return rpc<OvertimeOverview>("employee_overtime_overview");
+    },
+
+    previewOvertime(i) {
+      return rpc<OvertimePreview>("manager_assign_overtime", {
+        p_assign_key: PREVIEW_KEY, p_employee_id: i.employee_id, p_start_at: i.start_at, p_end_at: i.end_at, p_task: i.task, p_dry_run: true,
+      });
+    },
+
+    assignOvertime(key, i) {
+      return rpc<OvertimeItem>("manager_assign_overtime", {
+        p_assign_key: key, p_employee_id: i.employee_id, p_start_at: i.start_at, p_end_at: i.end_at, p_task: i.task, p_dry_run: false,
+      });
+    },
+
+    cancelOvertime(id) {
+      return rpc<OvertimeItem>("manager_cancel_overtime", { p_id: id });
+    },
+
+    noteOvertime(id, note) {
+      return rpc<OvertimeItem>("employee_overtime_note", { p_id: id, p_note: note });
     },
   };
 }
