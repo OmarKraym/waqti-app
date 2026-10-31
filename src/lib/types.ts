@@ -104,6 +104,9 @@ export interface RequestItem {
   id: string;
   type: RequestType;
   leave_type: LeaveType | null;
+  /** Permissions only (phase 4d): the company's permission type. */
+  permission_type_id?: string | null;
+  permission_type?: string | null;
   status: RequestStatus;
   start_at: string;
   /** Exclusive end: a leave on 3-4 March ends at 5 March 00:00. */
@@ -128,16 +131,29 @@ export interface LeaveBalance {
   remaining: number | null;
 }
 
+/** How the time of a permission is entered (set per type by the company). */
+export type PermissionMode =
+  | "range"         // from - to (exit during the shift, work mission)
+  | "late_arrival"  // arrival time; starts at the shift start (late justification)
+  | "early_leave";  // exit time; ends at the shift end (final exit)
+
+/** One permission type of the company, with what the employee used of it this month (pending counts). */
 export interface PermissionUsage {
-  month: string; // YYYY-MM
-  limit: number; // minutes
-  used: number;
-  pending: number;
+  id: string;
+  name: string;
+  mode: PermissionMode;
+  max_per_month: number | null; // null = no limit
+  max_minutes: number | null;   // per request; null = no limit
+  days_back: number;            // how many days back it may be requested (0 = same day)
+  days_ahead: number;
+  month: string;                // YYYY-MM
+  used: number;                 // approved requests this month
+  pending: number;              // pending requests this month
 }
 
 export interface RequestsOverview {
   balances: LeaveBalance[];
-  permission: PermissionUsage;
+  permission_types: PermissionUsage[];
   requests: RequestItem[];
   inbox_count: number;
   timezone: string;
@@ -146,7 +162,7 @@ export interface RequestsOverview {
 
 export type NewRequest =
   | { type: "leave"; leave_type: LeaveType; start_date: string; end_date: string; reason: string | null }
-  | { type: "permission"; start_at: string; end_at: string; reason: string | null }
+  | { type: "permission"; permission_type_id: string; start_at: string | null; end_at: string | null; reason: string | null }
   | { type: "other"; start_date: string; end_date: string; reason: string };
 
 /** What the server computed for a request without saving it (dry run). */

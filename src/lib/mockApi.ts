@@ -222,7 +222,15 @@ export function createMockApi(): WaqtiApi {
 
 const TZ = "Africa/Tripoli";
 const LEAVE_TYPES: LeaveType[] = ["annual", "sick", "emergency", "marriage", "unpaid"];
-const PERMISSION_LIMIT = 240;
+/** The 4 default permission types of a company (same as the server's defaults). Shift: 08:00-16:00, Friday off. */
+const PERMISSION_TYPES = [
+  { id: "pt-exit", name: "خروج أثناء الدوام", mode: "range" as const, max_per_month: 3, max_minutes: 120, days_back: 7, days_ahead: 30 },
+  { id: "pt-final", name: "خروج نهائي من الدوام", mode: "early_leave" as const, max_per_month: 1, max_minutes: null, days_back: 7, days_ahead: 30 },
+  { id: "pt-late", name: "تبرير تأخير", mode: "late_arrival" as const, max_per_month: 3, max_minutes: 60, days_back: 0, days_ahead: 0 },
+  { id: "pt-mission", name: "مهمة عمل", mode: "range" as const, max_per_month: null, max_minutes: null, days_back: 7, days_ahead: 30 },
+];
+const SHIFT_START_H = 8;
+const SHIFT_END_H = 16;
 const ME = { full_name: "أحمد سالم", employee_number: "1024", department: "المبيعات", job_title: "مندوب" };
 
 function createMockRequests() {
@@ -253,7 +261,7 @@ function createMockRequests() {
     mine.push(
       make({ type: "leave", leave_type: "annual", status: "approved", start_at: startOfDay(plusDays(t, -20)), end_at: startOfDay(plusDays(t, -17)),
              days: 3, current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -25)) }),
-      make({ type: "permission", status: "rejected", start_at: new Date(Date.parse(startOfDay(plusDays(t, -3))) + 10 * 3_600_000).toISOString(),
+      make({ type: "permission", permission_type_id: "pt-exit", permission_type: "خروج أثناء الدوام", status: "rejected", start_at: new Date(Date.parse(startOfDay(plusDays(t, -3))) + 10 * 3_600_000).toISOString(),
              end_at: new Date(Date.parse(startOfDay(plusDays(t, -3))) + 12 * 3_600_000).toISOString(), minutes: 120, current_step: null,
              decision_note: "ضغط عمل في هذا اليوم", steps: steps("خالد المبروك", "rejected", "cancelled"), created_at: startOfDay(plusDays(t, -4)) }),
       make({ type: "leave", leave_type: "annual", start_at: startOfDay(plusDays(t, 12)), end_at: startOfDay(plusDays(t, 15)), days: 3,
@@ -270,11 +278,11 @@ function createMockRequests() {
                   reason: "زواج أخي", employee: other("سالم الورفلي", "1031"), steps: steps("أحمد سالم", "pending", "waiting") }),
         approval_id: newRequestId(), my_step: 1, step_count: 2,
         balance: { leave_type: "annual", entitled: 30, used: 9, pending: 0, remaining: 21 }, permission: null },
-      { ...make({ type: "permission", start_at: new Date(Date.parse(startOfDay(plusDays(t, 1))) + 9 * 3_600_000).toISOString(),
+      { ...make({ type: "permission", permission_type_id: "pt-exit", permission_type: "خروج أثناء الدوام", start_at: new Date(Date.parse(startOfDay(plusDays(t, 1))) + 9 * 3_600_000).toISOString(),
                   end_at: new Date(Date.parse(startOfDay(plusDays(t, 1))) + 11 * 3_600_000).toISOString(), minutes: 120,
                   reason: "مراجعة طبية", employee: other("مريم التاجوري", "1040"), steps: steps("أحمد سالم", "pending", "waiting") }),
         approval_id: newRequestId(), my_step: 1, step_count: 2, balance: null,
-        permission: { month: t.slice(0, 7), limit: PERMISSION_LIMIT, used: 60, pending: 0 } },
+        permission: { ...PERMISSION_TYPES[0], month: t.slice(0, 7), used: 1, pending: 0 } },
     );
   }
 
@@ -285,26 +293,44 @@ function createMockRequests() {
     const pending = rows.filter((r) => r.status === "pending").reduce((a, r) => a + (r.days ?? 0), 0);
     return { leave_type: type, entitled, used, pending, remaining: entitled === null ? null : entitled - used - pending };
   }
-  function permission(month: string): PermissionUsage {
-    const rows = mine.filter((r) => r.type === "permission" && localDate(r.start_at, TZ).startsWith(month));
-    const sum = (st: string) => rows.filter((r) => r.status === st).reduce((a, r) => a + (r.minutes ?? 0), 0);
-    return { month, limit: PERMISSION_LIMIT, used: sum("approved"), pending: sum("pending") };
+  function permission(typeId: string, month: string): PermissionUsage {
+    const pt = PERMISSION_TYPES.find((x) => x.id === typeId)!;
+    const rows = mine.filter((r) => r.permission_type_id === typeId && localDate(r.start_at, TZ).startsWith(month));
+    const count = (st: string) => rows.filter((r) => r.status === st).length;
+    return { ...pt, month, used: count("approved"), pending: count("pending") };
   }
+  const atHour = (day: string, h: number) => new Date(Date.parse(startOfDay(day)) + h * 3_600_000).toISOString();
 
   function check(r: NewRequest): RequestPreview {
     const t = today();
     let start: string, end: string, days: number | null = null, minutes: number | null = null;
     let bal: LeaveBalance | null = null, perm: PermissionUsage | null = null;
     if (r.type === "permission") {
-      const s = Date.parse(r.start_at), e = Date.parse(r.end_at);
-      const day = localDate(r.start_at, TZ);
-      if (!(e > s) || localDate(new Date(e - 1000).toISOString(), TZ) !== day) throw new AppError("invalid_dates");
-      minutes = Math.ceil((e - s) / 60_000);
-      if (minutes < 15 || minutes > 480) throw new AppError("invalid_duration");
-      if (day < plusDays(t, -7) || day > plusDays(t, 90)) throw new AppError("invalid_dates");
-      perm = permission(day.slice(0, 7));
-      if (perm.used + perm.pending + minutes > perm.limit) throw new AppError("permission_limit");
-      start = r.start_at; end = r.end_at;
+      const pt = PERMISSION_TYPES.find((x) => x.id === r.permission_type_id);
+      if (!pt) throw new AppError("permission_type_not_found");
+      const day = localDate((r.start_at ?? r.end_at)!, TZ);
+      const workday = new Date(`${day}T12:00:00Z`).getUTCDay() !== 5;
+      if (pt.mode === "range") {
+        if (!r.start_at || !r.end_at || Date.parse(r.end_at) <= Date.parse(r.start_at)
+            || localDate(new Date(Date.parse(r.end_at) - 1000).toISOString(), TZ) !== day) throw new AppError("invalid_dates");
+        start = r.start_at; end = r.end_at;
+      } else if (pt.mode === "late_arrival") {
+        if (!r.end_at) throw new AppError("invalid_dates");
+        if (!workday) throw new AppError("no_working_days");
+        start = atHour(day, SHIFT_START_H); end = r.end_at;
+        if (Date.parse(end) <= Date.parse(start)) throw new AppError("not_late");
+        if (Date.parse(end) > Date.parse(atHour(day, SHIFT_END_H))) throw new AppError("invalid_dates");
+      } else {
+        if (!r.start_at) throw new AppError("invalid_dates");
+        if (!workday) throw new AppError("no_working_days");
+        start = r.start_at; end = atHour(day, SHIFT_END_H);
+        if (Date.parse(start) >= Date.parse(end) || Date.parse(start) < Date.parse(atHour(day, SHIFT_START_H))) throw new AppError("invalid_dates");
+      }
+      minutes = Math.ceil((Date.parse(end) - Date.parse(start)) / 60_000);
+      if (pt.max_minutes !== null && minutes > pt.max_minutes) throw new AppError("permission_too_long");
+      if (day < plusDays(t, -pt.days_back) || day > plusDays(t, pt.days_ahead)) throw new AppError("outside_window");
+      perm = permission(pt.id, day.slice(0, 7));
+      if (pt.max_per_month !== null && perm.used + perm.pending >= pt.max_per_month) throw new AppError("permission_limit");
     } else {
       if (r.end_date < r.start_date || r.start_date < plusDays(t, -30) || r.start_date > plusDays(t, 365)) throw new AppError("invalid_dates");
       if (r.type === "other" && !r.reason) throw new AppError("reason_required");
@@ -336,7 +362,7 @@ function createMockRequests() {
       const t = today();
       return {
         balances: LEAVE_TYPES.map((x) => balance(x, t.slice(0, 4))),
-        permission: permission(t.slice(0, 7)),
+        permission_types: PERMISSION_TYPES.map((pt) => permission(pt.id, t.slice(0, 7))),
         requests: [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at)),
         inbox_count: inbox.length,
         timezone: TZ,
@@ -352,7 +378,9 @@ function createMockRequests() {
       const known = byKey.get(key);
       if (known) return mine.find((x) => x.id === known)!;
       const p = check(r);
+      const pt = r.type === "permission" ? PERMISSION_TYPES.find((x) => x.id === r.permission_type_id) : undefined;
       const item = make({ type: r.type, leave_type: r.type === "leave" ? r.leave_type : null, start_at: p.start_at, end_at: p.end_at,
+                          permission_type_id: pt?.id ?? null, permission_type: pt?.name ?? null,
                           days: p.days, minutes: p.minutes, reason: r.reason });
       mine.push(item);
       byKey.set(key, item.id);

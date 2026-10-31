@@ -6,8 +6,11 @@ import {
   formatDays,
   formatMinutes,
   formatPeriod,
+  formatTimes,
   localDate,
   permissionLeft,
+  permissionRules,
+  permissionTimesFilled,
   progressLine,
   remainingAfter,
   requestSignature,
@@ -73,6 +76,7 @@ describe("wording", () => {
   it("title", () => {
     expect(requestTitle({ type: "leave", leave_type: "sick" })).toBe("إجازة مرضية");
     expect(requestTitle({ type: "permission", leave_type: null })).toBe("إذن");
+    expect(requestTitle({ type: "permission", leave_type: null, permission_type: "تبرير تأخير" })).toBe("إذن: تبرير تأخير");
   });
 });
 
@@ -83,9 +87,23 @@ describe("balances", () => {
     expect(remainingAfter(null, 3)).toBeNull();
   });
 
-  it("permission left counts pending and never goes below zero", () => {
-    expect(permissionLeft({ month: "2026-11", limit: 240, used: 60, pending: 30 })).toBe(150);
-    expect(permissionLeft({ month: "2026-11", limit: 240, used: 200, pending: 60 })).toBe(0);
+  const pt = { id: "t", name: "خروج", mode: "range" as const, max_per_month: 3, max_minutes: 120, days_back: 7, days_ahead: 30, month: "2026-11", used: 0, pending: 0 };
+
+  it("permission left counts pending requests, never below zero, null when unlimited", () => {
+    expect(permissionLeft({ ...pt, used: 1, pending: 1 })).toBe(1);
+    expect(permissionLeft({ ...pt, used: 2, pending: 2 })).toBe(0);
+    expect(permissionLeft({ ...pt, max_per_month: null, used: 9 })).toBeNull();
+  });
+
+  it("permission rules in one line", () => {
+    expect(permissionRules(pt)).toBe("3 مرات في الشهر · ساعتان كحد أقصى في المرة");
+    expect(permissionRules({ ...pt, max_per_month: 3, max_minutes: 60, days_back: 0, days_ahead: 0 })).toBe("3 مرات في الشهر · ساعة كحد أقصى في المرة · في نفس اليوم فقط");
+    expect(permissionRules({ ...pt, max_per_month: 1, max_minutes: null })).toBe("مرة واحدة في الشهر");
+    expect(permissionRules({ ...pt, max_per_month: null, max_minutes: null })).toBe("بلا حد لعدد المرات");
+  });
+
+  it("times in Arabic", () => {
+    expect([1, 2, 3, 11].map(formatTimes)).toEqual(["مرة واحدة", "مرتان", "3 مرات", "11 مرة"]);
   });
 });
 
@@ -123,14 +141,35 @@ describe("the form", () => {
     expect(draftToRequest({ ...emptyDraft(today), start_date: "2026-12-30", end_date: "2027-01-02" }, TZ)).toEqual({ ok: false, error: "crosses_year" });
   });
 
-  it("permission: hours become instants in the company time zone", () => {
-    const r = draftToRequest({ ...emptyDraft(today), type: "permission", date: "2026-11-05", from: "10:00", to: "12:00" }, TZ);
-    expect(r).toEqual({ ok: true, request: { type: "permission", start_at: "2026-11-05T08:00:00.000Z", end_at: "2026-11-05T10:00:00.000Z", reason: null } });
+  const permDraft = (mode: "range" | "late_arrival" | "early_leave", over: object = {}) =>
+    ({ ...emptyDraft(today), type: "permission" as const, permission_type_id: "t1", permission_mode: mode, date: "2026-11-05", ...over });
+
+  it("permission (range): from and to become instants in the company time zone", () => {
+    const r = draftToRequest(permDraft("range", { from: "10:00", to: "12:00" }), TZ);
+    expect(r).toEqual({ ok: true, request: { type: "permission", permission_type_id: "t1", start_at: "2026-11-05T08:00:00.000Z", end_at: "2026-11-05T10:00:00.000Z", reason: null } });
   });
 
-  it("permission: missing or reversed hours are not sent", () => {
-    expect(draftToRequest({ ...emptyDraft(today), type: "permission", from: "10:00", to: "" }, TZ).ok).toBe(false);
-    expect(draftToRequest({ ...emptyDraft(today), type: "permission", from: "12:00", to: "10:00" }, TZ)).toEqual({ ok: false, error: "invalid_dates" });
+  it("permission (late arrival): only the arrival time is sent; the server starts it at the shift start", () => {
+    const r = draftToRequest(permDraft("late_arrival", { to: "08:20", from: "" }), TZ);
+    expect(r).toEqual({ ok: true, request: { type: "permission", permission_type_id: "t1", start_at: null, end_at: "2026-11-05T06:20:00.000Z", reason: null } });
+  });
+
+  it("permission (final exit): only the exit time is sent; the server ends it at the shift end", () => {
+    const r = draftToRequest(permDraft("early_leave", { from: "14:00", to: "" }), TZ);
+    expect(r).toEqual({ ok: true, request: { type: "permission", permission_type_id: "t1", start_at: "2026-11-05T12:00:00.000Z", end_at: null, reason: null } });
+  });
+
+  it("permission: missing or reversed times, or no type, are not sent", () => {
+    expect(draftToRequest(permDraft("range", { from: "10:00", to: "" }), TZ).ok).toBe(false);
+    expect(draftToRequest(permDraft("range", { from: "12:00", to: "10:00" }), TZ)).toEqual({ ok: false, error: "invalid_dates" });
+    expect(draftToRequest(permDraft("late_arrival", { to: "" }), TZ).ok).toBe(false);
+    expect(draftToRequest(permDraft("range", { permission_type_id: "", from: "10:00", to: "11:00" }), TZ)).toEqual({ ok: false, error: "permission_type_not_found" });
+  });
+
+  it("the times a mode needs", () => {
+    expect(permissionTimesFilled(permDraft("late_arrival", { to: "08:10", from: "" }))).toBe(true);
+    expect(permissionTimesFilled(permDraft("early_leave", { from: "", to: "16:00" }))).toBe(false);
+    expect(permissionTimesFilled(permDraft("range", { from: "10:00", to: "" }))).toBe(false);
   });
 
   it("other: a reason is required", () => {
@@ -153,13 +192,14 @@ describe("server arguments", () => {
     const a = submitArgs("k", { type: "leave", leave_type: "sick", start_date: "2026-11-10", end_date: "2026-11-11", reason: null }, true);
     expect(a).toEqual({
       p_request_key: "k", p_type: "leave", p_leave_type: "sick", p_start_date: "2026-11-10", p_end_date: "2026-11-11",
-      p_start_at: null, p_end_at: null, p_reason: null, p_dry_run: true,
+      p_start_at: null, p_end_at: null, p_reason: null, p_dry_run: true, p_permission_type_id: null,
     });
   });
 
-  it("permission sends instants, not dates", () => {
-    const a = submitArgs("k", { type: "permission", start_at: "2026-11-05T08:00:00.000Z", end_at: "2026-11-05T10:00:00.000Z", reason: "x" }, false);
-    expect(a).toMatchObject({ p_type: "permission", p_leave_type: null, p_start_date: null, p_start_at: "2026-11-05T08:00:00.000Z", p_dry_run: false });
+  it("permission sends instants and its type, not dates", () => {
+    const a = submitArgs("k", { type: "permission", permission_type_id: "t1", start_at: "2026-11-05T08:00:00.000Z", end_at: null, reason: "x" }, false);
+    expect(a).toMatchObject({ p_type: "permission", p_leave_type: null, p_start_date: null, p_start_at: "2026-11-05T08:00:00.000Z",
+                              p_end_at: null, p_dry_run: false, p_permission_type_id: "t1" });
   });
 });
 

@@ -35,6 +35,10 @@ export type AppErrorCode =
   | "request_not_found"
   | "already_decided"
   | "cannot_decide_own"
+  | "permission_type_not_found"
+  | "permission_too_long"
+  | "outside_window"
+  | "not_late"
   // change password
   | "password_too_short"
   | "password_too_long"
@@ -57,7 +61,7 @@ const KNOWN = new Set<AppErrorCode>([
   "geofence_not_configured", "invalid_input", "clock_changed", "time_unverified", "time_order", "offline_too_old",
   "invalid_dates", "invalid_duration", "crosses_year", "no_working_days", "insufficient_balance", "permission_limit",
   "overlapping_request", "reason_required", "maternity_female_only", "request_not_found", "already_decided",
-  "cannot_decide_own",
+  "cannot_decide_own", "permission_type_not_found", "permission_too_long", "outside_window", "not_late",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
 ]);
 
@@ -89,13 +93,17 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   crosses_year: "الإجازة لا يمكن أن تمتد إلى السنة التالية. قسّمها إلى طلبين.",
   no_working_days: "لا توجد أيام عمل في هذه الفترة حسب جدول دوامك.",
   insufficient_balance: "رصيدك لا يكفي لهذه الإجازة (الطلبات المعلّقة محسوبة).",
-  permission_limit: "تجاوزت الحد الشهري للأذونات (الطلبات المعلّقة محسوبة).",
+  permission_limit: "استنفدت عدد المرات المسموح بها لهذا الإذن هذا الشهر (الطلبات المعلّقة محسوبة).",
   overlapping_request: "لديك طلب آخر في نفس الفترة.",
   reason_required: "اكتب سبب الطلب.",
   maternity_female_only: "إجازة الأمومة غير متاحة لهذا الحساب.",
   request_not_found: "الطلب غير موجود أو لم يعد بانتظار قرارك.",
   already_decided: "تم البتّ في هذا الطلب من قبل.",
   cannot_decide_own: "لا يمكنك اتخاذ قرار في طلبك أنت.",
+  permission_type_not_found: "اختر نوع الإذن.",
+  permission_too_long: "مدة الإذن أطول من المسموح لهذا النوع.",
+  outside_window: "لا يمكن طلب هذا النوع من الإذن في هذا اليوم.",
+  not_late: "وقت الوصول قبل بداية دوامك، فلا يوجد تأخير.",
   password_too_short: "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
   password_too_long: "كلمة المرور طويلة جدًا.",
   password_too_weak: "كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل.",

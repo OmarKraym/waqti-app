@@ -267,5 +267,6 @@ export function submitArgs(key: string, r: NewRequest, dryRun: boolean): Record<
     p_end_at: r.type === "permission" ? r.end_at : null,
     p_reason: r.reason,
     p_dry_run: dryRun,
+    p_permission_type_id: r.type === "permission" ? r.permission_type_id : null,
   };
 }

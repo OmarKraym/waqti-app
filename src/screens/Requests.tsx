@@ -10,8 +10,14 @@ import {
   emptyDraft,
   formatDays,
   formatMinutes,
+  formatDay,
   formatPeriod,
+  formatTimes,
+  localTime,
+  MODE_HINT,
   permissionLeft,
+  permissionRules,
+  permissionTimesFilled,
   progressLine,
   remainingAfter,
   requestSignature,
@@ -20,7 +26,7 @@ import {
   KIND_LABEL,
   type Draft,
 } from "../lib/requests";
-import type { InboxItem, LeaveType, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
+import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
 import type { RequestsData } from "./useRequests";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
@@ -160,7 +166,11 @@ function InboxCard({ item, timeZone, online, onDone }: {
         <p className="req-meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
       )}
       {item.permission && (
-        <p className="req-meta">أذوناته هذا الشهر: {formatMinutes(item.permission.used + item.permission.pending)} من {formatMinutes(item.permission.limit)}</p>
+        <p className="req-meta">
+          {item.permission.max_per_month === null
+            ? `هذا النوع بلا حد لعدد المرات (طلب ${formatTimes(item.permission.used + item.permission.pending + 1)} هذا الشهر).`
+            : <>استخدم هذا الشهر <strong>{item.permission.used + item.permission.pending}</strong> من {item.permission.max_per_month} قبل هذا الطلب.</>}
+        </p>
       )}
       {err && <p className="form-error" role="alert">{err === "network" ? "لم يصل رد. حاول مرة أخرى؛ لن يُسجّل القرار مرتين." : ERROR_TEXT[err]}</p>}
       {rejecting ? (
@@ -190,7 +200,6 @@ function InboxCard({ item, timeZone, online, onDone }: {
 
 function Balances({ overview }: { overview: RequestsOverview }) {
   const annual = overview.balances.find((b) => b.leave_type === "annual");
-  const left = permissionLeft(overview.permission);
   const others = overview.balances.filter((b) => b.leave_type !== "annual" && (b.used > 0 || b.pending > 0));
   return (
     <section className="balances" aria-label="الأرصدة">
@@ -201,11 +210,24 @@ function Balances({ overview }: { overview: RequestsOverview }) {
           <span className="balance-sub">متبقٍ من {formatDays(annual.entitled ?? 0)}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
         </div>
       )}
-      <div className="balance">
-        <span className="balance-label">أذونات هذا الشهر</span>
-        <span className="balance-value">{left === 0 ? "لا شيء" : formatMinutes(left)}</span>
-        <span className="balance-sub">متبقٍ من {formatMinutes(overview.permission.limit)}</span>
-      </div>
+      {overview.permission_types.length > 0 && (
+        <div className="balance">
+          <span className="balance-label">الأذونات هذا الشهر</span>
+          <ul className="perm-usage">
+            {overview.permission_types.map((p) => {
+              const left = permissionLeft(p);
+              return (
+                <li key={p.id}>
+                  <span className="perm-name">{p.name}</span>
+                  <span className={`perm-left${left === 0 ? " none" : ""}`}>
+                    {left === null ? "بلا حد" : left === 0 ? "استُنفد" : `متبقٍ ${left} من ${p.max_per_month}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {others.length > 0 && (
         <p className="balance-others">
           {others.map((b) => `${LEAVE_LABEL[b.leave_type]}: ${formatDays(b.used + b.pending)} هذه السنة`).join(" · ")}
@@ -291,7 +313,9 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
   overview: RequestsOverview; online: boolean; onClose: () => void; onSent: (r: RequestItem) => void;
 }) {
   const tz = overview.timezone;
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(overview.today));
+  const ptypes = overview.permission_types;
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(overview.today, ptypes[0]));
+  const ptype = ptypes.find((p) => p.id === draft.permission_type_id) ?? null;
   const [preview, setPreview] = useState<{ sig: string; result: RequestPreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ sig: string; code: AppErrorCode } | null>(null);
   const [sending, setSending] = useState(false);
@@ -331,7 +355,7 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
 
   const current = preview && preview.sig === sig ? preview.result : null;
   const problem: AppErrorCode | null = !built.ok
-    ? (draft.type === "permission" && (!draft.from || !draft.to)) || (draft.type === "other" && built.error === "reason_required")
+    ? (draft.type === "permission" && !permissionTimesFilled(draft)) || (draft.type === "other" && built.error === "reason_required")
       ? null // not filled in yet: no red text
       : built.error
     : previewError && previewError.sig === sig ? previewError.code : null;
@@ -389,24 +413,60 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
         )}
 
         {draft.type === "permission" ? (
+          ptypes.length === 0 ? (
+            <p className="muted">لا توجد أنواع أذونات متاحة. تواصل مع إدارة شركتك.</p>
+          ) : (
           <>
             <label className="field">
-              <span>اليوم</span>
-              <input type="date" value={draft.date} min={addDays(overview.today, -7)} max={addDays(overview.today, 90)}
-                     onChange={(e) => set({ date: e.target.value })} />
+              <span>نوع الإذن</span>
+              <select
+                value={draft.permission_type_id}
+                onChange={(e) => {
+                  const p = ptypes.find((x) => x.id === e.target.value)!;
+                  const lo = addDays(overview.today, -p.days_back);
+                  const hi = addDays(overview.today, p.days_ahead);
+                  set({ permission_type_id: p.id, permission_mode: p.mode, date: draft.date < lo || draft.date > hi ? overview.today : draft.date });
+                }}
+              >
+                {ptypes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </label>
-            <div className="two">
+            {ptype && <p className="muted small perm-rules">{permissionRules(ptype)}</p>}
+            {ptype && ptype.days_back === 0 && ptype.days_ahead === 0 ? (
+              <p className="field-static"><span>اليوم</span> {formatDay(overview.today)}</p>
+            ) : (
               <label className="field">
-                <span>من الساعة</span>
+                <span>اليوم</span>
+                <input type="date" value={draft.date}
+                       min={addDays(overview.today, -(ptype?.days_back ?? 0))} max={addDays(overview.today, ptype?.days_ahead ?? 0)}
+                       onChange={(e) => set({ date: e.target.value })} />
+              </label>
+            )}
+            {draft.permission_mode === "range" ? (
+              <div className="two">
+                <label className="field">
+                  <span>من الساعة</span>
+                  <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
+                </label>
+                <label className="field">
+                  <span>إلى الساعة</span>
+                  <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
+                </label>
+              </div>
+            ) : draft.permission_mode === "late_arrival" ? (
+              <label className="field">
+                <span>وقت الوصول</span>
+                <input type="time" value={draft.to} step={60} onChange={(e) => set({ to: e.target.value })} />
+              </label>
+            ) : (
+              <label className="field">
+                <span>وقت الخروج</span>
                 <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
               </label>
-              <label className="field">
-                <span>إلى الساعة</span>
-                <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
-              </label>
-            </div>
-            <p className="muted small">المتاح لك هذا الشهر: {formatMinutes(permissionLeft(overview.permission))}. الإذن من ربع ساعة إلى 8 ساعات في نفس اليوم.</p>
+            )}
+            <p className="muted small">{MODE_HINT[draft.permission_mode]}</p>
           </>
+          )
         ) : (
           <div className="two">
             <label className="field">
@@ -429,7 +489,8 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
         </label>
       </div>
 
-      <PreviewLine draft={draft} preview={current} problem={problem} waiting={built.ok && online && current === null && problem === null} />
+      <PreviewLine draft={draft} preview={current} problem={problem} ptype={ptype} timeZone={tz}
+                   waiting={built.ok && online && current === null && problem === null} />
 
       {sendError && (
         <div className="banner error" role="alert">
@@ -445,10 +506,26 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
   );
 }
 
-function PreviewLine({ draft, preview, problem, waiting }: {
+/** Server errors about a permission, worded with the rules of its type. */
+function permissionErrorText(code: AppErrorCode, p: PermissionUsage | null): string {
+  if (p && code === "permission_too_long" && p.max_minutes !== null) return `أطول من المسموح لهذا الإذن (${formatMinutes(p.max_minutes)} كحد أقصى في المرة).`;
+  if (p && code === "permission_limit" && p.max_per_month !== null) return `استنفدت هذا الإذن هذا الشهر (${formatTimes(p.max_per_month)} في الشهر، والطلبات المعلّقة محسوبة).`;
+  if (p && code === "outside_window") {
+    if (p.days_back === 0 && p.days_ahead === 0) return "هذا الإذن يُطلب في نفس اليوم فقط.";
+    return `هذا الإذن يُطلب من ${formatDays(p.days_back)} قبل اليوم إلى ${formatDays(p.days_ahead)} بعده.`;
+  }
+  return ERROR_TEXT[code];
+}
+
+function PreviewLine({ draft, preview, problem, waiting, ptype, timeZone }: {
   draft: Draft; preview: RequestPreview | null; problem: AppErrorCode | null; waiting: boolean;
+  ptype: PermissionUsage | null; timeZone: string;
 }) {
-  if (problem) return <p className="preview bad" role="alert">{problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال." : ERROR_TEXT[problem]}</p>;
+  if (problem) {
+    const text = problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
+      : draft.type === "permission" ? permissionErrorText(problem, ptype) : ERROR_TEXT[problem];
+    return <p className="preview bad" role="alert">{text}</p>;
+  }
   if (waiting) return <p className="preview muted" aria-live="polite">جارٍ التحقق…</p>;
   if (!preview) return null;
   if (draft.type === "leave" && preview.days !== null) {
@@ -460,10 +537,13 @@ function PreviewLine({ draft, preview, problem, waiting }: {
     );
   }
   if (draft.type === "permission" && preview.minutes !== null && preview.permission) {
-    const left = preview.permission.limit - preview.permission.used - preview.permission.pending - preview.minutes;
+    const u = preview.permission;
+    const left = u.max_per_month === null ? null : u.max_per_month - u.used - u.pending - 1;
     return (
       <p className="preview ok" aria-live="polite">
-        {formatMinutes(preview.minutes)} · يبقى لك هذا الشهر <strong>{left > 0 ? formatMinutes(left) : "لا شيء"}</strong>
+        <span dir="ltr">{localTime(preview.start_at, timeZone)} – {localTime(preview.end_at, timeZone)}</span>
+        {" · "}{formatMinutes(preview.minutes)}
+        {left !== null && <> · يبقى لك من هذا الإذن هذا الشهر <strong>{left > 0 ? formatTimes(left) : "لا شيء"}</strong></>}
       </p>
     );
   }

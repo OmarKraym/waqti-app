@@ -8,6 +8,7 @@ import type {
   LeaveBalance,
   LeaveType,
   NewRequest,
+  PermissionMode,
   PermissionUsage,
   RequestItem,
   RequestStatus,
@@ -44,9 +45,11 @@ export const KIND_LABEL: Record<ApproverKind, string> = {
   hr: "الموارد البشرية",
 };
 
-/** Full title of a request: "إجازة سنوية", "إذن", "طلب آخر". */
-export function requestTitle(r: Pick<RequestItem, "type" | "leave_type">): string {
-  return r.type === "leave" && r.leave_type ? `إجازة ${LEAVE_LABEL[r.leave_type]}` : TYPE_LABEL[r.type];
+/** Full title of a request: "إجازة سنوية", "إذن: تبرير تأخير", "طلب آخر". */
+export function requestTitle(r: Pick<RequestItem, "type" | "leave_type"> & { permission_type?: string | null }): string {
+  if (r.type === "leave" && r.leave_type) return `إجازة ${LEAVE_LABEL[r.leave_type]}`;
+  if (r.type === "permission" && r.permission_type) return `إذن: ${r.permission_type}`;
+  return TYPE_LABEL[r.type];
 }
 
 // ---------------------------------------------------------------- dates in the company time zone
@@ -148,10 +151,34 @@ export function remainingAfter(b: LeaveBalance | null, days: number | null): num
   return b.remaining - days;
 }
 
-/** Permission minutes still available this month (pending requests count). */
-export function permissionLeft(p: PermissionUsage): number {
-  return Math.max(0, p.limit - p.used - p.pending);
+/** Requests of this permission type still available this month (pending count); null = no limit. */
+export function permissionLeft(p: PermissionUsage): number | null {
+  return p.max_per_month === null ? null : Math.max(0, p.max_per_month - p.used - p.pending);
 }
+
+/** "مرة واحدة", "مرتان", "3 مرات", "11 مرة". */
+export function formatTimes(n: number): string {
+  if (n === 1) return "مرة واحدة";
+  if (n === 2) return "مرتان";
+  return n >= 3 && n <= 10 ? `${n} مرات` : `${n} مرة`;
+}
+
+/** The rules of a permission type in one line: "3 مرات في الشهر · ساعتان كحد أقصى في المرة · في نفس اليوم فقط". */
+export function permissionRules(p: Pick<PermissionUsage, "max_per_month" | "max_minutes" | "days_back" | "days_ahead">): string {
+  const parts = [
+    p.max_per_month === null ? "بلا حد لعدد المرات" : `${formatTimes(p.max_per_month)} في الشهر`,
+    p.max_minutes === null ? null : `${formatMinutes(p.max_minutes)} كحد أقصى في المرة`,
+    p.days_back === 0 && p.days_ahead === 0 ? "في نفس اليوم فقط" : null,
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** What the employee enters for each mode. */
+export const MODE_HINT: Record<PermissionMode, string> = {
+  range: "اكتب وقت الخروج ووقت العودة.",
+  late_arrival: "اكتب وقت وصولك. يُحسب من بداية دوامك.",
+  early_leave: "اكتب وقت خروجك. يُحسب حتى نهاية دوامك.",
+};
 
 // ---------------------------------------------------------------- approval progress
 
@@ -184,15 +211,28 @@ export interface Draft {
   leave_type: LeaveType;
   start_date: string;
   end_date: string;
-  /** permission */
+  /** permission: its type, the day, and the times its mode needs (range: from+to, late: to, early: from) */
+  permission_type_id: string;
+  permission_mode: PermissionMode;
   date: string;
   from: string;
   to: string;
   reason: string;
 }
 
-export function emptyDraft(today: string): Draft {
-  return { type: "leave", leave_type: "annual", start_date: today, end_date: today, date: today, from: "", to: "", reason: "" };
+export function emptyDraft(today: string, firstType?: Pick<PermissionUsage, "id" | "mode">): Draft {
+  return {
+    type: "leave", leave_type: "annual", start_date: today, end_date: today,
+    permission_type_id: firstType?.id ?? "", permission_mode: firstType?.mode ?? "range",
+    date: today, from: "", to: "", reason: "",
+  };
+}
+
+/** The time fields a permission mode needs are filled in (nothing to complain about yet if not). */
+export function permissionTimesFilled(d: Draft): boolean {
+  if (d.permission_mode === "late_arrival") return d.to !== "";
+  if (d.permission_mode === "early_leave") return d.from !== "";
+  return d.from !== "" && d.to !== "";
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -206,9 +246,19 @@ export function draftToRequest(d: Draft, timeZone: string): { ok: true; request:
   const reason = d.reason.trim() === "" ? null : d.reason.trim();
   if (reason !== null && reason.length > 500) return { ok: false, error: "invalid_input" };
   if (d.type === "permission") {
-    if (!DATE.test(d.date) || !TIME.test(d.from) || !TIME.test(d.to)) return { ok: false, error: "invalid_dates" };
-    if (d.to <= d.from) return { ok: false, error: "invalid_dates" };
-    return { ok: true, request: { type: "permission", start_at: zonedToUtc(d.date, d.from, timeZone), end_at: zonedToUtc(d.date, d.to, timeZone), reason } };
+    if (!d.permission_type_id) return { ok: false, error: "permission_type_not_found" };
+    if (!DATE.test(d.date)) return { ok: false, error: "invalid_dates" };
+    const base = { type: "permission" as const, permission_type_id: d.permission_type_id, reason };
+    if (d.permission_mode === "late_arrival") {
+      if (!TIME.test(d.to)) return { ok: false, error: "invalid_dates" };
+      return { ok: true, request: { ...base, start_at: null, end_at: zonedToUtc(d.date, d.to, timeZone) } };
+    }
+    if (d.permission_mode === "early_leave") {
+      if (!TIME.test(d.from)) return { ok: false, error: "invalid_dates" };
+      return { ok: true, request: { ...base, start_at: zonedToUtc(d.date, d.from, timeZone), end_at: null } };
+    }
+    if (!TIME.test(d.from) || !TIME.test(d.to) || d.to <= d.from) return { ok: false, error: "invalid_dates" };
+    return { ok: true, request: { ...base, start_at: zonedToUtc(d.date, d.from, timeZone), end_at: zonedToUtc(d.date, d.to, timeZone) } };
   }
   if (!DATE.test(d.start_date) || !DATE.test(d.end_date) || d.end_date < d.start_date) return { ok: false, error: "invalid_dates" };
   if (d.type === "leave") {
