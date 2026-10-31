@@ -21,7 +21,7 @@ declare
   v_admin uuid; a uuid; b uuid; c uuid; d uuid; e2 uuid; v_comp2 uuid;
   r jsonb; r2 jsonb; ov jsonb; inbox jsonb; v_req uuid; v_ap uuid; v_days numeric; v_tz text := 'Africa/Tripoli';
   v_today date := (now() at time zone 'Africa/Tripoli')::date;
-  v_mon date; s text; n int;
+  v_mon date; s text; n int; v_pt uuid;
 begin
   -- ---------------------------------------------------------------- cast
   select u.id into v_admin from auth.users u where lower(u.email) = 'omarkraym5@gmail.com';
@@ -50,8 +50,8 @@ begin
 
   -- ---------------------------------------------------------------- overview + default chain
   ov := public.employee_requests_overview();
-  perform pg_temp.ok(jsonb_array_length(ov -> 'balances') >= 5 and (ov -> 'permission' ->> 'limit')::int = 240 and (ov ->> 'inbox_count')::int = 0,
-    'overview: balances, permission limit 240, empty inbox', ov::text);
+  perform pg_temp.ok(jsonb_array_length(ov -> 'balances') >= 5 and jsonb_array_length(ov -> 'permission_types') >= 1 and (ov ->> 'inbox_count')::int = 0,
+    'overview: balances, permission types (4d), empty inbox', ov::text);
   perform pg_temp.as_user(v_admin);
   r := public.admin_get_approval_chains();
   perform pg_temp.ok(r -> 'chains' -> 'leave' -> 0 ->> 'kind' = 'direct_manager' and r -> 'chains' -> 'leave' -> 1 ->> 'kind' = 'hr'
@@ -138,27 +138,25 @@ begin
   r := public.employee_cancel_request((r ->> 'id')::uuid);
   perform pg_temp.ok(r ->> 'status' = 'cancelled' and r -> 'steps' -> 0 ->> 'status' = 'cancelled', 'employee cancels a pending request', r::text);
 
-  -- ---------------------------------------------------------------- permission (minutes, monthly limit)
+  -- ---------------------------------------------------------------- permission (phase 4d: by type; detailed tests in phase4d)
+  select id into v_pt from public.permission_types where company_id = (select company_id from public.employees where id = a) and name = 'مهمة عمل';
+  update public.permission_types set days_ahead = 365 where id = v_pt;  -- test dates are far ahead
   r := public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null,
-         ((v_mon + 40)::timestamp + time '10:00') at time zone v_tz, ((v_mon + 40)::timestamp + time '12:00') at time zone v_tz, 'مراجعة');
+         ((v_mon + 40)::timestamp + time '10:00') at time zone v_tz, ((v_mon + 40)::timestamp + time '12:00') at time zone v_tz, 'مراجعة', false, v_pt);
   perform pg_temp.ok((r ->> 'minutes')::int = 120 and r ->> 'status' = 'pending', 'permission of 2 hours accepted', r::text);
-  s := pg_temp.err(format($q$select public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null, %L, %L)$q$,
-        ((v_mon + 41)::timestamp + time '09:00') at time zone v_tz, ((v_mon + 41)::timestamp + time '11:30') at time zone v_tz));
-  perform pg_temp.ok(s = 'permission_limit' or (date_trunc('month', v_mon + 41) <> date_trunc('month', v_mon + 40) and s = ''),
-    'monthly permission limit (240 min) is enforced', s);
-  s := pg_temp.err(format($q$select public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null, %L, %L)$q$,
-        ((v_mon + 42)::timestamp + time '09:00') at time zone v_tz, ((v_mon + 42)::timestamp + time '09:10') at time zone v_tz));
-  perform pg_temp.ok(s = 'invalid_duration', 'permission under 15 minutes is refused', s);
-  s := pg_temp.err(format($q$select public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null, %L, %L)$q$,
-        ((v_mon + 42)::timestamp + time '22:00') at time zone v_tz, ((v_mon + 43)::timestamp + time '01:00') at time zone v_tz));
+  s := pg_temp.err(format($q$select public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null, %L, %L, null, false, %L)$q$,
+        ((v_mon + 42)::timestamp + time '22:00') at time zone v_tz, ((v_mon + 43)::timestamp + time '01:00') at time zone v_tz, v_pt));
   perform pg_temp.ok(s = 'invalid_dates', 'permission across midnight is refused', s);
+  s := pg_temp.err(format($q$select public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null, %L, %L)$q$,
+        ((v_mon + 44)::timestamp + time '09:00') at time zone v_tz, ((v_mon + 44)::timestamp + time '10:00') at time zone v_tz));
+  perform pg_temp.ok(s = 'permission_type_not_found', 'a permission needs its type (4d)', s);
 
   -- ---------------------------------------------------------------- custom chains
   perform pg_temp.as_user(v_admin);
-  perform public.admin_set_approval_chain('permission', '[{"kind":"direct_manager"},{"kind":"second_manager"},{"kind":"hr"}]');
+  perform public.admin_set_approval_chain('permission', '[{"kind":"direct_manager"},{"kind":"second_manager"},{"kind":"hr"}]', v_pt);
   perform pg_temp.as_user(a);
   r := public.employee_submit_request(gen_random_uuid(), 'permission', null, null, null,
-         ((v_mon + 50)::timestamp + time '10:00') at time zone v_tz, ((v_mon + 50)::timestamp + time '11:00') at time zone v_tz);
+         ((v_mon + 50)::timestamp + time '10:00') at time zone v_tz, ((v_mon + 50)::timestamp + time '11:00') at time zone v_tz, null, false, v_pt);
   perform pg_temp.ok(jsonb_array_length(r -> 'steps') = 3 and r -> 'steps' -> 1 ->> 'kind' = 'second_manager'
     and r -> 'steps' -> 1 ->> 'status' = 'waiting', 'custom 3-step path is used (manager -> manager''s manager -> hr)', r::text);
   perform pg_temp.as_user(v_admin);
@@ -187,8 +185,8 @@ begin
   perform pg_temp.ok((r ->> 'total')::int >= 1 and not exists (select 1 from jsonb_array_elements(r -> 'items') x
                      where not exists (select 1 from jsonb_array_elements(x -> 'steps') st where st ->> 'kind' = 'hr' and st ->> 'status' = 'pending')),
     'admin lists only the pending requests that reached HR (4c)', r ->> 'total');
-  perform public.admin_set_approval_chain('permission', '[]');
-  perform pg_temp.ok(not exists (select 1 from approval_steps where request_type = 'permission'), 'empty path = back to default');
+  perform public.admin_set_approval_chain('permission', '[]', v_pt);
+  perform pg_temp.ok(not exists (select 1 from approval_steps where permission_type_id = v_pt), 'empty path = back to default');
   s := pg_temp.err($q$select public.admin_set_approval_chain('leave', '[{"kind":"boss"}]')$q$);
   perform pg_temp.ok(s = 'invalid_input', 'unknown step kind is refused', s);
 
@@ -208,7 +206,7 @@ begin
   perform pg_temp.ok(s = 'request_not_found', 'other company employee cannot decide our requests', s);
 
   -- ---------------------------------------------------------------- grants
-  perform pg_temp.ok(not has_function_privilege('anon', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean)', 'execute'),
+  perform pg_temp.ok(not has_function_privilege('anon', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid)', 'execute'),
     'anonymous users cannot submit');
   perform pg_temp.ok(not has_table_privilege('authenticated', 'public.request_approvals', 'select')
     and not has_table_privilege('authenticated', 'public.requests', 'insert'), 'no direct table access for approvals / inserts');
