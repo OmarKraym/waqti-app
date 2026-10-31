@@ -177,15 +177,16 @@ begin
   perform pg_temp.ok(r -> 'steps' -> 0 ->> 'status' = 'skipped' and r -> 'steps' -> 1 ->> 'status' = 'pending',
     'no manager set: goes straight to hr', r::text);
 
-  -- admin override of a stuck manager step
+  -- phase 4c: the admin (HR) cannot decide a request that is still with the manager
   perform pg_temp.as_user(a);
   r := public.employee_submit_request(gen_random_uuid(), 'leave', 'unpaid', v_mon + 80, v_mon + 80);
   perform pg_temp.as_user(v_admin);
-  r := public.admin_decide_request((r ->> 'id')::uuid, 'approve', 'المدير غائب');
-  perform pg_temp.ok((r ->> 'current_step')::int = 2 and exists (select 1 from audit_log where action = 'request.approve' and (details ->> 'override')::boolean),
-    'admin can move a stuck manager step (logged as override)', r::text);
+  s := pg_temp.err(format($q$select public.admin_decide_request(%L, 'approve')$q$, r ->> 'id'));
+  perform pg_temp.ok(s = 'request_not_found', 'admin cannot decide a request still at the manager step (4c)', s);
   r := public.admin_list_requests(p_status => 'pending');
-  perform pg_temp.ok((r ->> 'total')::int >= 3, 'admin lists the company requests', r ->> 'total');
+  perform pg_temp.ok((r ->> 'total')::int >= 1 and not exists (select 1 from jsonb_array_elements(r -> 'items') x
+                     where not exists (select 1 from jsonb_array_elements(x -> 'steps') st where st ->> 'kind' = 'hr' and st ->> 'status' = 'pending')),
+    'admin lists only the pending requests that reached HR (4c)', r ->> 'total');
   perform public.admin_set_approval_chain('permission', '[]');
   perform pg_temp.ok(not exists (select 1 from approval_steps where request_type = 'permission'), 'empty path = back to default');
   s := pg_temp.err($q$select public.admin_set_approval_chain('leave', '[{"kind":"boss"}]')$q$);
