@@ -20,6 +20,14 @@ export function tabFromUrl(href: string): Tab | null {
   }
 }
 
+/** The address for a tab: ?tab=… (other parameters kept), none for "today". A reload opens the same tab. */
+export function urlWithTab(href: string, tab: Tab): string {
+  const u = new URL(href, "https://x/");
+  if (tab === "today") u.searchParams.delete("tab");
+  else u.searchParams.set("tab", tab);
+  return u.pathname + u.search + u.hash;
+}
+
 /** The signed-in app: three tabs. "Today" stays mounted when hidden, so offline punches keep syncing. */
 export function Main({ user }: { user: SessionUser }) {
   const [tab, setTab] = useState<Tab>(() => tabFromUrl(window.location.href) ?? "today");
@@ -31,13 +39,14 @@ export function Main({ user }: { user: SessionUser }) {
   const go = (t: Tab) => {
     setTab(t);
     setVisited((v) => (v.has(t) ? v : new Set(v).add(t)));
+    // Remember the tab in the address (no new history entry), so a reload stays here.
+    window.history.replaceState(window.history.state, "", urlWithTab(window.location.href, t));
     if (t === "requests") requests.reload();
     window.scrollTo(0, 0);
   };
 
   useEffect(() => {
-    // Opened from a notification: clean the address, keep the tab.
-    if (tabFromUrl(window.location.href)) window.history.replaceState(null, "", window.location.pathname);
+    // The address keeps ?tab= (from a notification or a reload), so the next reload opens the same tab.
     // A notification tapped while the app is already open.
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "waqti-open") {

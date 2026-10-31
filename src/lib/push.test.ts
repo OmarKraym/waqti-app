@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fromB64u, pushState, VAPID_PUBLIC_KEY } from "./push";
-import { tabFromUrl } from "../screens/Main";
+import { tabFromUrl, urlWithTab } from "../screens/Main";
 
 const env = { hasPush: true, isIos: false, standalone: false, permission: "default" as NotificationPermission, subscribed: false };
 
@@ -28,5 +28,18 @@ describe("opening the app from a notification", () => {
     expect(tabFromUrl("/waqti-app/?tab=notifications")).toBe("notifications");
     expect(tabFromUrl("https://omarkraym.github.io/waqti-app/")).toBeNull();
     expect(tabFromUrl("/waqti-app/?tab=evil")).toBeNull();
+  });
+});
+
+describe("a reload stays on the same tab", () => {
+  it("writes the tab into the address, and removes it for today", () => {
+    expect(urlWithTab("https://omarkraym.github.io/waqti-app/", "requests")).toBe("/waqti-app/?tab=requests");
+    expect(urlWithTab("https://omarkraym.github.io/waqti-app/?tab=requests", "notifications")).toBe("/waqti-app/?tab=notifications");
+    expect(urlWithTab("https://omarkraym.github.io/waqti-app/?tab=requests", "today")).toBe("/waqti-app/");
+    expect(tabFromUrl(urlWithTab("/waqti-app/", "notifications"))).toBe("notifications");
+  });
+  it("keeps other parameters", () => {
+    expect(urlWithTab("/waqti-app/?history=1&tab=today", "requests")).toBe("/waqti-app/?history=1&tab=requests");
+    expect(urlWithTab("/waqti-app/?history=1&tab=requests", "today")).toBe("/waqti-app/?history=1");
   });
 });
