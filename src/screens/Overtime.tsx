@@ -17,6 +17,7 @@ import {
 } from "../lib/overtime";
 import { addDays, formatDay, formatMinutes } from "../lib/requests";
 import type { OvertimeItem, OvertimeOverview, OvertimePreview } from "../lib/types";
+import { AppBar, Banner, Icon } from "./ui";
 
 type Done = (text: string, kind: "success" | "error") => void;
 
@@ -78,8 +79,8 @@ function MyOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: 
             <span>ملاحظة لمن كلّفك (مثلًا: لا أستطيع الحضور ولماذا)</span>
             <textarea value={note} maxLength={500} rows={2} onChange={(e) => setNote(e.target.value)} />
           </label>
-          <div className="row end">
-            <button className="btn ghost" onClick={() => setWriting(false)} disabled={busy}>تراجع</button>
+          <div className="actions">
+            <button className="btn" onClick={() => setWriting(false)} disabled={busy}>تراجع</button>
             <button className="btn primary" onClick={send} disabled={busy || !online || !note.trim()} aria-busy={busy}>إرسال الملاحظة</button>
           </div>
         </div>
@@ -101,7 +102,7 @@ export function TeamOvertime({ data, online, onDone, onAssign }: { data: Overtim
     <section aria-labelledby="ot-team-title">
       <div className="section-head">
         <h2 id="ot-team-title" className="section-title">العمل الإضافي لفريقك</h2>
-        <button className="btn small" onClick={onAssign} disabled={!online}>تكليف بعمل إضافي</button>
+        <button className="btn small" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</button>
       </div>
       {items.length === 0 ? (
         <p className="muted empty">لم تكلّف أحدًا بعد.</p>
@@ -210,12 +211,9 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
   const limits = data.limits;
 
   return (
+    <>
+    <AppBar title="تكليف بعمل إضافي" onBack={onClose} backDisabled={sending} />
     <main className="container requests">
-      <div className="req-head">
-        <h1 className="screen-title">تكليف بعمل إضافي</h1>
-        <button className="btn ghost small" onClick={onClose} disabled={sending}>رجوع</button>
-      </div>
-
       <div className="form card">
         <label className="field">
           <span>الموظف</span>
@@ -247,7 +245,7 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
             <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
           </label>
         </div>
-        <p className="muted small">
+        <p className="hint-line">
           خارج دوامه فقط: قبله أو بعده أو في يوم عطلته.
           {(limits.day_minutes !== null || limits.month_minutes !== null) && " الحد الأقصى: "}
           {limits.day_minutes !== null && `${formatMinutes(limits.day_minutes)} في اليوم`}
@@ -272,12 +270,13 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
         </div>
       ) : null}
 
-      {sendError && <div className="banner error" role="alert"><span>{sendError}</span></div>}
-      {!online && <div className="banner warning" role="alert">لا يوجد اتصال بالإنترنت.</div>}
+      {sendError && <Banner kind="error">{sendError}</Banner>}
+      {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت.</Banner>}
 
       <button className="btn primary block send" onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "تكليف"}
       </button>
     </main>
+    </>
   );
 }

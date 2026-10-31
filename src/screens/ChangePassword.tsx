@@ -40,7 +40,8 @@ export function ChangePassword({ email }: { email: string | null }) {
 
   return (
     <main className="auth-wrap">
-      <form className="card auth-card" onSubmit={submit} noValidate>
+      <form className="auth-card" onSubmit={submit} noValidate>
+        <div className="auth-head">
         <h1>تغيير كلمة المرور</h1>
         <p className="muted">
           هذا أول دخول لك. اختر كلمة مرور جديدة بدل المؤقتة.
@@ -51,6 +52,7 @@ export function ChangePassword({ email }: { email: string | null }) {
             </>
           )}
         </p>
+        </div>
 
         {/* Hidden username helps password managers save the new password for the right account. */}
         <input type="email" autoComplete="username" value={email ?? ""} readOnly hidden />
@@ -63,14 +65,14 @@ export function ChangePassword({ email }: { email: string | null }) {
           <span>تأكيد كلمة المرور</span>
           <input type="password" dir="ltr" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
-        <p className="muted small">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
+        <p className="hint-line">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
 
         <p className="form-error" role="alert">{error}</p>
 
         <button className="btn primary block" type="submit" disabled={busy}>
           {busy ? "جارٍ الحفظ…" : "حفظ كلمة المرور"}
         </button>
-        <button className="btn ghost block" type="button" onClick={() => api.signOut()} disabled={busy}>
+        <button className="btn quiet block" type="button" onClick={() => api.signOut()} disabled={busy}>
           تسجيل الخروج
         </button>
       </form>

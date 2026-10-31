@@ -25,10 +25,12 @@ export function Login() {
 
   return (
     <main className="auth-wrap">
-      <form className="card auth-card" onSubmit={submit} autoComplete="on" noValidate>
-        <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" className="auth-logo" width={56} height={56} />
-        <h1>وقتي</h1>
-        <p className="muted">تسجيل الحضور والانصراف</p>
+      <form className="auth-card" onSubmit={submit} autoComplete="on" noValidate>
+        <div className="auth-head">
+          <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" className="auth-logo" width={64} height={64} />
+          <h1>وقتي</h1>
+          <p className="muted">سجّل دخولك لتسجيل الحضور والانصراف</p>
+        </div>
 
         <label className="field">
           <span>البريد الإلكتروني</span>
@@ -60,7 +62,7 @@ export function Login() {
         <button className="btn primary block" type="submit" disabled={busy || !email || !password}>
           {busy ? "جارٍ الدخول…" : "تسجيل الدخول"}
         </button>
-        <p className="muted small">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
+        <p className="auth-foot">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
       </form>
     </main>
   );

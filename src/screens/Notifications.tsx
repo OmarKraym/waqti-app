@@ -3,6 +3,7 @@ import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { keysOf, currentSubscription, readPushState, subscribe, unsubscribe, type PushState } from "../lib/push";
 import type { NotificationSettings } from "../lib/types";
+import { AppBar, Banner, Icon } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string } | null;
 
@@ -106,18 +107,11 @@ export function Notifications({ online }: { online: boolean }) {
   }
 
   return (
+    <>
+    <AppBar title="الإشعارات" />
     <main className="container notif">
-      <div className="req-head">
-        <h1 className="screen-title">الإشعارات</h1>
-      </div>
-
-      {!online && <div className="banner warning" role="alert">الإعدادات تحتاج اتصالًا بالإنترنت.</div>}
-      {note && (
-        <div className={`banner ${note.kind}`} role="status">
-          <span>{note.text}</span>
-          <button className="x" aria-label="إغلاق" onClick={() => setNote(null)}>×</button>
-        </div>
-      )}
+      {!online && <Banner kind="warning">الإعدادات تحتاج اتصالًا بالإنترنت.</Banner>}
+      {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}
 
       <section className="notif-card" aria-labelledby="device-title">
         <h2 id="device-title" className="section-title">هذا الجهاز</h2>
@@ -125,15 +119,15 @@ export function Notifications({ online }: { online: boolean }) {
           <p className="muted">جارٍ التحقق…</p>
         ) : push === "on" ? (
           <>
-            <p className="device-on">الإشعارات مفعّلة على هذا الجهاز.</p>
-            <div className="row start">
+            <p className="state-line on"><Icon name="check" />الإشعارات مفعّلة على هذا الجهاز.</p>
+            <div className="actions">
               <button className="btn" onClick={test} disabled={busy || !online}>إرسال إشعار تجريبي</button>
-              <button className="btn ghost" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</button>
+              <button className="btn danger-text" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</button>
             </div>
           </>
         ) : push === "off" ? (
           <>
-            <p>فعّلها لتصلك الطلبات وتذكيرات الدوام حتى والتطبيق مغلق.</p>
+            <p className="state-line"><Icon name="bell" />فعّلها لتصلك الطلبات وتذكيرات الدوام حتى والتطبيق مغلق.</p>
             <button className="btn primary block" onClick={turnOn} disabled={busy || !online} aria-busy={busy}>
               {busy ? "جارٍ التفعيل…" : "تفعيل الإشعارات"}
             </button>
@@ -141,7 +135,7 @@ export function Notifications({ online }: { online: boolean }) {
         ) : push === "ios_install" ? (
           <p>على iPhone تصل الإشعارات فقط من التطبيق المثبّت: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من أيقونته ثم ارجع إلى هنا.</p>
         ) : push === "denied" ? (
-          <p className="alert-text">الإشعارات محظورة لهذا التطبيق. اسمح بها من إعدادات المتصفح أو الهاتف، ثم ارجع إلى هنا.</p>
+          <p className="state-line alert-text"><Icon name="alert" />الإشعارات محظورة لهذا التطبيق. اسمح بها من إعدادات المتصفح أو الهاتف، ثم ارجع إلى هنا.</p>
         ) : (
           <p>هذا المتصفح لا يدعم الإشعارات. جرّب متصفح Chrome، أو ثبّت التطبيق على الشاشة الرئيسية.</p>
         )}
@@ -149,14 +143,14 @@ export function Notifications({ online }: { online: boolean }) {
 
       <section className="notif-card" aria-labelledby="req-n-title">
         <h2 id="req-n-title" className="section-title">الطلبات</h2>
-        <p className="muted">تصلك تلقائيًا: كل طلب ينتظر موافقتك عندما يصل دورك في مسار الموافقات، ونتيجة طلباتك (موافقة أو رفض).</p>
+        <p className="card-text">تصلك تلقائيًا: كل طلب ينتظر موافقتك عندما يصل دورك في مسار الموافقات، ونتيجة طلباتك (موافقة أو رفض).</p>
       </section>
 
       <section className="notif-card" aria-labelledby="rem-title">
         <h2 id="rem-title" className="section-title">تذكير الحضور والانصراف</h2>
         {!settings ? (
           loadError ? (
-            <div className="row start"><span className="muted">تعذّر تحميل الإعدادات.</span><button className="btn small" onClick={refresh}>إعادة المحاولة</button></div>
+            <div className="state-row"><span className="muted">تعذّر تحميل الإعدادات.</span><button className="btn small" onClick={refresh}>إعادة المحاولة</button></div>
           ) : (
             <p className="muted">جارٍ التحميل…</p>
           )
@@ -164,9 +158,9 @@ export function Notifications({ online }: { online: boolean }) {
           <>
             <div className="rem-row">
               <label className="switch">
+                <span>تذكير بتسجيل الحضور</span>
                 <input type="checkbox" checked={settings.remind_check_in} disabled={!online}
                        onChange={(e) => save({ ...settings, remind_check_in: e.target.checked })} />
-                <span>تذكير بتسجيل الحضور</span>
               </label>
               <select aria-label="وقت تذكير الحضور" value={settings.check_in_before} disabled={!online || !settings.remind_check_in}
                       onChange={(e) => save({ ...settings, check_in_before: Number(e.target.value) })}>
@@ -175,24 +169,25 @@ export function Notifications({ online }: { online: boolean }) {
             </div>
             <div className="rem-row">
               <label className="switch">
+                <span>تذكير بتسجيل الانصراف</span>
                 <input type="checkbox" checked={settings.remind_check_out} disabled={!online}
                        onChange={(e) => save({ ...settings, remind_check_out: e.target.checked })} />
-                <span>تذكير بتسجيل الانصراف</span>
               </label>
               <select aria-label="وقت تذكير الانصراف" value={settings.check_out_before} disabled={!online || !settings.remind_check_out}
                       onChange={(e) => save({ ...settings, check_out_before: Number(e.target.value) })}>
                 {BEFORE_OUT.map((m) => <option key={m} value={m}>{minutesLabel(m, "عند نهاية الدوام")}</option>)}
               </select>
             </div>
-            <p className="muted small">
+            <p className="hint-line">
               حسب جدول دوامك. لا يصلك تذكير الحضور إذا سجّلت حضورك أو كنت في إجازة، ولا تذكير الانصراف إذا لم تكن مسجّلًا حضورك.
             </p>
             {(settings.remind_check_in || settings.remind_check_out) && settings.devices === 0 && (
-              <p className="alert-text small">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
+              <p className="hint-line alert-text">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
             )}
           </>
         )}
       </section>
     </main>
+    </>
   );
 }

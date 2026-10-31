@@ -34,6 +34,7 @@ import {
 import { dayKey, earlierDays, formatDuration, todayRows, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceState, LocationStatus } from "../lib/types";
 import { useInstallPrompt, useIosInstallHint, useOnline } from "./hooks";
+import { AppBar, Banner, Icon } from "./ui";
 
 const SYNC_EVERY_MS = 30_000;
 
@@ -251,7 +252,8 @@ export function Home({ user }: { user: SessionUser }) {
     return (
       <main className="center-screen">
         <div className="card pad">
-          <h2>تعذّر تحميل حالة الحضور</h2>
+          <Icon name="alert" className="pad-icon" />
+          <h2 className="pad-title">تعذّر تحميل حالة الحضور</h2>
           <p className="muted">
             {state.error.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[state.error.code]}
           </p>
@@ -279,21 +281,20 @@ export function Home({ user }: { user: SessionUser }) {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={28} height={28} />
-          <span className="truncate">{data.company.name}</span>
-        </div>
-        <button className="btn ghost small" onClick={onSignOut}>خروج</button>
-      </header>
+      <AppBar
+        className="brand-bar"
+        lead={<img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={32} height={32} />}
+        title={data.company.name}
+        action={<button className="btn quiet small" onClick={onSignOut}><Icon name="signOut" />خروج</button>}
+      />
 
       <main className="container">
         {!online && (
-          <div className={`banner ${allowQueue ? "warning" : "error"}`} role="alert">
+          <Banner kind={allowQueue ? "warning" : "error"}>
             {allowQueue
               ? "لا يوجد اتصال بالإنترنت. يمكنك التسجيل وسيُحفظ على الجهاز. افتح التطبيق مع الإنترنت خلال 3 أيام ليُعتمد، ولا تغيّر ساعة الهاتف ولا تحذف التطبيق."
               : "لا يوجد اتصال بالإنترنت. تسجيل الحضور يحتاج اتصالًا."}
-          </div>
+          </Banner>
         )}
 
         <section className="status" aria-live="polite">
@@ -301,7 +302,7 @@ export function Home({ user }: { user: SessionUser }) {
             <span className="truncate">{data.employee.full_name}</span>
             {data.employee.employee_number && <span className="who-number" dir="ltr">{data.employee.employee_number}</span>}
           </p>
-          <h1 className="status-head">{statusHeadline(data, rows, nowMs, tz)}</h1>
+          <h2 className="status-head">{statusHeadline(data, rows, nowMs, tz)}</h2>
           <ServerClock offsetMs={offsetMs} timeZone={tz} />
           {fromCache !== null && (
             <p className="cache-note">
@@ -311,13 +312,13 @@ export function Home({ user }: { user: SessionUser }) {
         </section>
 
         <section className="timecard" aria-label="بطاقة اليوم">
-          <h2 className="timecard-day">{formatDate(new Date(nowMs).toISOString(), tz)}</h2>
+          <h3 className="timecard-day">{formatDate(new Date(nowMs).toISOString(), tz)}</h3>
           <ol className="slots">
             {rows.map((r) => (
-              <li key={r.key} className="slot">
+              <li key={r.key} className={`slot ${r.action === "check_in" ? "in" : "out"}`}>
                 <span className="slot-label">{r.action === "check_in" ? "حضور" : "انصراف"}</span>
                 {r.kind === "empty" ? (
-                  <span className="slot-empty" aria-label="لم يُسجَّل بعد" />
+                  <span className="slot-empty" role="img" aria-label="لم يُسجَّل بعد" />
                 ) : (
                   <span className="slot-mark">
                     <span
@@ -326,10 +327,12 @@ export function Home({ user }: { user: SessionUser }) {
                     >
                       {formatTime(r.time!, tz)}
                     </span>
-                    {r.kind === "pencil" && <span className="slot-note">لم يُرسل بعد</span>}
-                    {r.kind === "stamped" && r.needsReview && (
-                      <span className="slot-note review">{STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
-                    )}
+                    {r.kind === "pencil" && <span className="slot-note"><Icon name="phone" />لم يُرسل بعد</span>}
+                    {r.kind === "stamped" && (r.needsReview ? (
+                      <span className="slot-note review"><Icon name="alert" />{STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
+                    ) : (
+                      <span className="slot-note ok"><Icon name="check" />مؤكَّد</span>
+                    ))}
                   </span>
                 )}
               </li>
@@ -339,7 +342,7 @@ export function Home({ user }: { user: SessionUser }) {
 
         {state.phase === "unconfirmed" ? (
           <div className="unconfirmed" role="alert">
-            <p>{ERROR_TEXT.network}</p>
+            <p><Icon name="alert" className="inline-icon" />{ERROR_TEXT.network}</p>
             <div className="row">
               <button className="btn primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
               <button className="btn ghost" onClick={refresh}>تحديث الحالة</button>
@@ -369,26 +372,21 @@ export function Home({ user }: { user: SessionUser }) {
         {hint && working && <p className="hint">{hint}</p>}
 
         {state.phase === "ready" && state.notice && (
-          <div className={`banner ${state.notice.kind}`} role="status">
-            <span>{state.notice.text}</span>
-            <button className="x" aria-label="إغلاق" onClick={() => dispatch({ type: "DISMISS_NOTICE" })}>×</button>
-          </div>
+          <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
         )}
         {syncNote && (
-          <div className={`banner ${syncNote.kind} sync-note`} role="status">
-            <span>{syncNote.text}</span>
-            <button className="x" aria-label="إغلاق" onClick={() => setSyncNote(null)}>×</button>
-          </div>
+          <Banner kind={syncNote.kind} className="sync-note" onClose={() => setSyncNote(null)}>{syncNote.text}</Banner>
         )}
         {waiting.length > 0 && (
           <p className="queue-count" role="status">
+            <Icon name="phone" className="inline-icon" />
             بانتظار الإرسال: {waiting.length} {online ? "— جارٍ الإرسال…" : ""}
           </p>
         )}
 
         {failed.length > 0 && (
           <section className="failed-card" role="alert">
-            <h3 className="section-title">تسجيلات لم يقبلها الخادم</h3>
+            <h3 className="section-title"><Icon name="alert" className="inline-icon" />تسجيلات لم يقبلها الخادم</h3>
             <ul className="failed-list">
               {failed.map((q) => (
                 <li key={q.request_id} className="failed-item">
@@ -400,7 +398,7 @@ export function Home({ user }: { user: SessionUser }) {
                 </li>
               ))}
             </ul>
-            <p className="muted small">هذه التسجيلات لم تُحسب. تواصل مع إدارة شركتك لتصحيحها.</p>
+            <p className="hint-line">هذه التسجيلات لم تُحسب. تواصل مع إدارة شركتك لتصحيحها.</p>
             <button className="btn ghost block" onClick={dismissFailed}>فهمت، إخفاء</button>
           </section>
         )}
@@ -412,8 +410,8 @@ export function Home({ user }: { user: SessionUser }) {
         )}
         {iosHint && (
           <div className="banner install-hint" role="note">
-            <span>لتثبيت التطبيق: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية».</span>
-            <button className="x" aria-label="إغلاق" onClick={dismissIosHint}>×</button>
+            <span className="banner-text">لتثبيت التطبيق: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية».</span>
+            <button className="x" aria-label="إغلاق" onClick={dismissIosHint}><Icon name="close" /></button>
           </div>
         )}
       </main>
@@ -468,7 +466,7 @@ function PolicyNote({ data }: { data: AttendanceState }) {
       : data.location_policy === "record"
         ? "يُسجَّل موقعك مع كل عملية."
         : "لا يُطلب الموقع لهذا الحساب.";
-  return <p className="policy">{text}</p>;
+  return <p className="policy"><Icon name="pin" className="inline-icon" />{text}</p>;
 }
 
 const STATUS_TEXT: Partial<Record<LocationStatus, string>> = {
@@ -482,6 +480,7 @@ function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
   return (
     <section className="earlier" aria-labelledby="earlier-title">
       <h3 id="earlier-title" className="section-title">الأيام السابقة</h3>
+      <div className="group">
       <table className="days">
         <thead>
           <tr>
@@ -505,6 +504,7 @@ function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

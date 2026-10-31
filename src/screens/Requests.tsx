@@ -29,6 +29,7 @@ import {
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "./useRequests";
+import { AppBar, Banner, Icon } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
 
@@ -69,27 +70,26 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
   }
 
   return (
-    <main className="container requests">
-      <div className="req-head">
-        <h1 className="screen-title">الطلبات</h1>
-        <button className="btn primary" onClick={() => { setNote(null); setComposing(true); }} disabled={!overview || !online}>
-          طلب جديد
+    <>
+    <AppBar
+      className="req-head"
+      title="الطلبات"
+      action={
+        <button className="btn primary small" onClick={() => { setNote(null); setComposing(true); }} disabled={!overview || !online}>
+          <Icon name="plus" />طلب جديد
         </button>
-      </div>
-
-      {!online && <div className="banner warning" role="alert">الطلبات تحتاج اتصالًا بالإنترنت.</div>}
-      {note && (
-        <div className={`banner ${note.kind}`} role="status">
-          <span>{note.text}</span>
-          <button className="x" aria-label="إغلاق" onClick={() => setNote(null)}>×</button>
-        </div>
-      )}
+      }
+    />
+    <main className="container requests">
+      {!online && <Banner kind="warning">الطلبات تحتاج اتصالًا بالإنترنت.</Banner>}
+      {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}
 
       {!overview ? (
         loading ? (
           <div className="center-block" aria-busy="true"><div className="spinner" /></div>
         ) : (
           <div className="card pad">
+            <Icon name="alert" className="pad-icon" />
             <p className="muted">{error?.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[error?.code ?? "unknown"]}</p>
             <button className="btn primary" onClick={reload}>إعادة المحاولة</button>
           </div>
@@ -111,6 +111,7 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
         </>
       )}
     </main>
+    </>
   );
 }
 
@@ -198,14 +199,14 @@ function InboxCard({ item, timeZone, online, onDone }: {
             <span>سبب الرفض (يراه الموظف، اختياري)</span>
             <textarea value={reason} maxLength={500} rows={2} onChange={(e) => setReason(e.target.value)} />
           </label>
-          <div className="row end">
-            <button className="btn ghost" onClick={() => setRejecting(false)} disabled={busy}>تراجع</button>
+          <div className="actions">
+            <button className="btn" onClick={() => setRejecting(false)} disabled={busy}>تراجع</button>
             <button className="btn danger" onClick={() => decide("reject")} disabled={busy || !online} aria-busy={busy}>تأكيد الرفض</button>
           </div>
         </div>
       ) : (
-        <div className="row end">
-          <button className="btn ghost danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</button>
+        <div className="actions">
+          <button className="btn danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</button>
           <button className="btn primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
             {busy ? "جارٍ الإرسال…" : "موافقة"}
           </button>
@@ -221,9 +222,10 @@ function Balances({ overview }: { overview: RequestsOverview }) {
   const annual = overview.balances.find((b) => b.leave_type === "annual");
   const others = overview.balances.filter((b) => b.leave_type !== "annual" && (b.used > 0 || b.pending > 0));
   return (
-    <section className="balances" aria-label="الأرصدة">
+    <section className="balances" aria-labelledby="bal-title">
+      <h2 id="bal-title" className="section-title">أرصدتي</h2>
       {annual && annual.remaining !== null && (
-        <div className="balance">
+        <div className="balance annual">
           <span className="balance-label">الإجازة السنوية</span>
           <span className="balance-value">{formatDays(annual.remaining)}</span>
           <span className="balance-sub">متبقٍ من {formatDays(annual.entitled ?? 0)}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
@@ -401,12 +403,9 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
   ];
 
   return (
+    <>
+    <AppBar title="طلب جديد" onBack={onClose} backDisabled={sending} />
     <main className="container requests">
-      <div className="req-head">
-        <h1 className="screen-title">طلب جديد</h1>
-        <button className="btn ghost small" onClick={onClose} disabled={sending}>رجوع</button>
-      </div>
-
       <div className="seg" role="radiogroup" aria-label="نوع الطلب">
         {types.map((t) => (
           <button
@@ -450,7 +449,7 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
                 {ptypes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            {ptype && <p className="muted small perm-rules">{permissionRules(ptype)}</p>}
+            {ptype && <p className="hint-line perm-rules">{permissionRules(ptype)}</p>}
             {ptype && ptype.days_back === 0 && ptype.days_ahead === 0 ? (
               <p className="field-static"><span>اليوم</span> {formatDay(overview.today)}</p>
             ) : (
@@ -483,7 +482,7 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
                 <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
               </label>
             )}
-            <p className="muted small">{MODE_HINT[draft.permission_mode]}</p>
+            <p className="hint-line">{MODE_HINT[draft.permission_mode]}</p>
           </>
           )
         ) : (
@@ -512,16 +511,15 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
                    waiting={built.ok && online && current === null && problem === null} />
 
       {sendError && (
-        <div className="banner error" role="alert">
-          <span>{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</span>
-        </div>
+        <Banner kind="error">{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</Banner>
       )}
-      {!online && <div className="banner warning" role="alert">لا يوجد اتصال بالإنترنت. أرسل الطلب عند عودة الاتصال.</div>}
+      {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت. أرسل الطلب عند عودة الاتصال.</Banner>}
 
       <button className="btn primary block send" onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "إرسال الطلب"}
       </button>
     </main>
+    </>
   );
 }
 
