@@ -24,6 +24,8 @@ export interface Pending {
   request_id: string;
   action: AttendanceAction;
   reading: LocationReading | null;
+  /** Fingerprint result for this punch (phase 8b): "ticket" (done, or not required) or "unsupported". */
+  biometric?: "ticket" | "unsupported";
 }
 
 export type NoticeKind = "success" | "warning" | "error";

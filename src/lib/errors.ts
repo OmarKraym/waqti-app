@@ -22,6 +22,13 @@ export type AppErrorCode =
   | "time_unverified"
   | "time_order"
   | "offline_too_old"
+  // fingerprint and punch windows (phase 8)
+  | "biometric_required"
+  | "device_not_registered"
+  | "device_already_registered"
+  | "biometric_failed"
+  | "outside_punch_window"
+  | "day_off"
   // requests
   | "invalid_dates"
   | "invalid_duration"
@@ -75,6 +82,7 @@ const KNOWN = new Set<AppErrorCode>([
   "not_your_team", "overlaps_shift", "on_leave", "overlapping_overtime", "overtime_day_limit", "overtime_month_limit",
   "overtime_not_found", "overtime_started", "overtime_closed",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
+  "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -131,5 +139,11 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   password_too_weak: "كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل.",
   same_password: "كلمة المرور الجديدة يجب أن تختلف عن المؤقتة.",
   not_required: "لا يلزم تغيير كلمة المرور الآن.",
+  biometric_required: "يجب تأكيد البصمة على الجهاز المسجّل لحسابك. إذا غيّرت هاتفك اطلب من الإدارة إلغاء الجهاز القديم.",
+  device_not_registered: "سجّل بصمتك لهذا الجهاز أولًا.",
+  device_already_registered: "يوجد جهاز مسجّل لحسابك. لتسجيل جهاز جديد اطلب من الإدارة إلغاء القديم.",
+  biometric_failed: "لم تتم البصمة",
+  outside_punch_window: "البصم غير متاح الآن.",
+  day_off: "اليوم عطلة.",
   unknown: "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا تكرر تواصل مع الإدارة.",
 };

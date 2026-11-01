@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type Plugin } from "vite";
+import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -73,5 +74,7 @@ export default defineConfig(({ mode }) => ({
   ],
   test: {
     environment: "node",
+    // Edge Function tests run in their own Node harness (supabase/functions/*/test.sh).
+    exclude: [...configDefaults.exclude, "supabase/**"],
   },
 }));

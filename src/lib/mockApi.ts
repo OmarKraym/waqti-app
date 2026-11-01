@@ -110,6 +110,9 @@ export function createMockApi(): WaqtiApi {
       recent_events: events.slice(0, 10),
       server_time: new Date(serverNow()).toISOString(),
       time_token: tokenAt(serverNow()),
+      // The fake server has no punch windows and no fingerprint (both are off by default on the real one too).
+      punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
+      biometric: { policy: "off", has_device: false },
     };
   };
 
@@ -223,6 +226,9 @@ export function createMockApi(): WaqtiApi {
       punchCount += 1;
       if (flaky && punchCount % 2 === 1) throw new AppError("network");
       return result;
+    },
+    async webauthn() {
+      throw new AppError("forbidden"); // fingerprint needs the real server
     },
     async punchOffline(input: OfflinePunchInput) {
       await wait(500);

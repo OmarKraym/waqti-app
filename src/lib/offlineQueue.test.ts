@@ -43,6 +43,8 @@ const base: AttendanceState = {
   recent_events: [],
   server_time: new Date(T0).toISOString(),
   time_token: "tok-T0",
+  punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
+  biometric: { policy: "off", has_device: false },
 };
 
 /** Server says T0; the phone clock is 10 minutes slow; perf clock was at 1000 ms. */

@@ -210,7 +210,21 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
         p_lat: r.kind === "ok" ? r.lat : null,
         p_lng: r.kind === "ok" ? r.lng : null,
         p_accuracy_m: r.kind === "ok" ? r.accuracy_m : null,
+        p_biometric: input.biometric ?? "ticket",
       });
+    },
+
+    async webauthn(action, body) {
+      const { data, error } = await sb.functions.invoke("webauthn", { body: { action, ...(body ?? {}) } });
+      if (error) {
+        if (error instanceof FunctionsFetchError) throw new AppError("network");
+        if (error instanceof FunctionsHttpError) {
+          const res = await (error.context as Response).json().catch(() => null);
+          throw new AppError(toKnownCode(res?.error), res?.error);
+        }
+        throw new AppError("unknown", error.message);
+      }
+      return data;
     },
 
     punchOffline(input: OfflinePunchInput) {

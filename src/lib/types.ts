@@ -1,3 +1,5 @@
+import type { BiometricState } from "./biometric";
+import type { PunchWindow } from "./punchWindow";
 // Shapes returned by the server. See docs/API_CONTRACT.md.
 
 export type AttendanceAction = "check_in" | "check_out";
@@ -40,6 +42,10 @@ export interface AttendanceState {
   server_time: string;
   /** Signed server-time token. An offline punch can never be dated before it (see API_CONTRACT). */
   time_token: string;
+  /** When the next punch is allowed (phase 8a). */
+  punch_window: PunchWindow;
+  /** Fingerprint policy of the company and whether this account has a registered device (phase 8b). */
+  biometric: BiometricState;
 }
 
 /** What the device managed to read. The server makes the final decision. */
@@ -55,6 +61,8 @@ export interface PunchInput {
   request_id: string;           // idempotency key: the same key never records twice
   expected_action: AttendanceAction;
   reading: LocationReading;
+  /** "ticket" (fingerprint done, or not required) or "unsupported" (this phone cannot; flagged for review). */
+  biometric?: "ticket" | "unsupported";
 }
 
 /** A punch made without internet, sent later. The server checks the phone clock against the token. */

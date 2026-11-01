@@ -31,9 +31,12 @@ import {
   type QueuedPunch,
   type TimeAnchor,
 } from "../lib/offlineQueue";
+import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
+import { nextBoundaryMs, windowText } from "../lib/punchWindow";
 import { dayKey, earlierDays, formatDuration, todayRows, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceState, LocationStatus } from "../lib/types";
 import { useInstallPrompt, useIosInstallHint, useOnline } from "./hooks";
+import { DeviceSetup } from "./DeviceSetup";
 import { AppBar, Banner, Icon } from "./ui";
 
 const SYNC_EVERY_MS = 30_000;
@@ -72,6 +75,10 @@ export function Home({ user }: { user: SessionUser }) {
   // The event just confirmed by the server: its stamp "lands" once (the only animation).
   const [freshId, setFreshId] = useState<string | null>(null);
   const syncing = useRef(false);
+  // Fingerprint (phase 8b): register this phone first / the check before a punch.
+  const [setupNeeded, setSetupNeeded] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [bioNote, setBioNote] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
 
   const load = useCallback(async () => {
     dispatch({ type: "LOAD_START" });
@@ -144,6 +151,34 @@ export function Home({ user }: { user: SessionUser }) {
     };
   }, [refresh]);
 
+  // ---- phase 8: fingerprint registration prompt and punch-window timer (need the server's state)
+  const live = state.phase === "loading" || state.phase === "load_error" ? null : state.data;
+  const bio = live?.biometric;
+  const [unsupportedNote, setUnsupportedNote] = useState(false);
+  useEffect(() => {
+    if (!bio || bio.policy !== "required" || bio.has_device) {
+      setUnsupportedNote(false);
+      return;
+    }
+    let cancelled = false;
+    supportsPlatformAuthenticator().then((can) => {
+      if (cancelled) return;
+      if (can) setSetupNeeded(true);
+      else setUnsupportedNote(true);
+    });
+    return () => { cancelled = true; };
+  }, [bio?.policy, bio?.has_device]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const win = live?.punch_window;
+  useEffect(() => {
+    if (!win || win.allowed) return;
+    // Ask the server again when the window opens (server clock), and every 5 minutes as a fallback.
+    const nb = nextBoundaryMs(win, Date.now() + offsetMs);
+    const t1 = nb === null ? undefined : setTimeout(() => refreshRef.current(), Math.min(nb + 1000, 6 * 3600 * 1000));
+    const t2 = setInterval(() => refreshRef.current(), 5 * 60 * 1000);
+    return () => { clearTimeout(t1); clearInterval(t2); };
+  }, [win?.allowed, win?.opens_at, offsetMs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Saves the punch on the phone. Returns false if the phone refused to save it. */
   function enqueue(pending: Pending, tapTime: number, tapPerf: number): boolean {
     if (!anchor.current) return false;
@@ -171,6 +206,7 @@ export function Home({ user }: { user: SessionUser }) {
           request_id: pending.request_id,
           expected_action: pending.action,
           reading: pending.reading ?? { kind: "not_requested" },
+          biometric: pending.biometric,
         });
         if (result.time_token) setAnchor(anchorFromServer(result.time_token, result.server_time));
         setFreshId(result.event_id);
@@ -183,7 +219,8 @@ export function Home({ user }: { user: SessionUser }) {
         // sending it again just returns the saved punch.
         if (err.code === "network" && allowQueue && enqueue(pending, tapTime, tapPerf)) return;
         dispatch({ type: "PUNCH_FAIL", error: err });
-        if (err.code === "state_changed") load();
+        // The server's state moved on (other device, window closed, device removed): show the current one.
+        if (["state_changed", "outside_punch_window", "day_off", "biometric_required", "device_not_registered"].includes(err.code)) load();
       } finally {
         busy.current = false;
       }
@@ -196,10 +233,34 @@ export function Home({ user }: { user: SessionUser }) {
     busy.current = true;
     setHint(null);
     setSyncNote(null);
+    setBioNote(null);
+    // Fingerprint first (phase 8b). A cancelled prompt records nothing.
+    const requestId = newRequestId();
+    let biometric: "ticket" | "unsupported" = "ticket";
+    try {
+      setBioBusy(true);
+      const step = await biometricStep(view.biometric ?? { policy: "off", has_device: false });
+      if (step === "register") {
+        setSetupNeeded(true);
+        busy.current = false;
+        return;
+      }
+      if (step === "unsupported") biometric = "unsupported";
+      if (step === "fingerprint") await fingerprintTicket(api, requestId);
+    } catch (e) {
+      const err = e instanceof AppError ? e : new AppError("unknown", String(e));
+      if (err.code === "not_authenticated") return void api.signOut();
+      setBioNote({ kind: "error", text: ERROR_TEXT[err.code] });
+      busy.current = false;
+      if (err.code === "device_not_registered" || err.code === "forbidden") load();
+      return;
+    } finally {
+      setBioBusy(false);
+    }
     // The time of the TAP (not of the GPS answer) is what is recorded offline.
     const tapTime = Date.now();
     const tapPerf = performance.now();
-    const pending: Pending = { request_id: newRequestId(), action: view.next_action, reading: null };
+    const pending: Pending = { request_id: requestId, action: view.next_action, reading: null, biometric };
     dispatch({ type: "TAP", request_id: pending.request_id, action: pending.action });
     const reading = await readLocation(view.location_policy);
     setHint(readingHint(reading, view.max_accuracy_m));
@@ -276,7 +337,9 @@ export function Home({ user }: { user: SessionUser }) {
   const failed = failedOf(queue);
   const working = state.phase === "locating" || state.phase === "submitting";
   const action = state.phase === "ready" ? data.next_action : state.pending.action;
-  const canTap = !working && (online || allowQueue);
+  // Phase 8a: outside the allowed times the button is off (the server refuses anyway). Old cached states have no window.
+  const blocked = !!data.punch_window && !data.punch_window.allowed && fromCache === null;
+  const canTap = !working && !bioBusy && !blocked && (online || allowQueue);
   const tz = data.company.timezone;
   const nowMs = Date.now() + offsetMs;
   const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
@@ -343,7 +406,15 @@ export function Home({ user }: { user: SessionUser }) {
           </ol>
         </section>
 
-        {state.phase === "unconfirmed" ? (
+        {setupNeeded ? (
+          <DeviceSetup
+            onDone={() => {
+              setSetupNeeded(false);
+              setBioNote({ kind: "success", text: "تم تسجيل البصمة لهذا الجهاز. يمكنك الآن تسجيل الحضور." });
+              load();
+            }}
+          />
+        ) : state.phase === "unconfirmed" ? (
           <div className="unconfirmed" role="alert">
             <p><Icon name="alert" className="inline-icon" />{ERROR_TEXT.network}</p>
             <div className="row">
@@ -360,7 +431,11 @@ export function Home({ user }: { user: SessionUser }) {
           >
             <span className="punch-label">{actionLabel(action)}</span>
             <span className="punch-sub">
-              {state.phase === "locating"
+              {bioBusy
+                ? "أكّد بصمتك…"
+                : blocked
+                ? windowText(data.punch_window, data.company.timezone)
+                : state.phase === "locating"
                 ? "جارٍ تحديد الموقع…"
                 : state.phase === "submitting"
                   ? "جارٍ الإرسال للخادم…"
@@ -376,6 +451,12 @@ export function Home({ user }: { user: SessionUser }) {
 
         {state.phase === "ready" && state.notice && (
           <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
+        )}
+        {bioNote && (
+          <Banner kind={bioNote.kind} className="bio-note" onClose={() => setBioNote(null)}>{bioNote.text}</Banner>
+        )}
+        {data.biometric?.policy === "required" && !data.biometric.has_device && !setupNeeded && unsupportedNote && (
+          <p className="hint-line">هذا الجهاز لا يدعم البصمة؛ ستُعلَّم بصماتك للمراجعة</p>
         )}
         {syncNote && (
           <Banner kind={syncNote.kind} className="sync-note" onClose={() => setSyncNote(null)}>{syncNote.text}</Banner>

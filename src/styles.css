@@ -167,6 +167,7 @@ button { font: inherit; }
 .card { padding: var(--s4); }
 .pad { padding: var(--s8) var(--s6); text-align: center; display: grid; justify-items: center; gap: var(--s3); }
 .pad-icon { width: 32px; height: 32px; color: var(--danger); }
+.device-setup .pad-icon { color: var(--brand); }
 .pad-title { font-size: var(--fs-title); font-weight: 700; }
 .pad .row { margin-top: var(--s2); }
 

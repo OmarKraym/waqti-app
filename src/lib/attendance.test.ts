@@ -15,6 +15,8 @@ const base: AttendanceState = {
   recent_events: [],
   server_time: "2026-10-29T06:00:00Z",
   time_token: "tok",
+  punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
+  biometric: { policy: "off", has_device: false },
 };
 
 const ready: ScreenState = { phase: "ready", data: base, notice: null, refreshing: false };

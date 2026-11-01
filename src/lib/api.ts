@@ -25,6 +25,8 @@ export interface WaqtiApi {
   changeTemporaryPassword(newPassword: string): Promise<void>;
   getAttendanceState(): Promise<AttendanceState>;
   punch(input: PunchInput): Promise<PunchResult>;
+  /** Fingerprint steps (Edge Function "webauthn"): register this phone, or get a ticket for one punch. */
+  webauthn(action: "register-options" | "register-verify" | "punch-options" | "punch-verify", body?: object): Promise<unknown>;
   /** Sends a punch that was saved on the phone without internet. */
   punchOffline(input: OfflinePunchInput): Promise<PunchResult>;
 
