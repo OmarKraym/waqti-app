@@ -187,7 +187,6 @@ button { font: inherit; }
 .banner.success { background: var(--brand-wash); border-color: var(--brand-tint); color: var(--brand); }
 .banner.warning { background: var(--warn-tint); border-color: #f5dd9f; color: var(--warn); }
 .banner.error { background: var(--danger-tint); border-color: #f6c9c3; color: var(--danger); }
-.banner.install-hint { background: var(--surface); border: 1px dashed var(--line-strong); color: var(--text-2); }
 .banner .x {
   flex: none; display: grid; place-items: center;
   width: 32px; height: 32px; margin-block: -5px;
@@ -311,7 +310,6 @@ button { font: inherit; }
 .status-head { font-size: var(--fs-display); font-weight: 700; line-height: 1.3; color: var(--text); }
 .clock-line { color: var(--text-2); font-size: var(--fs-small); }
 .clock-line span { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
-.cache-note { color: var(--text-2); font-size: var(--fs-small); }
 
 /* The day's time card: the one hero object */
 .timecard {
@@ -345,8 +343,6 @@ button { font: inherit; }
 }
 .slot-note { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-caption); font-weight: 600; color: var(--text-2); }
 .slot-note .icon { width: 16px; height: 16px; stroke-width: 2; }
-.slot-note.ok { color: var(--brand); }
-.slot.out .slot-note.ok { color: var(--copper); }
 .slot-note.review { color: var(--warn); }
 
 /* Confirmed by the server: solid. Saved on the phone only: dashed, never looks final. */
@@ -387,8 +383,6 @@ button { font: inherit; }
 .punch-sub { font-size: var(--fs-small); opacity: .9; }
 .punch-sub:empty { display: none; }
 
-.policy { color: var(--text-2); font-size: var(--fs-small); text-align: center; margin-top: calc(-1 * var(--s1)); }
-.hint { color: var(--warn); font-size: var(--fs-small); text-align: center; }
 .queue-count { color: var(--text-2); font-weight: 600; font-size: var(--fs-small); text-align: center; }
 
 .unconfirmed {
@@ -527,7 +521,6 @@ button { font: inherit; }
 .seg-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .form { display: grid; gap: var(--s5); padding: var(--s5) var(--s4); }
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
-.perm-rules { margin-top: calc(-1 * var(--s3)); }
 
 .preview {
   font-size: var(--fs-small); line-height: 1.6;

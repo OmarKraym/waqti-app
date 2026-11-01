@@ -40,32 +40,3 @@ export function useInstallPrompt(): (() => void) | null {
     event.prompt().finally(() => setEvent(null));
   };
 }
-
-const IOS_HINT_KEY = "waqti-ios-install-hint-dismissed";
-
-/** iPhone/iPad Safari has no install prompt: show a one-line "Add to Home Screen" hint instead. */
-export function useIosInstallHint(): [boolean, () => void] {
-  const [show, setShow] = useState(() => {
-    const ua = navigator.userAgent;
-    const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
-    const standalone =
-      window.matchMedia?.("(display-mode: standalone)").matches ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    let dismissed = false;
-    try {
-      dismissed = localStorage.getItem(IOS_HINT_KEY) === "1";
-    } catch {
-      /* storage blocked: just show it */
-    }
-    return isIos && !standalone && !dismissed;
-  });
-  const dismiss = () => {
-    setShow(false);
-    try {
-      localStorage.setItem(IOS_HINT_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-  };
-  return [show, dismiss];
-}

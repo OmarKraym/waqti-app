@@ -30,21 +30,3 @@ export function readLocation(policy: LocationPolicy, geo: Geolocation | undefine
     );
   });
 }
-
-/** Short hint for the employee BEFORE the server answers. It is advice only, never a decision. */
-export function readingHint(reading: LocationReading, maxAccuracyM: number): string | null {
-  switch (reading.kind) {
-    case "ok":
-      return reading.accuracy_m > maxAccuracyM ? `دقة الموقع ضعيفة (±${reading.accuracy_m} م)` : null;
-    case "denied":
-      return "تم رفض إذن الموقع في المتصفح";
-    case "timeout":
-      return "انتهت مهلة تحديد الموقع";
-    case "unavailable":
-      return "تعذّر تحديد الموقع";
-    case "unsupported":
-      return "هذا المتصفح لا يدعم تحديد الموقع";
-    case "not_requested":
-      return null;
-  }
-}

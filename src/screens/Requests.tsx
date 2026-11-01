@@ -14,9 +14,7 @@ import {
   formatPeriod,
   formatTimes,
   localTime,
-  MODE_HINT,
   permissionLeft,
-  permissionRules,
   permissionTimesFilled,
   progressLine,
   remainingAfter,
@@ -267,7 +265,7 @@ function MyRequests({ items, timeZone, online, onChanged }: {
     <section aria-labelledby="mine-title">
       <h2 id="mine-title" className="section-title">طلباتي</h2>
       {items.length === 0 ? (
-        <p className="muted empty">لا توجد طلبات بعد. اضغط «طلب جديد» لتقديم إجازة أو إذن.</p>
+        <p className="muted empty">لا توجد طلبات بعد.</p>
       ) : (
         <ul className="req-list">
           {items.map((r) => (
@@ -449,7 +447,6 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
                 {ptypes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            {ptype && <p className="hint-line perm-rules">{permissionRules(ptype)}</p>}
             {ptype && ptype.days_back === 0 && ptype.days_ahead === 0 ? (
               <p className="field-static"><span>اليوم</span> {formatDay(overview.today)}</p>
             ) : (
@@ -482,7 +479,6 @@ function NewRequestForm({ overview, online, onClose, onSent }: {
                 <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
               </label>
             )}
-            <p className="hint-line">{MODE_HINT[draft.permission_mode]}</p>
           </>
           )
         ) : (

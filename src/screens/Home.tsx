@@ -12,7 +12,7 @@ import {
 } from "../lib/attendance";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { readingHint, readLocation } from "../lib/location";
+import { readLocation } from "../lib/location";
 import {
   anchorFromCache,
   anchorFromServer,
@@ -35,7 +35,7 @@ import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from 
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
 import { dayKey, earlierDays, formatDuration, todayRows, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceState, LocationStatus } from "../lib/types";
-import { useInstallPrompt, useIosInstallHint, useOnline } from "./hooks";
+import { useInstallPrompt, useOnline } from "./hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { AppBar, Banner, Icon } from "./ui";
 
@@ -47,8 +47,6 @@ export function Home({ user }: { user: SessionUser }) {
   const busy = useRef(false); // blocks a second tap while one is being processed
   const online = useOnline();
   const install = useInstallPrompt();
-  const [iosHint, dismissIosHint] = useIosInstallHint();
-  const [hint, setHint] = useState<string | null>(null);
 
   // ---- offline support
   const storage = useMemo(() => browserStorage(), []);
@@ -231,7 +229,6 @@ export function Home({ user }: { user: SessionUser }) {
   async function onTap(view: AttendanceState, allowQueue: boolean) {
     if (busy.current) return;
     busy.current = true;
-    setHint(null);
     setSyncNote(null);
     setBioNote(null);
     // Fingerprint first (phase 8b). A cancelled prompt records nothing.
@@ -263,7 +260,6 @@ export function Home({ user }: { user: SessionUser }) {
     const pending: Pending = { request_id: requestId, action: view.next_action, reading: null, biometric };
     dispatch({ type: "TAP", request_id: pending.request_id, action: pending.action });
     const reading = await readLocation(view.location_policy);
-    setHint(readingHint(reading, view.max_accuracy_m));
     dispatch({ type: "LOCATED", reading });
     const full = { ...pending, reading };
 
@@ -370,11 +366,6 @@ export function Home({ user }: { user: SessionUser }) {
           </p>
           <h2 className="status-head">{statusHeadline(data, rows, nowMs, tz)}</h2>
           <ServerClock offsetMs={offsetMs} timeZone={tz} />
-          {fromCache !== null && (
-            <p className="cache-note">
-              تعرض آخر حالة محفوظة على الجهاز ({formatTime(new Date(fromCache).toISOString(), tz)}).
-            </p>
-          )}
         </section>
 
         <section className="timecard" aria-label="بطاقة اليوم">
@@ -394,11 +385,9 @@ export function Home({ user }: { user: SessionUser }) {
                       {formatTime(r.time!, tz)}
                     </span>
                     {r.kind === "pencil" && <span className="slot-note"><Icon name="phone" />لم يُرسل بعد</span>}
-                    {r.kind === "stamped" && (r.needsReview ? (
+                    {r.kind === "stamped" && r.needsReview && (
                       <span className="slot-note review"><Icon name="alert" />{STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
-                    ) : (
-                      <span className="slot-note ok"><Icon name="check" />مؤكَّد</span>
-                    ))}
+                    )}
                   </span>
                 )}
               </li>
@@ -446,8 +435,6 @@ export function Home({ user }: { user: SessionUser }) {
           </button>
         )}
 
-        <PolicyNote data={data} />
-        {hint && working && <p className="hint">{hint}</p>}
 
         {state.phase === "ready" && state.notice && (
           <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
@@ -492,12 +479,6 @@ export function Home({ user }: { user: SessionUser }) {
         {install && (
           <button className="btn ghost block" onClick={install}>تثبيت التطبيق على الجهاز</button>
         )}
-        {iosHint && (
-          <div className="banner install-hint" role="note">
-            <span className="banner-text">لتثبيت التطبيق: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية».</span>
-            <button className="x" aria-label="إغلاق" onClick={dismissIosHint}><Icon name="close" /></button>
-          </div>
-        )}
       </main>
     </div>
   );
@@ -539,18 +520,6 @@ function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: strin
       الساعة الآن <span dir="ltr">{formatClock(new Date(now).toISOString(), timeZone)}</span>
     </p>
   );
-}
-
-function PolicyNote({ data }: { data: AttendanceState }) {
-  const text =
-    data.location_policy === "geofence"
-      ? data.outside_action === "reject"
-        ? "يجب أن تكون داخل نطاق مكان العمل."
-        : "يُتحقق من موقعك، والتسجيل خارج النطاق يُرسل للمراجعة."
-      : data.location_policy === "record"
-        ? "يُسجَّل موقعك مع كل عملية."
-        : "لا يُطلب الموقع لهذا الحساب.";
-  return <p className="policy"><Icon name="pin" className="inline-icon" />{text}</p>;
 }
 
 const STATUS_TEXT: Partial<Record<LocationStatus, string>> = {

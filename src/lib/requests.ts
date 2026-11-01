@@ -163,23 +163,6 @@ export function formatTimes(n: number): string {
   return n >= 3 && n <= 10 ? `${n} مرات` : `${n} مرة`;
 }
 
-/** The rules of a permission type in one line: "3 مرات في الشهر · ساعتان كحد أقصى في المرة · في نفس اليوم فقط". */
-export function permissionRules(p: Pick<PermissionUsage, "max_per_month" | "max_minutes" | "days_back" | "days_ahead">): string {
-  const parts = [
-    p.max_per_month === null ? "بلا حد لعدد المرات" : `${formatTimes(p.max_per_month)} في الشهر`,
-    p.max_minutes === null ? null : `${formatMinutes(p.max_minutes)} كحد أقصى في المرة`,
-    p.days_back === 0 && p.days_ahead === 0 ? "في نفس اليوم فقط" : null,
-  ];
-  return parts.filter(Boolean).join(" · ");
-}
-
-/** What the employee enters for each mode. */
-export const MODE_HINT: Record<PermissionMode, string> = {
-  range: "اكتب وقت الخروج ووقت العودة.",
-  late_arrival: "اكتب وقت وصولك. يُحسب من بداية دوامك.",
-  early_leave: "اكتب وقت خروجك. يُحسب حتى نهاية دوامك.",
-};
-
 // ---------------------------------------------------------------- approval progress
 
 /** Steps the employee sees: skipped ones are hidden (they never needed anyone). */

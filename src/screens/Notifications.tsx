@@ -178,9 +178,6 @@ export function Notifications({ online }: { online: boolean }) {
                 {BEFORE_OUT.map((m) => <option key={m} value={m}>{minutesLabel(m, "عند نهاية الدوام")}</option>)}
               </select>
             </div>
-            <p className="hint-line">
-              حسب جدول دوامك. لا يصلك تذكير الحضور إذا سجّلت حضورك أو كنت في إجازة، ولا تذكير الانصراف إذا لم تكن مسجّلًا حضورك.
-            </p>
             {(settings.remind_check_in || settings.remind_check_out) && settings.devices === 0 && (
               <p className="hint-line alert-text">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
             )}

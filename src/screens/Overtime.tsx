@@ -208,7 +208,6 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
 
   const direct = data.team.filter((t) => t.direct);
   const below = data.team.filter((t) => !t.direct);
-  const limits = data.limits;
 
   return (
     <>
@@ -245,14 +244,6 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
             <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
           </label>
         </div>
-        <p className="hint-line">
-          خارج دوامه فقط: قبله أو بعده أو في يوم عطلته.
-          {(limits.day_minutes !== null || limits.month_minutes !== null) && " الحد الأقصى: "}
-          {limits.day_minutes !== null && `${formatMinutes(limits.day_minutes)} في اليوم`}
-          {limits.day_minutes !== null && limits.month_minutes !== null && " و"}
-          {limits.month_minutes !== null && `${formatMinutes(limits.month_minutes)} في الشهر`}
-          {(limits.day_minutes !== null || limits.month_minutes !== null) && "."}
-        </p>
         <label className="field">
           <span>المهمة (اختياري، يراها الموظف)</span>
           <textarea value={draft.task} maxLength={500} rows={2} onChange={(e) => set({ task: e.target.value })} placeholder="مثال: جرد المخزن الرئيسي" />

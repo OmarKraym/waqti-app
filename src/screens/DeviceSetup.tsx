@@ -28,7 +28,7 @@ export function DeviceSetup({ onDone }: { onDone: () => void }) {
       <Icon name="phone" className="pad-icon" />
       <h2 id="device-setup-title" className="pad-title">سجّل بصمتك لهذا الجهاز</h2>
       <p className="muted">
-        شركتك تطلب تأكيد البصمة عند كل حضور وانصراف. يُسجَّل هاتف واحد لحسابك، ولتغييره لاحقًا تطلب من الإدارة إلغاء القديم.
+        يُسجَّل هاتف واحد فقط لحسابك. لتغييره لاحقًا اطلب من الإدارة إلغاء القديم.
       </p>
       {error && <Banner kind="error" onClose={() => setError(null)}>{error}</Banner>}
       <button className="btn primary block" onClick={register} disabled={busy} aria-busy={busy}>

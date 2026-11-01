@@ -9,7 +9,6 @@ import {
   formatTimes,
   localDate,
   permissionLeft,
-  permissionRules,
   permissionTimesFilled,
   progressLine,
   remainingAfter,
@@ -93,13 +92,6 @@ describe("balances", () => {
     expect(permissionLeft({ ...pt, used: 1, pending: 1 })).toBe(1);
     expect(permissionLeft({ ...pt, used: 2, pending: 2 })).toBe(0);
     expect(permissionLeft({ ...pt, max_per_month: null, used: 9 })).toBeNull();
-  });
-
-  it("permission rules in one line", () => {
-    expect(permissionRules(pt)).toBe("3 مرات في الشهر · ساعتان كحد أقصى في المرة");
-    expect(permissionRules({ ...pt, max_per_month: 3, max_minutes: 60, days_back: 0, days_ahead: 0 })).toBe("3 مرات في الشهر · ساعة كحد أقصى في المرة · في نفس اليوم فقط");
-    expect(permissionRules({ ...pt, max_per_month: 1, max_minutes: null })).toBe("مرة واحدة في الشهر");
-    expect(permissionRules({ ...pt, max_per_month: null, max_minutes: null })).toBe("بلا حد لعدد المرات");
   });
 
   it("times in Arabic", () => {

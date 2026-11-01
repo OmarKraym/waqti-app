@@ -29,7 +29,6 @@ export function Login() {
         <div className="auth-head">
           <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" className="auth-logo" width={64} height={64} />
           <h1>وقتي</h1>
-          <p className="muted">سجّل دخولك لتسجيل الحضور والانصراف</p>
         </div>
 
         <label className="field">
