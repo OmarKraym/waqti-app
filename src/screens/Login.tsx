@@ -39,6 +39,10 @@ export function Login() {
         clearDeviceHint();
         setBioReady(false);
         setError("هذا الهاتف لم يعد مسجّلًا للبصمة. ادخل بكلمة المرور.");
+      } else if (code === "login_disabled") {
+        clearDeviceHint(); // the employee switched it off in the profile: the button goes away
+        setBioReady(false);
+        setError(ERROR_TEXT.login_disabled);
       } else {
         setError(code === "network" ? "تعذّر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى." : ERROR_TEXT[code]);
       }

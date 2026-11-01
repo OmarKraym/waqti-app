@@ -166,7 +166,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const bio = live?.biometric;
   useEffect(() => {
     if (live) onInfo({ employee: live.employee, company: live.company, biometric: live.biometric });
-  }, [live?.employee.full_name, live?.employee.employee_number, live?.company.name, live?.biometric?.policy, live?.biometric?.has_device]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [live?.employee.full_name, live?.employee.employee_number, live?.company.name, live?.biometric?.policy, live?.biometric?.has_device, live?.biometric?.login_enabled]); // eslint-disable-line react-hooks/exhaustive-deps
   const [unsupportedNote, setUnsupportedNote] = useState(false);
   useEffect(() => {
     if (!bio || bio.policy !== "required" || bio.has_device) {

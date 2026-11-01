@@ -8,6 +8,8 @@ import { clearDeviceHint, readDeviceHint, saveDeviceHint } from "./bioDevice";
 export interface BiometricState {
   policy: "off" | "required";
   has_device: boolean;
+  /** Fingerprint SIGN-IN switch of this employee (phase 10). Old saved states have none: it counts as on. */
+  login_enabled?: boolean;
 }
 
 type WebauthnApi = Pick<WaqtiApi, "webauthn">;
@@ -99,7 +101,8 @@ export async function loginWithFingerprint(
   const credentialId = hint.read();
   if (!credentialId) throw new AppError("device_not_registered");
   const forgetIfGone = (e: unknown): never => {
-    if (e instanceof AppError && e.code === "device_not_registered") hint.clear();
+    // not registered (admin removed the phone) or switched off by the employee: the button must go away
+    if (e instanceof AppError && (e.code === "device_not_registered" || e.code === "login_disabled")) hint.clear();
     throw e;
   };
   const issued = (await api.webauthn("login-options", { credential_id: credentialId }).catch(forgetIfGone)) as
@@ -120,5 +123,46 @@ export async function loginWithFingerprint(
     .catch(forgetIfGone)) as { token_hash?: unknown } | null;
   if (!done || typeof done.token_hash !== "string") throw new AppError("unknown");
   await api.signInWithToken(done.token_hash);
+  return true;
+}
+
+export type LoginToggle =
+  | { kind: "off_by_company" }
+  | { kind: "needs_device" }
+  | { kind: "switch"; on: boolean; canTurnOn: boolean };
+
+/** What the profile shows for "sign in with fingerprint". */
+export function loginToggle(b: BiometricState | undefined, supported: boolean): LoginToggle {
+  if (!b || b.policy !== "required") return { kind: "off_by_company" };
+  if (!b.has_device) return { kind: "needs_device" };
+  return { kind: "switch", on: b.login_enabled !== false, canTurnOn: supported };
+}
+
+/**
+ * Turns fingerprint sign-in on or off for this employee. The server enforces it (a phone that still remembers its
+ * fingerprint is refused while it is off). Off needs nothing; on needs a fresh fingerprint over a challenge from the
+ * server. Returns the new state. A cancelled prompt throws biometric_failed and changes nothing.
+ */
+export async function setLoginEnabled(
+  api: WebauthnApi,
+  enabled: boolean,
+  start: Start = startAuthentication as unknown as Start,
+  hint: HintSave & { clear: () => void } = { save: saveDeviceHint, clear: clearDeviceHint },
+): Promise<boolean> {
+  if (!enabled) {
+    await api.webauthn("set-login", { enabled: false });
+    hint.clear(); // only after the server agreed: the sign-in button goes away on this phone at once
+    return false;
+  }
+  const options = await api.webauthn("punch-options");
+  const known = (options as { allowCredentials?: { id?: unknown }[] } | null)?.allowCredentials?.[0]?.id;
+  let response: unknown;
+  try {
+    response = await start({ optionsJSON: options as never });
+  } catch (e) {
+    throw new AppError(cancelled(e) ? "biometric_failed" : "unknown", String(e));
+  }
+  await api.webauthn("set-login", { enabled: true, response });
+  if (typeof known === "string") hint.save(known);
   return true;
 }

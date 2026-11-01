@@ -26,7 +26,7 @@ globalThis.__fake = {
     if (fn === "employee_webauthn_context") {
       if (role !== "user") return { data: null, error: { message: "permission denied" } };
       if (db.inactive) return { data: null, error: { message: "employee_inactive" } };
-      return { data: { employee_id: EMP, company_id: "c1", policy: db.policy, has_device: !!db.device, user_name: "001", display_name: "أحمد",
+      return { data: { employee_id: EMP, company_id: "c1", policy: db.policy, has_device: !!db.device, login_enabled: db.device ? db.device.loginEnabled !== false : false, user_name: "001", display_name: "أحمد",
         credential: db.device && { credential_id: db.device.id, public_key_b64u: db.device.pk, sign_count: db.device.count, transports: db.device.transports } }, error: null };
     }
     if (role !== "service") return { data: null, error: { message: "permission denied" } };
@@ -41,6 +41,14 @@ globalThis.__fake = {
       if (!db.device || args.p_credential_id !== db.device.id) return { data: null, error: { message: "biometric_failed" } };
       db.device.count = args.p_new_count; db.tickets.push(args.p_request_id); return { data: { ok: true }, error: null };
     }
+    if (fn === "service_webauthn_set_login") {
+      // phase 10 fake: same contract as the SQL function
+      if (!db.device) return { data: null, error: { message: "device_not_registered" } };
+      if (args.p_enabled && (args.p_new_count ?? 0) > 0 && db.device.count > 0 && args.p_new_count <= db.device.count) return { data: null, error: { message: "biometric_failed" } };
+      db.device.loginEnabled = args.p_enabled; db.device.count = Math.max(db.device.count, args.p_new_count ?? 0);
+      db.audits.push(args.p_enabled ? "auth.biometric_login_enabled" : "auth.biometric_login_disabled");
+      return { data: { login_enabled: args.p_enabled }, error: null };
+    }
     if (fn.startsWith("service_login_")) {
       const L = db;
       const no = (m) => ({ data: null, error: { message: m } });
@@ -53,11 +61,13 @@ globalThis.__fake = {
         if (L.fails >= 5) return no("too_many_attempts");
         if (L.mustChange) return no("password_required");
         if (L.policy !== "required") return no("biometric_off");
+        if (L.device.loginEnabled === false) return no("login_disabled");
         return { data: { employee_id: EMP, company_id: "c1", email: "emp@example.test",
           credential: { credential_id: L.device.id, public_key_b64u: L.device.pk, sign_count: L.device.count, transports: L.device.transports } }, error: null };
       }
       if (fn === "service_login_put_challenge") {
         if (L.fails >= 5) return no("too_many_attempts");
+        if (L.device.loginEnabled === false) return no("login_disabled");
         const id = randomUUID(); L.loginChal.set(id, { cred: args.p_credential_id, challenge: args.p_challenge }); return { data: id, error: null };
       }
       if (fn === "service_login_take_challenge") {
@@ -264,6 +274,62 @@ r = await call({ action: "punch-options" }, anon);
 ok(r.status === 401, "punch-options still needs a session");
 r = await call({ action: "register-options" }, anon);
 ok(r.status === 401, "register-options still needs a session");
+
+// ---- phase 10: turn fingerprint sign-in on or off (a session is needed; turning it ON also needs a fresh fingerprint)
+const setLogin = (body, auth = "Bearer good") => call({ action: "set-login", ...body }, auth);
+r = await setLogin({ enabled: false }, anon);
+ok(r.status === 401, "set-login needs a session");
+r = await setLogin({ enabled: "yes" });
+ok(r.status === 400 && (await errOf(r)) === "invalid_input", "set-login: enabled must be true or false");
+r = await setLogin({});
+ok(r.status === 400 && (await errOf(r)) === "invalid_input", "set-login: enabled is required");
+// off: no fingerprint asked, the device stays
+r = await setLogin({ enabled: false });
+ok(r.status === 200 && (await r.json()).login_enabled === false && db.device.loginEnabled === false && !!db.device, "set-login off: done without a fingerprint, device kept");
+ok(db.audits.at(-1) === "auth.biometric_login_disabled", "set-login off: audited");
+r = await lopt();
+ok(r.status === 403 && (await errOf(r)) === "login_disabled", "login-options refused while sign-in is off");
+r = await call({ action: "punch-options" });
+ok(r.status === 200, "the punch fingerprint still works while sign-in is off");
+// on: needs a fingerprint over a fresh challenge
+const enabledBefore = db.audits.length;
+r = await setLogin({ enabled: true });
+ok(r.status === 400 && (await errOf(r)) === "invalid_input" && db.device.loginEnabled === false, "set-login on without a fingerprint: refused");
+const eo = await (await call({ action: "punch-options" })).json();
+const forgedOn = (() => {
+  const authData = head(0x05, ++count);
+  const cd = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge: eo.challenge, origin: ORIGIN }));
+  return { id: cid, rawId: cid, type: "public-key", clientExtensionResults: {},
+    response: { clientDataJSON: b64u(cd), authenticatorData: b64u(authData), signature: b64u(sign("sha256", Buffer.concat([authData, sha(cd)]), other.privateKey)) } };
+})();
+r = await setLogin({ enabled: true, response: forgedOn });
+ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.device.loginEnabled === false && db.audits.length === enabledBefore, "set-login on: a signature from another key is refused");
+r = await setLogin({ enabled: true, response: assert(eo.challenge) });
+ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.device.loginEnabled === false, "set-login on: the challenge is single use (a failed try uses it up)");
+const eo2 = await (await call({ action: "punch-options" })).json();
+const onSigned = assert(eo2.challenge);
+r = await setLogin({ enabled: true, response: onSigned });
+ok(r.status === 200 && (await r.json()).login_enabled === true && db.device.loginEnabled === true && db.device.count === count, "set-login on: a valid fingerprint turns it on and moves the counter");
+ok(db.audits.at(-1) === "auth.biometric_login_enabled", "set-login on: audited");
+r = await setLogin({ enabled: true, response: onSigned });
+ok(r.status === 400 && (await errOf(r)) === "biometric_failed", "set-login on: the same signature cannot be replayed");
+r = await lopt();
+ok(r.status === 200, "sign-in options work again once it is on");
+db.fails = 0;
+// company policy off: nothing to turn on, but turning off is always allowed
+db.policy = "off";
+db.device.loginEnabled = false;
+r = await setLogin({ enabled: true, response: assert("x") });
+ok(r.status === 403 && (await errOf(r)) === "forbidden", "set-login on: refused while the company has fingerprint off");
+db.device.loginEnabled = true;
+r = await setLogin({ enabled: false });
+ok(r.status === 200 && db.device.loginEnabled === false, "set-login off: allowed even while the company has fingerprint off");
+db.policy = "required";
+// no phone registered
+const savedDevice = db.device; db.device = null;
+r = await setLogin({ enabled: false });
+ok(r.status === 409 && (await errOf(r)) === "device_not_registered", "set-login: no registered phone");
+db.device = savedDevice;
 
 ok(db.calls.filter((c) => c.fn.startsWith("service_")).every((c) => c.role === "service")
    && db.calls.filter((c) => c.fn === "employee_webauthn_context").every((c) => c.role === "user"), "service RPCs only with the service key; context with the caller's token");

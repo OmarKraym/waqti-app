@@ -114,7 +114,12 @@ export function Main({ user }: { user: SessionUser }) {
 
   return (
     <div className="with-tabs">
-      {profile && <Profile user={user} info={info} onBack={closeProfile} onSignOut={() => setConfirmOut(true)} />}
+      {profile && (
+        <Profile
+          user={user} info={info} online={online} onBack={closeProfile} onSignOut={() => setConfirmOut(true)}
+          onLoginChanged={(enabled) => setInfo((i) => (i ? { ...i, biometric: { ...i.biometric, login_enabled: enabled } } : i))}
+        />
+      )}
       <div hidden={profile || tab !== "today"}>
         <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} onPunched={onPunched} />
       </div>

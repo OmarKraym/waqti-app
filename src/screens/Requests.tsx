@@ -31,6 +31,7 @@ import { TimeField } from "./TimeField";
 import { AppBar, Banner, Icon } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
+const TYPE_ICON = { leave: "calendar", permission: "clock", other: "doc" } as const;
 
 export function Requests({ data, online, compose }: {
   data: RequestsData;
@@ -100,11 +101,12 @@ export function Requests({ data, online, compose }: {
         )
       ) : (
         <>
+          <Balances overview={overview} />
           {inbox.length > 0 && (
             <Inbox items={inbox} timeZone={overview.timezone} online={online} onDone={(text, kind) => { setNote({ kind, text }); reload(); }} />
           )}
           {overtime && <MyOvertime data={overtime} online={online} onDone={done} />}
-          <Balances overview={overview} />
+          <PermissionUsage overview={overview} />
           <MyRequests
             items={overview.requests}
             timeZone={overview.timezone}
@@ -183,13 +185,14 @@ function InboxCard({ item, timeZone, online, onDone }: {
   return (
     <article className="req-card approve-card">
       <header className="req-card-head">
-        <div className="min-w-0">
+        <span className="avatar-sm" aria-hidden="true">{item.employee.full_name.trim().charAt(0)}</span>
+        <div className="req-head-text">
           <p className="req-who truncate">{item.employee.full_name}</p>
           <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
         </div>
         <span className="step-of">الخطوة {visibleSteps(item.steps).findIndex((s) => s.step_order === item.my_step) + 1} من {item.step_count}</span>
       </header>
-      <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+      <p className="req-period"><Icon name={TYPE_ICON[item.type]} className="inline-icon" />{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
       {item.reason && <p className="req-reason">«{item.reason}»</p>}
       {item.balance && item.balance.entitled !== null && (
         <p className="req-meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
@@ -230,32 +233,27 @@ function InboxCard({ item, timeZone, online, onDone }: {
 function Balances({ overview }: { overview: RequestsOverview }) {
   const annual = overview.balances.find((b) => b.leave_type === "annual");
   const others = overview.balances.filter((b) => b.leave_type !== "annual" && (b.used > 0 || b.pending > 0));
+  if (!(annual && annual.remaining !== null) && others.length === 0) return null;
+  const entitled = annual?.entitled ?? 0;
+  const pct = (n: number) => (entitled > 0 ? Math.min(100, Math.max(0, (n / entitled) * 100)) : 0);
   return (
-    <section className="balances" aria-labelledby="bal-title">
-      <h2 id="bal-title" className="section-title">أرصدتي</h2>
+    <section className="balances" aria-label="أرصدتي">
       {annual && annual.remaining !== null && (
         <div className="balance annual">
           <span className="balance-label">الإجازة السنوية</span>
           <span className="balance-value">{formatDays(annual.remaining)}</span>
-          <span className="balance-sub">متبقٍ من {formatDays(annual.entitled ?? 0)}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
-        </div>
-      )}
-      {overview.permission_types.length > 0 && (
-        <div className="balance">
-          <span className="balance-label">الأذونات هذا الشهر</span>
-          <ul className="perm-usage">
-            {overview.permission_types.map((p) => {
-              const left = permissionLeft(p);
-              return (
-                <li key={p.id}>
-                  <span className="perm-name">{p.name}</span>
-                  <span className={`perm-left${left === 0 ? " none" : ""}`}>
-                    {left === null ? "بلا حد" : left === 0 ? "استُنفد" : `متبقٍ ${left} من ${p.max_per_month}`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <span className="balance-sub">متبقٍ من {formatDays(entitled)}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
+          {entitled > 0 && (
+            <div className="balance-bar" role="img" aria-label={`مستخدم ${formatDays(annual.used)} وقيد الموافقة ${formatDays(annual.pending)} من ${formatDays(entitled)}`}>
+              <span className="used" style={{ width: `${pct(annual.used)}%` }} />
+              <span className="pend" style={{ width: `${pct(annual.pending)}%` }} />
+            </div>
+          )}
+          <dl className="balance-stats">
+            <div><dt>مستخدمة</dt><dd>{formatDays(annual.used)}</dd></div>
+            <div><dt>قيد الموافقة</dt><dd>{formatDays(annual.pending)}</dd></div>
+            <div><dt>الرصيد الكلي</dt><dd>{formatDays(entitled)}</dd></div>
+          </dl>
         </div>
       )}
       {others.length > 0 && (
@@ -263,6 +261,31 @@ function Balances({ overview }: { overview: RequestsOverview }) {
           {others.map((b) => `${LEAVE_LABEL[b.leave_type]}: ${formatDays(b.used + b.pending)} هذه السنة`).join(" · ")}
         </p>
       )}
+    </section>
+  );
+}
+
+function PermissionUsage({ overview }: { overview: RequestsOverview }) {
+  if (overview.permission_types.length === 0) return null;
+  return (
+    <section className="perms" aria-labelledby="perm-title">
+      <h2 id="perm-title" className="section-title">الأذونات هذا الشهر</h2>
+      <div className="balance">
+        <ul className="perm-usage">
+          {overview.permission_types.map((p) => {
+            const left = permissionLeft(p);
+            const share = left === null || !p.max_per_month ? 1 : left / p.max_per_month;
+            return (
+              <li key={p.id}>
+                <span className="perm-name">{p.name}</span>
+                <span className={`perm-left${left === 0 ? " none" : share < 0.5 ? " low" : ""}`}>
+                  {left === null ? "بلا حد" : left === 0 ? "استُنفد" : `متبقٍ ${left} من ${p.max_per_month}`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -312,10 +335,13 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
   return (
     <article className={`req-card mine ${item.status}`}>
       <header className="req-card-head">
-        <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
+        <span className={`type-ico ${item.type}`} aria-hidden="true"><Icon name={TYPE_ICON[item.type]} /></span>
+        <div className="req-head-text">
+          <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
+          <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+        </div>
         <span className={`chip ${item.status}`}>{STATUS_LABEL[item.status]}</span>
       </header>
-      <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
       {steps.length > 0 && (
         <ol className="steps" aria-label="مسار الموافقة">
           {steps.map((s) => (

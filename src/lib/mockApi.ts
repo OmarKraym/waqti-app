@@ -42,6 +42,8 @@ const policy = (q.get("policy") ?? "geofence") as AttendanceState["location_poli
 const outside = (q.get("outside") ?? "flag") as AttendanceState["outside_action"];
 const pos = q.get("pos") ?? "inside";
 const flaky = q.get("net") === "flaky";
+/** ?bio=1: the company asks for the fingerprint and this account has a registered phone (the profile switch can be tried). */
+const bio = q.get("bio") === "1";
 const MAX_OFFLINE_MS = 72 * 3_600_000;
 const TOLERANCE_MS = 120_000;
 
@@ -83,6 +85,7 @@ export function createMockApi(): WaqtiApi {
     }
   };
 
+  let loginEnabled = true;
   const events: AttendanceEvent[] = [];
   if (q.get("history") === "1") {
     // Three earlier days (newest first), times in Tripoli = UTC+2.
@@ -117,7 +120,7 @@ export function createMockApi(): WaqtiApi {
       time_token: tokenAt(serverNow()),
       // The fake server has no punch windows and no fingerprint (both are off by default on the real one too).
       punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
-      biometric: { policy: "off", has_device: false },
+      biometric: bio ? { policy: "required", has_device: true, login_enabled: loginEnabled } : { policy: "off", has_device: false },
     };
   };
 
@@ -235,8 +238,20 @@ export function createMockApi(): WaqtiApi {
       if (flaky && punchCount % 2 === 1) throw new AppError("network");
       return result;
     },
-    async webauthn() {
-      throw new AppError("forbidden"); // fingerprint needs the real server
+    async webauthn(action, body) {
+      if (!bio) throw new AppError("forbidden"); // fingerprint needs the real server
+      await wait(250);
+      requireNetwork();
+      if (action === "punch-options") {
+        return { challenge: "bW9jay1jaGFsbGVuZ2U", rpId: "localhost", timeout: 60000, userVerification: "required",
+                 allowCredentials: [{ id: "bW9jay1jcmVk", type: "public-key", transports: ["internal"] }] };
+      }
+      if (action === "punch-verify") return { ok: true };
+      if (action === "set-login") {
+        loginEnabled = (body as { enabled: boolean }).enabled;
+        return { login_enabled: loginEnabled };
+      }
+      throw new AppError("forbidden");
     },
     async punchOffline(input: OfflinePunchInput) {
       await wait(500);

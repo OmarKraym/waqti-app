@@ -33,6 +33,7 @@ export type AppErrorCode =
   | "too_many_attempts"
   | "password_required"
   | "biometric_off"
+  | "login_disabled"
   // requests
   | "invalid_dates"
   | "invalid_duration"
@@ -87,7 +88,7 @@ const KNOWN = new Set<AppErrorCode>([
   "overtime_not_found", "overtime_started", "overtime_closed",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
   "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
-  "too_many_attempts", "password_required", "biometric_off",
+  "too_many_attempts", "password_required", "biometric_off", "login_disabled",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -153,5 +154,6 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   too_many_attempts: "محاولات كثيرة بالبصمة. انتظر 15 دقيقة، أو ادخل بكلمة المرور.",
   password_required: "هذا الحساب يدخل بكلمة المرور فقط. ادخل بكلمة المرور.",
   biometric_off: "الدخول بالبصمة غير مفعّل لشركتك. ادخل بكلمة المرور.",
+  login_disabled: "أوقفتَ الدخول بالبصمة لحسابك. ادخل بكلمة المرور، ويمكنك تشغيله من «حسابي».",
   unknown: "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا تكرر تواصل مع الإدارة.",
 };

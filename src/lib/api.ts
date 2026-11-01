@@ -29,7 +29,7 @@ export interface WaqtiApi {
   punch(input: PunchInput): Promise<PunchResult>;
   /** Fingerprint steps (Edge Function "webauthn"): register this phone, get a ticket for one punch, or sign in. */
   webauthn(
-    action: "register-options" | "register-verify" | "punch-options" | "punch-verify" | "login-options" | "login-verify",
+    action: "register-options" | "register-verify" | "punch-options" | "punch-verify" | "set-login" | "login-options" | "login-verify",
     body?: object,
   ): Promise<unknown>;
   /** Sends a punch that was saved on the phone without internet. */

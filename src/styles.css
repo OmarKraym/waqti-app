@@ -347,6 +347,36 @@ button { font: inherit; }
 .info-list > div + div { border-top: 1px solid var(--line); }
 .info-list dt { color: var(--text-2); font-size: var(--fs-small); flex: none; }
 .info-list dd { margin: 0; font-weight: 600; text-align: end; min-width: 0; overflow-wrap: anywhere; }
+/* Fingerprint sign-in switch */
+.bio-card { padding: var(--s4); display: grid; gap: var(--s3); }
+.bio-row { display: flex; align-items: center; gap: var(--s3); }
+.bio-ico {
+  flex: none; width: 44px; height: 44px; border-radius: 14px;
+  display: grid; place-items: center; background: var(--in-tint); color: var(--in-deep);
+}
+.bio-ico .icon { width: 24px; height: 24px; }
+.bio-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.bio-title { font-weight: 700; color: var(--text); }
+.bio-detail { color: var(--text-2); font-size: var(--fs-small); line-height: 1.5; }
+.bio-note { font-size: var(--fs-small); color: var(--text-2); line-height: 1.6; }
+.bio-note.success { color: var(--in-deep); }
+.bio-note.error { color: var(--danger); }
+.switch {
+  flex: none; position: relative; width: 56px; height: 32px; padding: 0;
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--line-strong);
+  transition: background-color .2s;
+}
+.switch::before { content: ""; position: absolute; inset: -8px -2px; } /* a 48px-tall touch target */
+.switch.on { background: var(--in); }
+.switch:disabled { opacity: .5; cursor: not-allowed; }
+.switch-knob {
+  position: absolute; top: 4px; inset-inline-start: 4px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(27, 28, 32, .35);
+  transition: inset-inline-start .2s ease;
+}
+.switch.on .switch-knob { inset-inline-start: 28px; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch-knob { transition: none; } }
 .btn.danger-soft { background: var(--out-tint); border-color: transparent; color: var(--out); font-weight: 700; }
 .btn.danger-soft:hover:not(:disabled) { background: #efd3d1; }
 
@@ -484,7 +514,7 @@ button { font: inherit; }
 .auth-head { display: grid; justify-items: center; gap: var(--s2); text-align: center; margin-bottom: var(--s2); }
 .auth-head h1 { font-family: var(--font-display); font-size: var(--fs-display); font-weight: 700; }
 .auth-head .muted { font-size: var(--fs-small); max-width: 32ch; }
-.auth-logo { border-radius: 18px; margin-bottom: var(--s1); }
+.auth-logo { border-radius: 18px; margin-bottom: var(--s1); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--fossil); }
 .auth-card .btn.block { min-height: 52px; border-radius: var(--r-md); }
 .auth-or {
   display: flex; align-items: center; gap: var(--s3);
@@ -814,3 +844,89 @@ div.preview { display: grid; gap: 2px; }
   *, *::before, *::after { transition: none !important; }
   .stamp.fresh, .spinner, .punch[aria-busy="true"] .punch-icon { animation: none; }
 }
+
+/* ---------------------------------------------------------------- requests: more colour and hierarchy */
+/* A small rust marker before every section title */
+.section-title::before { content: ""; flex: none; width: 4px; height: 18px; border-radius: 2px; background: var(--sun); }
+.requests { gap: var(--s5); }
+
+/* Balance hero: same dark dial card as the today screen */
+.balances { gap: var(--s2); }
+.balance.annual {
+  position: relative; overflow: hidden; isolation: isolate;
+  gap: 2px; padding: var(--s5);
+  background: var(--ink); border: 0; border-radius: var(--r-xl); color: #fff;
+  box-shadow: 0 18px 32px -22px rgba(50, 71, 85, .9);
+}
+.balance.annual::after {
+  content: ""; position: absolute; z-index: -1;
+  width: 230px; height: 230px; top: -60px; inset-inline-end: -84px;
+  background: url("./dial.svg") center / contain no-repeat; pointer-events: none;
+}
+.balance.annual .balance-label { color: rgba(255, 255, 255, .78); }
+.balance.annual .balance-value { color: #fff; font-size: var(--fs-clock); line-height: 1.1; }
+.balance.annual .balance-sub { color: var(--sage); font-weight: 600; }
+.balance-bar {
+  display: flex; height: 8px; margin-top: var(--s3);
+  border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, .16);
+}
+.balance-bar .used { background: var(--sage); }
+.balance-bar .pend { background: var(--sun); }
+.balance-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); margin: var(--s3) 0 0; }
+.balance-stats > div { display: grid; gap: 2px; padding: var(--s2) var(--s3); border-radius: var(--r-sm); background: rgba(255, 255, 255, .1); min-width: 0; }
+.balance-stats dt { font-size: var(--fs-caption); color: rgba(255, 255, 255, .72); }
+.balance-stats dd { margin: 0; font-weight: 700; font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+
+.perms { display: grid; }
+.perms .balance { padding: var(--s2) var(--s4); }
+.perm-usage { margin: 0; }
+.perm-left.low { background: var(--warn-tint); color: var(--warn); }
+
+/* Cards: an edge that tells the state, an icon that tells the kind */
+.req-card { position: relative; border-inline-start: 5px solid var(--line-strong); padding: var(--s4); }
+.req-card.mine.pending { border-inline-start-color: var(--sun); }
+.req-card.mine.approved { border-inline-start-color: var(--in); }
+.req-card.mine.rejected { border-inline-start-color: var(--out); }
+.req-card.mine.cancelled { border-inline-start-color: var(--sand); }
+.approve-card { border: 1px solid var(--line); border-inline-start: 5px solid var(--sun); box-shadow: 0 10px 22px -16px rgba(50, 71, 85, .55); }
+.req-card-head { align-items: center; }
+.req-head-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.req-head-text .req-period { color: var(--text-2); font-weight: 500; }
+.type-ico, .avatar-sm {
+  flex: none; width: 44px; height: 44px; border-radius: 14px;
+  display: grid; place-items: center;
+}
+.type-ico .icon { width: 22px; height: 22px; }
+.type-ico.leave { background: var(--in-tint); color: var(--in-deep); }
+.type-ico.permission { background: var(--warn-tint); color: var(--rust-deep); }
+.type-ico.other { background: var(--ink-tint); color: var(--ink); }
+.avatar-sm { border-radius: 50%; background: var(--ink); color: var(--sage); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-title); }
+.approve-card .req-period { display: flex; align-items: center; padding: var(--s2) var(--s3); border-radius: var(--r-sm); background: var(--bg); font-weight: 600; }
+.approve-card .req-period .inline-icon { color: var(--rust-deep); }
+.approve-card .actions .btn { min-height: 48px; font-weight: 700; }
+.approve-card .btn.primary { background: var(--in); border-color: var(--in); }
+.approve-card .btn.primary:hover:not(:disabled) { background: var(--in-deep); border-color: var(--in-deep); }
+.approve-card .btn.danger-text { border: 1.5px solid var(--out-tint); background: var(--out-tint); color: var(--out); }
+.step-of { background: var(--ink-tint); color: var(--ink); }
+.chip { height: 28px; padding: 0 12px; }
+.req-progress { padding-top: var(--s2); border-top: 1px dashed var(--line); }
+.empty { padding: var(--s6) var(--s4); text-align: center; border: 1.5px dashed var(--line-strong); border-radius: var(--r-lg); }
+
+/* New-request form */
+.seg { background: var(--ink-tint); }
+.seg-btn { font-size: var(--fs-body); }
+.seg-btn.on { background: var(--ink); color: #fff; box-shadow: 0 6px 14px -8px rgba(50, 71, 85, .9); }
+.requests .form, .form { border-top: 4px solid var(--sun); }
+.send { background: var(--in); border-color: var(--in); color: #fff; }
+.send:hover:not(:disabled) { background: var(--in-deep); border-color: var(--in-deep); }
+.send:disabled { background: var(--sunken); border-color: var(--sunken); color: var(--text-2); opacity: 1; }
+
+/* My request cards: state chip above the title, so the title and the time keep the full width */
+.req-card.mine .req-card-head {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "ico chip" "ico text";
+  column-gap: var(--s3); row-gap: var(--s1); align-items: start;
+}
+.req-card.mine .type-ico { grid-area: ico; }
+.req-card.mine .chip { grid-area: chip; justify-self: start; }
+.req-card.mine .req-head-text { grid-area: text; }
+.balance.annual::after { top: -90px; inset-inline-end: -128px; opacity: .8; }

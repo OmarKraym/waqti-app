@@ -1,6 +1,7 @@
 // webauthn: fingerprint (WebAuthn) for the employee app.
 //   register-options / register-verify : binds ONE device to the employee (company policy must be "required")
 //   punch-options / punch-verify       : checks a fingerprint signature and issues a single-use ticket for one punch
+//   set-login                          : (phase 10) the employee turns fingerprint sign-in on (needs a fresh fingerprint) or off
 //   login-options / login-verify       : (phase 9) sign in with the registered phone's fingerprint. These two run WITHOUT a
 //                                        session: who may sign in is decided only by the database (service_login_*), the
 //                                        challenge is single use and bound to the credential, and 5 failures lock it.
@@ -56,7 +57,7 @@ type Context = {
 
 
 const LOGIN_ERRORS: Record<string, number> = {
-  device_not_registered: 409, too_many_attempts: 429, password_required: 403, biometric_off: 403, employee_inactive: 403,
+  device_not_registered: 409, too_many_attempts: 429, password_required: 403, biometric_off: 403, employee_inactive: 403, login_disabled: 403,
 };
 
 /** Maps a service_login_* error to the answer for the phone. Anything unexpected is a plain server_error (no details). */
@@ -231,6 +232,40 @@ Deno.serve(async (req: Request) => {
       });
       if (error) return json({ error: "biometric_failed" }, 400);
       return json({ ok: true });
+    }
+
+    case "set-login": {
+      // Turn fingerprint SIGN-IN on or off (phase 10). Off needs nothing (it only closes a door). On needs a fresh
+      // fingerprint over a challenge from punch-options (single use), like a punch does; the company rule must be on.
+      const enabled = body.enabled;
+      if (typeof enabled !== "boolean") return json({ error: "invalid_input" }, 400);
+      if (!ctx.credential) return json({ error: "device_not_registered" }, 409);
+      let newCount: number | null = null;
+      if (enabled) {
+        if (ctx.policy !== "required") return json({ error: "forbidden" }, 403);
+        if (typeof body.response !== "object" || body.response === null) return json({ error: "invalid_input" }, 400);
+        const { data: challenge } = await admin.rpc("service_webauthn_take_challenge", { p_employee: ctx.employee_id, p_purpose: "punch" });
+        if (!challenge) return json({ error: "biometric_failed" }, 400);
+        try {
+          const result = await verifyAuthentication(body.response, challenge as string, {
+            id: ctx.credential.credential_id,
+            publicKey: fromB64u(ctx.credential.public_key_b64u),
+            counter: Number(ctx.credential.sign_count) || 0,
+            transports: ctx.credential.transports ?? [],
+          });
+          newCount = result.newCounter;
+        } catch {
+          return json({ error: "biometric_failed" }, 400);
+        }
+      }
+      const { data, error } = await admin.rpc("service_webauthn_set_login", { p_employee: ctx.employee_id, p_enabled: enabled, p_new_count: newCount });
+      if (error) {
+        if (error.message === "biometric_failed") return json({ error: "biometric_failed" }, 400);
+        if (error.message === "device_not_registered") return json({ error: "device_not_registered" }, 409);
+        console.error("set-login failed");
+        return json({ error: "server_error" }, 500);
+      }
+      return json({ login_enabled: data?.login_enabled === true });
     }
 
     default:
