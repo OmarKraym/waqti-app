@@ -17,6 +17,7 @@
 // - After a network error we do not know if the punch was saved, so we never say "failed" or
 //   "saved". A retry reuses the same request_id, so the server can never record it twice.
 
+import { clockParts, format12, zonedHMS } from "./time12";
 import { AppError, ERROR_TEXT } from "./errors";
 import type { AttendanceAction, AttendanceState, LocationReading, LocationStatus, PunchResult } from "./types";
 
@@ -170,25 +171,14 @@ export function actionLabel(a: AttendanceAction): string {
 }
 
 export function formatTime(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("ar-LY", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    numberingSystem: "latn",
-  }).format(new Date(iso));
+  const { h, m } = zonedHMS(iso, timeZone);
+  return format12(h, m);
 }
 
-/** Live clock with seconds (HH:MM:SS). Stamps and history keep HH:MM (formatTime). */
+/** Live clock with seconds ("8:05:09 م"). Stamps and history use formatTime. */
 export function formatClock(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("ar-LY", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-    numberingSystem: "latn",
-  }).format(new Date(iso));
+  const c = clockParts(iso, timeZone);
+  return `${c.hm}:${c.ss} ${c.period}`;
 }
 
 export function formatDate(iso: string, timeZone: string): string {

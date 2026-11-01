@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
-import type { RequestType } from "../lib/types";
+import { lateCandidate } from "../lib/lateOffer";
+import { draftToRequest, formatMinutes, formatTimes, permissionLeft, type Draft } from "../lib/requests";
+import type { PunchResult, RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { currentSubscription, keysOf } from "../lib/push";
 import { Home } from "./Home";
+import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "./hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
+import { Modal } from "./ui";
 import { useRequests } from "./useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -37,7 +41,45 @@ export function Main({ user }: { user: SessionUser }) {
   const requests = useRequests();
   const count = requests.overview?.inbox_count ?? 0;
   // "New request" from the today screen: open the requests tab on the form, with the type already chosen.
-  const [compose, setCompose] = useState<{ n: number; type: RequestType } | null>(null);
+  const [compose, setCompose] = useState<{ n: number; type: RequestType; draft?: Draft } | null>(null);
+
+  // Profile screen (opened from the logo). It gets its own history entry, so the phone's back button closes it.
+  const [profile, setProfile] = useState(false);
+  const [info, setInfo] = useState<ProfileInfo | null>(null);
+  const [confirmOut, setConfirmOut] = useState(false);
+  const openProfile = () => {
+    window.history.pushState({ ...(window.history.state ?? {}), profile: true }, "", window.location.href);
+    setProfile(true);
+    window.scrollTo(0, 0);
+  };
+  const closeProfile = () => {
+    if (window.history.state?.profile) window.history.back();
+    else setProfile(false);
+  };
+  useEffect(() => {
+    const onPop = () => { setProfile(!!window.history.state?.profile); setConfirmOut(false); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // After a late check-in: offer a late-arrival justification, if one can still be requested.
+  const [lateOffer, setLateOffer] = useState<{ draft: Draft; minutes: number; left: number | null } | null>(null);
+  const onPunched = useCallback(async (result: PunchResult) => {
+    if (result.action !== "check_in" || result.duplicate) return;
+    try {
+      const overview = await api.getRequestsOverview();
+      const cand = lateCandidate(overview, result.server_time, overview.timezone);
+      if (!cand) return;
+      const built = draftToRequest(cand.draft, overview.timezone);
+      if (!built.ok) return;
+      // The SERVER decides whether the arrival was late (shift, days off, longest allowed delay).
+      const preview = await api.previewRequest(built.request);
+      if (!preview.minutes || preview.minutes < 1) return;
+      setLateOffer({ draft: cand.draft, minutes: preview.minutes, left: permissionLeft(cand.ptype) });
+    } catch {
+      // no offer: not late, not allowed, or offline — the employee can still request it from the requests tab
+    }
+  }, []);
 
   const go = (t: Tab) => {
     setTab(t);
@@ -47,8 +89,8 @@ export function Main({ user }: { user: SessionUser }) {
     if (t === "requests") requests.reload();
     window.scrollTo(0, 0);
   };
-  const newRequest = (type: RequestType) => {
-    setCompose((c) => ({ n: (c?.n ?? 0) + 1, type }));
+  const newRequest = (type: RequestType, draft?: Draft) => {
+    setCompose((c) => ({ n: (c?.n ?? 0) + 1, type, draft }));
     go("requests");
   };
 
@@ -72,20 +114,21 @@ export function Main({ user }: { user: SessionUser }) {
 
   return (
     <div className="with-tabs">
-      <div hidden={tab !== "today"}>
-        <Home user={user} onNewRequest={newRequest} />
+      {profile && <Profile user={user} info={info} onBack={closeProfile} onSignOut={() => setConfirmOut(true)} />}
+      <div hidden={profile || tab !== "today"}>
+        <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} onPunched={onPunched} />
       </div>
       {visited.has("requests") && (
-        <div className="app" hidden={tab !== "requests"}>
+        <div className="app" hidden={profile || tab !== "requests"}>
           <Requests data={requests} online={online} compose={compose} />
         </div>
       )}
       {visited.has("notifications") && (
-        <div className="app" hidden={tab !== "notifications"}>
+        <div className="app" hidden={profile || tab !== "notifications"}>
           <Notifications online={online} />
         </div>
       )}
-      <nav className="tabbar three" aria-label="التنقل">
+      <nav className="tabbar three" aria-label="التنقل" hidden={profile}>
         <button className={`tab${tab === "today" ? " on" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M8 8.5h8M8 12.5h8M8 16.5h4" /></svg>
           <span>اليوم</span>
@@ -100,6 +143,20 @@ export function Main({ user }: { user: SessionUser }) {
           <span>الإشعارات</span>
         </button>
       </nav>
+
+      {lateOffer && (
+        <Modal title="تأخرت اليوم" onClose={() => setLateOffer(null)}>
+          <p className="modal-text">
+            وصلت متأخرًا {formatMinutes(lateOffer.minutes)} عن بداية دوامك. يمكنك تقديم تبرير تأخير الآن.
+            {lateOffer.left !== null && ` المتبقي لك هذا الشهر: ${formatTimes(lateOffer.left)}.`}
+          </p>
+          <div className="modal-actions">
+            <button className="btn primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</button>
+            <button className="btn ghost" onClick={() => setLateOffer(null)}>ليس الآن</button>
+          </div>
+        </Modal>
+      )}
+      {confirmOut && <ConfirmSignOut user={user} onCancel={() => setConfirmOut(false)} />}
     </div>
   );
 }

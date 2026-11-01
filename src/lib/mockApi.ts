@@ -55,9 +55,14 @@ function requireNetwork(): void {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The fake SERVER clock: real time, not affected when a test moves the phone clock (Date.now). */
-const serverNow = (): number =>
+/** ?clock=2026-11-03T06:40:00Z starts the fake SERVER clock at that moment (tests: a late check-in at any real time). */
+const clockStart = Date.parse(q.get("clock") ?? "");
+const realNow = (): number =>
   globalThis.performance ? Math.round(performance.timeOrigin + performance.now()) : Date.now();
+const clockShiftMs = Number.isNaN(clockStart) ? 0 : clockStart - realNow();
+
+/** The fake SERVER clock: real time (or the ?clock= start), not affected when a test moves the phone clock (Date.now). */
+const serverNow = (): number => realNow() + clockShiftMs;
 
 export function createMockApi(): WaqtiApi {
   let user: SessionUser | null = null;

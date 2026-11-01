@@ -2,6 +2,7 @@
 // Pure functions (no DOM, no network), unit-tested. The SERVER decides everything (balance, limits,
 // approvers); this file only shapes input and output.
 
+import { format12, zonedHMS } from "./time12";
 import type {
   ApprovalStep,
   ApproverKind,
@@ -89,9 +90,16 @@ export function localDate(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 }
 
-/** HH:MM of an instant in the company time zone. */
+/** The time of an instant in the company time zone, as the employee reads it: "10:30 ص". */
 export function localTime(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  const { h, m } = zonedHMS(iso, timeZone);
+  return format12(h, m);
+}
+
+/** 24-hour "HH:MM" of an instant in the company time zone (the value of a time field, not for display). */
+export function localHM(iso: string, timeZone: string): string {
+  const { h, m } = zonedHMS(iso, timeZone);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 export function addDays(date: string, n: number): string {

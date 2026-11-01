@@ -62,7 +62,7 @@ describe("attendance state machine", () => {
     expect(s.data.next_action).toBe("check_out");
     expect(s.data.open_session?.started_at).toBe(ok.server_time);
     expect(s.notice?.kind).toBe("success");
-    expect(s.notice?.text).toContain("09:05");
+    expect(s.notice?.text).toContain("9:05 ص");
   });
 
   it("network error = unconfirmed (not failed, not saved), and retry keeps the same request id", () => {
@@ -132,7 +132,7 @@ describe("location reading", () => {
 });
 
 describe("live clock", () => {
-  it("shows seconds, 24-hour, Western digits, company time zone", () => {
-    expect(formatClock("2026-10-30T18:05:09Z", "Africa/Tripoli")).toBe("20:05:09");
+  it("shows seconds, 12-hour with ص/م, Western digits, company time zone", () => {
+    expect(formatClock("2026-10-30T18:05:09Z", "Africa/Tripoli")).toBe("8:05:09 م");
   });
 });

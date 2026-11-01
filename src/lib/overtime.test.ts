@@ -24,14 +24,14 @@ describe("overtime form", () => {
 });
 
 describe("overtime wording", () => {
-  it("hours", () => expect(overtimeHours(item({}), TZ)).toBe("16:00–18:00"));
+  it("hours", () => expect(overtimeHours(item({}), TZ)).toBe("4:00 م–6:00 م"));
   it("limits after this assignment", () => {
     const p = { minutes: 60, used_day: 60, used_month: 240, limit_day: 180, limit_month: null, shift_start: null, shift_end: null };
     expect(limitsLine(p)).toBe("اليوم: ساعتان من 3 ساعات · الشهر: 5 ساعات (بلا حد)");
   });
   it("shift of that day", () => {
     const p = { minutes: 60, used_day: 0, used_month: 0, limit_day: null, limit_month: null, shift_start: "2026-11-05T06:00:00Z", shift_end: "2026-11-05T14:00:00Z" };
-    expect(shiftLine(p, TZ)).toBe("دوامه هذا اليوم \u206608:00–16:00\u2069");
+    expect(shiftLine(p, TZ)).toBe("دوامه هذا اليوم \u20668:00 ص–4:00 م\u2069");
     expect(shiftLine({ ...p, shift_start: null, shift_end: null }, TZ)).toBe("هذا اليوم عطلته");
   });
   it("assigned vs actual", () => {

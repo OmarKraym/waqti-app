@@ -54,7 +54,7 @@ describe("dates in the company time zone", () => {
 
   it("permission period shows the hours", () => {
     const p = formatPeriod({ type: "permission", start_at: "2026-11-03T08:00:00Z", end_at: "2026-11-03T10:30:00Z" }, TZ);
-    expect(p.time).toBe("10:00 – 12:30");
+    expect(p.time).toBe("10:00 ص – 12:30 م");
   });
 });
 

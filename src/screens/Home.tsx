@@ -34,15 +34,26 @@ import {
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
 import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
-import type { AttendanceState, LocationStatus, RequestType } from "../lib/types";
+import type { AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
+import { clockParts } from "../lib/time12";
 import { useInstallPrompt, useOnline } from "./hooks";
 import { DeviceSetup } from "./DeviceSetup";
-import { AppBar, Banner, Icon } from "./ui";
+import { ConfirmSignOut, type ProfileInfo } from "./Profile";
+import { Banner, Icon } from "./ui";
 
 const SYNC_EVERY_MS = 30_000;
 const OFFLINE_PUNCHES = false;
 
-export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: (type: RequestType) => void }) {
+export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
+  user: SessionUser;
+  onNewRequest: (type: RequestType) => void;
+  /** The app logo at the top opens the profile. */
+  onOpenProfile: () => void;
+  /** Who the employee is (shown on the profile screen). */
+  onInfo: (info: ProfileInfo) => void;
+  /** The server confirmed a punch made just now (not one loaded from history). */
+  onPunched: (result: PunchResult) => void;
+}) {
   const [state, dispatch] = useReducer(reduce, initialState);
   const busy = useRef(false); // blocks a second tap while one is being processed
   const online = useOnline();
@@ -77,6 +88,7 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
   const [bioNote, setBioNote] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
+  const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
 
   const load = useCallback(async () => {
     dispatch({ type: "LOAD_START" });
@@ -152,6 +164,9 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
   // ---- phase 8: fingerprint registration prompt and punch-window timer (need the server's state)
   const live = state.phase === "loading" || state.phase === "load_error" ? null : state.data;
   const bio = live?.biometric;
+  useEffect(() => {
+    if (live) onInfo({ employee: live.employee, company: live.company, biometric: live.biometric });
+  }, [live?.employee.full_name, live?.employee.employee_number, live?.company.name, live?.biometric?.policy, live?.biometric?.has_device]); // eslint-disable-line react-hooks/exhaustive-deps
   const [unsupportedNote, setUnsupportedNote] = useState(false);
   useEffect(() => {
     if (!bio || bio.policy !== "required" || bio.has_device) {
@@ -210,6 +225,7 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
         if (result.time_token) setAnchor(anchorFromServer(result.time_token, result.server_time));
         setFreshId(result.event_id);
         dispatch({ type: "PUNCH_OK", result });
+        onPunched(result);
         load(); // confirm the new state from the server
       } catch (e) {
         const err = e instanceof AppError ? e : new AppError("unknown", String(e));
@@ -224,7 +240,7 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
         busy.current = false;
       }
     },
-    [load, setAnchor], // enqueue only uses refs and stable setters
+    [load, setAnchor, onPunched], // enqueue only uses refs and stable setters
   );
 
   async function onTap(view: AttendanceState, allowQueue: boolean) {
@@ -282,17 +298,6 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
     await submit(pending, false, Date.now(), performance.now()); // same request_id: never recorded twice
   }
 
-  function onSignOut() {
-    const waiting = pendingOf(queueRef.current).length;
-    if (
-      waiting > 0 &&
-      !window.confirm(`لديك ${waiting} تسجيل لم يُرسل بعد. سيبقى محفوظًا على هذا الجهاز ويُرسل عند دخولك مرة أخرى. هل تريد الخروج؟`)
-    ) {
-      return;
-    }
-    api.signOut();
-  }
-
   function dismissFailed() {
     setQueue(pendingOf(queueRef.current));
     setSyncNote(null);
@@ -318,9 +323,10 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
           </p>
           <div className="row">
             <button className="btn primary" onClick={refresh}>إعادة المحاولة</button>
-            <button className="btn ghost" onClick={onSignOut}>تسجيل الخروج</button>
+            <button className="btn ghost" onClick={() => setConfirmOut(true)}>تسجيل الخروج</button>
           </div>
         </div>
+        {confirmOut && <ConfirmSignOut user={user} onCancel={() => setConfirmOut(false)} />}
       </main>
     );
   }
@@ -344,12 +350,13 @@ export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: 
 
   return (
     <div className="app">
-      <AppBar
-        className="brand-bar"
-        lead={<img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={32} height={32} />}
-        title={data.company.name}
-        action={<button className="btn quiet small" onClick={onSignOut}><Icon name="signOut" />خروج</button>}
-      />
+      <header className="topbar">
+        <button className="logo-btn" onClick={onOpenProfile} aria-label="حسابي">
+          <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={36} height={36} />
+        </button>
+        <h1 className="topbar-title truncate">{data.company.name}</h1>
+        <span className="topbar-end" aria-hidden="true" />
+      </header>
 
       <main className="container has-punch">
         {!online && (
@@ -542,15 +549,16 @@ function ServerClock({ offsetMs, timeZone, rows, openStart }: {
     return () => clearTimeout(t);
   }, [offsetMs]);
   const iso = new Date(now).toISOString();
-  const clock = formatClock(iso, timeZone); // HH:MM:SS
+  const c = clockParts(iso, timeZone);
   const worked = workedToday(rows, openStart, now);
   return (
     <div className="clock-block">
       <p className="clock">
-        <span className="sr-only">الساعة الآن </span>
-        <span dir="ltr">
-          <span className="clock-hm">{clock.slice(0, 5)}</span>
-          <span className="clock-s">{clock.slice(5)}</span>
+        <span className="sr-only">الساعة الآن {formatClock(iso, timeZone)}</span>
+        <span dir="ltr" aria-hidden="true">
+          <span className="clock-hm">{c.hm}</span>
+          <span className="clock-s">:{c.ss}</span>
+          <span className="clock-ap">{c.period}</span>
         </span>
       </p>
       <p className="clock-date">{formatDate(iso, timeZone)}</p>

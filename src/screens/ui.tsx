@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 /** Line icons, 24 px grid, stroke = currentColor. */
 const PATHS = {
@@ -16,6 +16,7 @@ const PATHS = {
   doc: <><path d="M7 3.5h7l4 4v13H7z" /><path d="M14 3.5v4h4M10 12.5h5M10 16h5" /></>,
   arrive: <><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /><path d="M9 8l-4 4 4 4M5 12h10" /></>,
   leave: <><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M15 8l4 4-4 4M19 12H9" /></>,
+  user: <><circle cx="12" cy="8.5" r="3.6" /><path d="M4.8 20c.9-3.6 3.7-5.6 7.2-5.6s6.3 2 7.2 5.6" /></>,
   fingerprint: <><path d="M5 9.2a8 8 0 0 1 14 0" /><path d="M7.5 20c-.6-1.4-.9-2.9-.9-4.6a5.4 5.4 0 0 1 10.8 0c0 1.3.2 2.5.6 3.6" /><path d="M12 11.8c-2 0-3.4 1.5-3.4 3.4 0 1.8.4 3.2 1.1 4.6" /><path d="M12 11.8c2 0 3.4 1.5 3.4 3.4 0 1.2.2 2.1.5 3" /><path d="M12 15.2c0 1.7.4 3.1 1.1 4.4" /></>,
 } as const;
 
@@ -68,6 +69,42 @@ export function Banner({ kind, children, onClose, className }: {
       {onClose && (
         <button className="x" aria-label="إغلاق" onClick={onClose}><Icon name="close" /></button>
       )}
+    </div>
+  );
+}
+
+/**
+ * A centred question on a dimmed screen. Esc or a tap outside closes it (onClose); the first button is focused
+ * (put the safe choice first in `children`), and focus goes back to where it was when it closes.
+ */
+export function Modal({ title, children, onClose, busy }: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  /** While something is being sent: Esc and the backdrop do nothing. */
+  busy?: boolean;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    box.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    return () => before?.focus?.();
+  }, []);
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && !busy) { e.stopPropagation(); onClose(); return; }
+    if (e.key !== "Tab") return;
+    const items = [...(box.current?.querySelectorAll<HTMLElement>("button:not(:disabled), [href], input, select, textarea") ?? [])];
+    if (items.length === 0) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={box} onKeyDown={onKey}>
+        <h2 id="modal-title" className="modal-title">{title}</h2>
+        {children}
+      </div>
     </div>
   );
 }

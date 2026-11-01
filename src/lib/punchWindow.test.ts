@@ -11,7 +11,7 @@ describe("the line under the punch button", () => {
   });
   it("gives the next window when it is too early", () => {
     const w: PunchWindow = { allowed: false, opens_at: at("07:00"), closes_at: at("10:00"), reason: "too_early" };
-    expect(windowText(w, TZ)).toBe("البصم متاح من 07:00 إلى 10:00");
+    expect(windowText(w, TZ)).toBe("البصم متاح من 7:00 ص إلى 10:00 ص");
   });
   it("says it is a day off", () => {
     expect(windowText({ allowed: false, opens_at: null, closes_at: null, reason: "day_off" }, TZ)).toBe("اليوم عطلة");

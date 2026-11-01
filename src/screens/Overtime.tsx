@@ -17,6 +17,7 @@ import {
 } from "../lib/overtime";
 import { addDays, formatDay, formatMinutes } from "../lib/requests";
 import type { OvertimeItem, OvertimeOverview, OvertimePreview } from "../lib/types";
+import { TimeField } from "./TimeField";
 import { AppBar, Banner, Icon } from "./ui";
 
 type Done = (text: string, kind: "success" | "error") => void;
@@ -68,7 +69,7 @@ function MyOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: 
         <p className="req-title">عمل إضافي · {formatMinutes(item.minutes)}</p>
         <span className={`chip ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
       </header>
-      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span dir="ltr">{overtimeHours(item, tz)}</span></p>
+      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
       {item.task && <p className="req-reason">«{item.task}»</p>}
       <p className="req-progress">كلّفك: {item.assigned_by.full_name}{item.phase === "cancelled" && item.cancelled_by_name ? ` · ألغاه: ${item.cancelled_by_name}` : ""}</p>
       {actual && <p className="req-meta">{actual}</p>}
@@ -139,7 +140,7 @@ function TeamOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz
         </div>
         <span className={`chip ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
       </header>
-      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span dir="ltr">{overtimeHours(item, tz)}</span></p>
+      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
       {item.task && <p className="req-reason">«{item.task}»</p>}
       {item.employee_note && <p className="ot-note">ملاحظة الموظف: «{item.employee_note}»</p>}
       {actual && <p className="req-meta">{actual}</p>}
@@ -234,15 +235,9 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
           <span>اليوم</span>
           <input type="date" value={draft.date} min={data.today} max={addDays(data.today, 60)} onChange={(e) => set({ date: e.target.value })} />
         </label>
-        <div className="two">
-          <label className="field">
-            <span>من الساعة</span>
-            <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>إلى الساعة</span>
-            <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
-          </label>
+        <div className="stack">
+          <TimeField label="من الساعة" value={draft.from} step={5} onChange={(v) => set({ from: v })} />
+          <TimeField label="إلى الساعة" value={draft.to} step={5} onChange={(v) => set({ to: v })} />
         </div>
         <label className="field">
           <span>المهمة (اختياري، يراها الموظف)</span>

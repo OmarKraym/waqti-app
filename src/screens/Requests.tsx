@@ -27,6 +27,7 @@ import {
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "./useRequests";
+import { TimeField } from "./TimeField";
 import { AppBar, Banner, Icon } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
@@ -35,10 +36,10 @@ export function Requests({ data, online, compose }: {
   data: RequestsData;
   online: boolean;
   /** Set by the today screen's shortcuts: open the form with this type (n changes on every tap). */
-  compose?: { n: number; type: RequestType } | null;
+  compose?: { n: number; type: RequestType; draft?: Draft } | null;
 }) {
   const { overview, inbox, overtime, loading, error, reload } = data;
-  const [composing, setComposing] = useState<RequestType | null>(compose?.type ?? null);
+  const [composing, setComposing] = useState<{ type: RequestType; draft?: Draft } | null>(compose ? { type: compose.type, draft: compose.draft } : null);
   const [assigning, setAssigning] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const done = (text: string, kind: "success" | "error") => { setNote({ kind, text }); reload(); };
@@ -46,7 +47,7 @@ export function Requests({ data, online, compose }: {
     if (!compose) return;
     setNote(null);
     setAssigning(false);
-    setComposing(compose.type);
+    setComposing({ type: compose.type, draft: compose.draft });
   }, [compose?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (assigning && overtime) {
@@ -66,7 +67,8 @@ export function Requests({ data, online, compose }: {
   if (composing && overview) {
     return (
       <NewRequestForm
-        initialType={composing}
+        initialType={composing.type}
+        initialDraft={composing.draft}
         overview={overview}
         online={online}
         onClose={() => setComposing(null)}
@@ -114,7 +116,7 @@ export function Requests({ data, online, compose }: {
       )}
     </main>
     {/* The main action of this tab floats where the punch button floats on the today tab. */}
-    <button className="fab new-req" onClick={() => { setNote(null); setComposing("leave"); }} disabled={!overview || !online}>
+    <button className="fab new-req" onClick={() => { setNote(null); setComposing({ type: "leave" }); }} disabled={!overview || !online}>
       <span className="fab-icon" aria-hidden="true"><Icon name="plus" /></span>
       <span className="fab-label">طلب جديد</span>
     </button>
@@ -187,7 +189,7 @@ function InboxCard({ item, timeZone, online, onDone }: {
         </div>
         <span className="step-of">الخطوة {visibleSteps(item.steps).findIndex((s) => s.step_order === item.my_step) + 1} من {item.step_count}</span>
       </header>
-      <p className="req-period">{period.day}{period.time && <>{" · "}<span dir="ltr">{period.time}</span></>}</p>
+      <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
       {item.reason && <p className="req-reason">«{item.reason}»</p>}
       {item.balance && item.balance.entitled !== null && (
         <p className="req-meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
@@ -313,7 +315,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
         <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
         <span className={`chip ${item.status}`}>{STATUS_LABEL[item.status]}</span>
       </header>
-      <p className="req-period">{period.day}{period.time && <>{" · "}<span dir="ltr">{period.time}</span></>}</p>
+      <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
       {steps.length > 0 && (
         <ol className="steps" aria-label="مسار الموافقة">
           {steps.map((s) => (
@@ -337,12 +339,12 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
 
 const PREVIEW_DELAY_MS = 400;
 
-function NewRequestForm({ initialType, overview, online, onClose, onSent }: {
-  initialType: RequestType; overview: RequestsOverview; online: boolean; onClose: () => void; onSent: (r: RequestItem) => void;
+function NewRequestForm({ initialType, initialDraft, overview, online, onClose, onSent }: {
+  initialType: RequestType; initialDraft?: Draft; overview: RequestsOverview; online: boolean; onClose: () => void; onSent: (r: RequestItem) => void;
 }) {
   const tz = overview.timezone;
   const ptypes = overview.permission_types;
-  const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(overview.today, ptypes[0]), type: initialType }));
+  const [draft, setDraft] = useState<Draft>(() => initialDraft ?? { ...emptyDraft(overview.today, ptypes[0]), type: initialType });
   const ptype = ptypes.find((p) => p.id === draft.permission_type_id) ?? null;
   const [preview, setPreview] = useState<{ sig: string; result: RequestPreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ sig: string; code: AppErrorCode } | null>(null);
@@ -467,26 +469,14 @@ function NewRequestForm({ initialType, overview, online, onClose, onSent }: {
               </label>
             )}
             {draft.permission_mode === "range" ? (
-              <div className="two">
-                <label className="field">
-                  <span>من الساعة</span>
-                  <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>إلى الساعة</span>
-                  <input type="time" value={draft.to} step={300} onChange={(e) => set({ to: e.target.value })} />
-                </label>
+              <div className="stack">
+                <TimeField label="من الساعة" value={draft.from} step={5} onChange={(v) => set({ from: v })} />
+                <TimeField label="إلى الساعة" value={draft.to} step={5} onChange={(v) => set({ to: v })} />
               </div>
             ) : draft.permission_mode === "late_arrival" ? (
-              <label className="field">
-                <span>وقت الوصول</span>
-                <input type="time" value={draft.to} step={60} onChange={(e) => set({ to: e.target.value })} />
-              </label>
+              <TimeField label="وقت الوصول" value={draft.to} step={1} onChange={(v) => set({ to: v })} />
             ) : (
-              <label className="field">
-                <span>وقت الخروج</span>
-                <input type="time" value={draft.from} step={300} onChange={(e) => set({ from: e.target.value })} />
-              </label>
+              <TimeField label="وقت الخروج" value={draft.from} step={5} onChange={(v) => set({ from: v })} />
             )}
           </>
           )
@@ -563,7 +553,7 @@ function PreviewLine({ draft, preview, problem, waiting, ptype, timeZone }: {
     const left = u.max_per_month === null ? null : u.max_per_month - u.used - u.pending - 1;
     return (
       <p className="preview ok" aria-live="polite">
-        <span dir="ltr">{localTime(preview.start_at, timeZone)} – {localTime(preview.end_at, timeZone)}</span>
+        <span>{localTime(preview.start_at, timeZone)} – {localTime(preview.end_at, timeZone)}</span>
         {" · "}{formatMinutes(preview.minutes)}
         {left !== null && <> · يبقى لك من هذا الإذن هذا الشهر <strong>{left > 0 ? formatTimes(left) : "لا شيء"}</strong></>}
       </p>
