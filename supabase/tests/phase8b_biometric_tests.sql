@@ -21,7 +21,7 @@ begin perform public.employee_punch(req, 'check_in', 'not_requested', null, null
 
 do $tests$
 declare
-  v_admin uuid; a uuid; b uuid; v_comp uuid; r jsonb; s text; v_ev record;
+  v_admin uuid; a uuid; b uuid; v_comp uuid; r jsonb; s text; v_ev record; v_row record;
   qa uuid := gen_random_uuid(); qb uuid := gen_random_uuid(); qc uuid := gen_random_uuid(); qd uuid := gen_random_uuid();
   k_pub text := 'pQECAyYgASFYIGZha2UtcHVibGljLWtleS14LWNvb3JkaW5hdGUtMzJiIlggZmFrZS1wdWJsaWMta2V5LXktY29vcmRpbmF0ZS0zMmI';
 begin
@@ -51,6 +51,11 @@ begin
   select * into v_ev from public.attendance_events where employee_id = a order by created_at desc limit 1;
   perform pg_temp.ok(s = '' and v_ev.needs_review and v_ev.metadata ->> 'biometric' = 'unsupported' and v_ev.authentication_method = 'password',
                      'unsupported phone: saved, flagged, marked', coalesce(s, '') || ' ' || coalesce(v_ev.metadata::text, ''));
+  update public.attendance_events set metadata = metadata || '{"missed_checkout": true}' where id = v_ev.id;
+  perform pg_temp.as_user(v_admin);
+  select * into v_row from public.admin_list_attendance(null, null, a, null, 5, 0) where event_id = v_ev.id;
+  perform pg_temp.ok(v_row.biometric = 'unsupported' and v_row.missed_checkout and v_row.needs_review, 'admin list shows "unsupported" and missed check-out', row_to_json(v_row)::text);
+  perform pg_temp.as_user(a);
   perform pg_temp.reset_punches(a);
   s := pg_temp.err(format('select public.employee_punch(%L, %L, %L, null, null, null, %L)', gen_random_uuid(), 'check_in', 'not_requested', 'other'));
   perform pg_temp.ok(s = 'invalid_input', 'unknown p_biometric refused', s);
