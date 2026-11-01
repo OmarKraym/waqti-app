@@ -1,6 +1,10 @@
 // webauthn: fingerprint (WebAuthn) for the employee app.
 //   register-options / register-verify : binds ONE device to the employee (company policy must be "required")
 //   punch-options / punch-verify       : checks a fingerprint signature and issues a single-use ticket for one punch
+//   login-options / login-verify       : (phase 9) sign in with the registered phone's fingerprint. These two run WITHOUT a
+//                                        session: who may sign in is decided only by the database (service_login_*), the
+//                                        challenge is single use and bound to the credential, and 5 failures lock it.
+//                                        On success the function returns a one-time token for auth.verifyOtp (no password).
 // The caller is read from their own token, and what they may do from the DATABASE (employee_webauthn_context, which
 // refuses inactive employees and temporary passwords). Devices, challenges and tickets are written only through
 // service-role functions. Nothing secret (challenges, keys, signatures) is logged.
@@ -50,6 +54,75 @@ type Context = {
   credential: { credential_id: string; public_key_b64u: string; sign_count: number; transports: string[] } | null;
 };
 
+
+const LOGIN_ERRORS: Record<string, number> = {
+  device_not_registered: 409, too_many_attempts: 429, password_required: 403, biometric_off: 403,
+};
+
+/** Maps a service_login_* error to the answer for the phone. Anything unexpected is a plain server_error (no details). */
+function loginError(message: string | undefined): Response {
+  const m = message ?? "";
+  if (m in LOGIN_ERRORS) return json({ error: m }, LOGIN_ERRORS[m]);
+  console.error("login rpc failed");
+  return json({ error: "server_error" }, 500);
+}
+
+// deno-lint-ignore no-explicit-any
+async function handleLogin(body: Record<string, any>, admin: any): Promise<Response> {
+  const credentialId = body.credential_id;
+  if (typeof credentialId !== "string" || credentialId.length < 1 || credentialId.length > 1024) return json({ error: "invalid_input" }, 400);
+
+  if (body.action === "login-options") {
+    const { data: ctx, error } = await admin.rpc("service_login_context", { p_credential_id: credentialId });
+    if (error || !ctx) return loginError(error?.message);
+    const options = await authenticationOptions(credentialId, (ctx as Context).credential?.transports ?? []);
+    const put = await admin.rpc("service_login_put_challenge", { p_credential_id: credentialId, p_challenge: options.challenge });
+    if (put.error || !put.data) return loginError(put.error?.message);
+    return json({ options, challenge_id: put.data });
+  }
+
+  // login-verify
+  const challengeId = body.challenge_id;
+  if (typeof challengeId !== "string" || !UUID_RE.test(challengeId)) return json({ error: "invalid_input" }, 400);
+  if (typeof body.response !== "object" || body.response === null) return json({ error: "invalid_input" }, 400);
+
+  const { data: ctxData, error: ctxError } = await admin.rpc("service_login_context", { p_credential_id: credentialId });
+  if (ctxError || !ctxData) return loginError(ctxError?.message);
+  const ctx = ctxData as Context & { email: string };
+
+  // Every refusal below is counted against the credential (5 in 15 minutes lock it).
+  const refuse = async (): Promise<Response> => {
+    const r = await admin.rpc("service_login_result", { p_credential_id: credentialId, p_ok: false, p_new_count: null });
+    if (r.error) return loginError(r.error.message);
+    return json({ error: "biometric_failed" }, 400);
+  };
+
+  const { data: challenge } = await admin.rpc("service_login_take_challenge", { p_challenge_id: challengeId, p_credential_id: credentialId });
+  if (!challenge) return await refuse();
+  let result;
+  try {
+    result = await verifyAuthentication(body.response, challenge as string, {
+      id: ctx.credential!.credential_id,
+      publicKey: fromB64u(ctx.credential!.public_key_b64u),
+      counter: Number(ctx.credential!.sign_count) || 0,
+      transports: ctx.credential!.transports ?? [],
+    });
+  } catch {
+    return await refuse();
+  }
+  // The link is made first and handed out only if the database accepts the result (counter, lock, audit).
+  const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email: ctx.email });
+  const token = link?.properties?.hashed_token;
+  if (linkError || typeof token !== "string") {
+    console.error("login link failed");
+    return json({ error: "server_error" }, 500);
+  }
+  const done = await admin.rpc("service_login_result", { p_credential_id: credentialId, p_ok: true, p_new_count: result.newCounter });
+  if (done.error) return loginError(done.error.message);
+  if (!done.data?.ok) return json({ error: "biometric_failed" }, 400);
+  return json({ token_hash: token });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -58,6 +131,17 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const noSession = { auth: { persistSession: false, autoRefreshToken: false } };
+
+  // Fingerprint login has no session yet: peek at the action first (a bad body falls through to the normal path below).
+  let peek: Record<string, unknown> | null = null;
+  try {
+    peek = await req.clone().json();
+  } catch {
+    peek = null;
+  }
+  if (peek && (peek.action === "login-options" || peek.action === "login-verify")) {
+    return await handleLogin(peek, createClient(url, serviceKey, noSession));
+  }
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(url, anonKey, { ...noSession, global: { headers: { Authorization: authHeader } } });

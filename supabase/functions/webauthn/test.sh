@@ -14,7 +14,10 @@ cat > "$T/fake-supabase.mjs" <<'JS'
 export function createClient(_url, key, opts = {}) {
   const auth = opts.global?.headers?.Authorization ?? "";
   const role = key === "service" ? "service" : "user";
-  return { auth: { getUser: async () => globalThis.__fake.getUser(auth) }, rpc: (fn, args) => globalThis.__fake.rpc(role, fn, args) };
+  return {
+    auth: { getUser: async () => globalThis.__fake.getUser(auth), admin: { generateLink: async (a) => globalThis.__fake.generateLink(role, a) } },
+    rpc: (fn, args) => globalThis.__fake.rpc(role, fn, args),
+  };
 }
 JS
 node --experimental-strip-types --no-warnings "$F/core.test.mjs" "$T/core.ts"

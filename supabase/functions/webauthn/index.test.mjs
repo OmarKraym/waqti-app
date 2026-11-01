@@ -16,7 +16,9 @@ const RP_ID = "omarkraym.github.io", ORIGIN = "https://omarkraym.github.io";
 
 // ---- fake database: what the real RPCs do, in memory
 const EMP = "e0000001-0000-4000-8000-000000000000";
-const db = { policy: "required", device: null, challenges: new Map(), tickets: [], calls: [], user: { id: EMP }, inactive: false };
+const db = { policy: "required", device: null, challenges: new Map(), tickets: [], calls: [], user: { id: EMP }, inactive: false,
+  // phase 9 (fingerprint login) fake: same contract as the service_login_* SQL functions
+  mustChange: false, loginChal: new Map(), fails: 0, links: [], linkError: false, audits: [] };
 globalThis.__fake = {
   getUser: (auth) => (auth === "Bearer good" ? { data: { user: db.user }, error: null } : { data: { user: null }, error: { message: "bad jwt" } }),
   rpc: async (role, fn, args) => {
@@ -39,7 +41,45 @@ globalThis.__fake = {
       if (!db.device || args.p_credential_id !== db.device.id) return { data: null, error: { message: "biometric_failed" } };
       db.device.count = args.p_new_count; db.tickets.push(args.p_request_id); return { data: { ok: true }, error: null };
     }
+    if (fn.startsWith("service_login_")) {
+      const L = db;
+      const no = (m) => ({ data: null, error: { message: m } });
+      if (!L.device || args.p_credential_id !== L.device.id) {
+        if (fn === "service_login_take_challenge") return { data: null, error: null };
+        return no("device_not_registered");
+      }
+      if (fn === "service_login_context") {
+        if (L.fails >= 5) return no("too_many_attempts");
+        if (L.mustChange) return no("password_required");
+        if (L.policy !== "required") return no("biometric_off");
+        return { data: { employee_id: EMP, company_id: "c1", email: "emp@example.test",
+          credential: { credential_id: L.device.id, public_key_b64u: L.device.pk, sign_count: L.device.count, transports: L.device.transports } }, error: null };
+      }
+      if (fn === "service_login_put_challenge") {
+        if (L.fails >= 5) return no("too_many_attempts");
+        const id = randomUUID(); L.loginChal.set(id, { cred: args.p_credential_id, challenge: args.p_challenge }); return { data: id, error: null };
+      }
+      if (fn === "service_login_take_challenge") {
+        const c = L.loginChal.get(args.p_challenge_id);
+        if (!c || c.cred !== args.p_credential_id) return { data: null, error: null };
+        L.loginChal.delete(args.p_challenge_id); return { data: c.challenge, error: null };
+      }
+      if (fn === "service_login_result") {
+        if (L.fails >= 5) return no("too_many_attempts");
+        let good = args.p_ok;
+        if (good && (args.p_new_count ?? 0) > 0 && L.device.count > 0 && args.p_new_count <= L.device.count) good = false;
+        if (!good) { L.fails++; return { data: { ok: false, error: "biometric_failed" }, error: null }; }
+        L.device.count = Math.max(L.device.count, args.p_new_count ?? 0); L.fails = 0; L.audits.push("auth.biometric_login");
+        return { data: { ok: true }, error: null };
+      }
+    }
     return { data: null, error: { message: "unknown " + fn } };
+  },
+  generateLink: async (role, a) => {
+    db.calls.push({ role, fn: "generateLink" });
+    if (role !== "service") return { data: null, error: { message: "not allowed" } };
+    if (db.linkError) return { data: null, error: { message: "boom secret-detail" } };
+    db.links.push(a); return { data: { properties: { hashed_token: "hash-" + db.links.length } }, error: null };
   },
 };
 let handler;
@@ -111,6 +151,114 @@ r = await call({ action: "punch-verify", response: signed, request_id: req });
 ok(r.status === 200 && db.tickets.includes(req) && db.device.count === count, "ticket issued for the punch", JSON.stringify(await r.json()));
 r = await call({ action: "punch-verify", response: signed, request_id: randomUUID() });
 ok(r.status === 400 && (await r.json()).error === "biometric_failed" && db.tickets.length === 1, "replayed fingerprint refused");
+// ---- phase 9: fingerprint login (no session: only the public key of the project, like a logged-out phone)
+const anon = "Bearer anon-key";
+const cid = b64u(credId);
+const lopt = (credential_id = cid) => call({ action: "login-options", credential_id }, anon);
+const lver = (body) => call({ action: "login-verify", ...body }, anon);
+const errOf = async (res) => (await res.json()).error;
+const before = db.calls.length;
+r = await lopt("no-such-device");
+ok(r.status === 409 && (await errOf(r)) === "device_not_registered", "login: unknown device -> device_not_registered");
+r = await call({ action: "login-options" }, anon);
+ok(r.status === 400 && (await errOf(r)) === "invalid_input", "login: credential id is required");
+r = await call({ action: "login-options", credential_id: "x".repeat(1025) }, anon);
+ok(r.status === 400, "login: credential id too long");
+r = await call({ action: "login-options", credential_id: 5 }, anon);
+ok(r.status === 400, "login: credential id must be a string");
+
+// happy path
+r = await lopt();
+const lo = await r.json();
+ok(r.status === 200 && lo.options?.challenge && lo.options.allowCredentials[0].id === cid && lo.options.userVerification === "required" && /^[0-9a-f-]{36}$/.test(lo.challenge_id),
+   "login: options carry a challenge, the device and userVerification=required", JSON.stringify(lo).slice(0, 160));
+const goodAssertion = assert(lo.options.challenge);
+r = await lver({ credential_id: cid, challenge_id: lo.challenge_id, response: goodAssertion });
+const lv = await r.json();
+ok(r.status === 200 && lv.token_hash === "hash-1" && Object.keys(lv).length === 1, "login: a valid fingerprint gives only a one-time token", JSON.stringify(lv));
+ok(db.links.length === 1 && db.links[0].type === "magiclink" && db.links[0].email === "emp@example.test", "login: link made for the e-mail the DATABASE gave");
+ok(db.audits.length === 1, "login: success recorded");
+r = await lver({ credential_id: cid, challenge_id: lo.challenge_id, response: goodAssertion });
+ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.links.length === 1, "login: the same signature and challenge cannot be used twice");
+ok(db.calls.slice(before).every((c) => c.fn !== "employee_webauthn_context"), "login: needs no session (the caller's token is never read)");
+
+// forged signature (another key). The earlier refusals each counted as a failure; start clean for each case below.
+db.fails = 0;
+const other = generateKeyPairSync("ec", { namedCurve: "P-256" });
+r = await lopt(); const lo2 = await r.json();
+{
+  const authData = head(0x05, ++count);
+  const cd = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge: lo2.options.challenge, origin: ORIGIN }));
+  const forged = { id: cid, rawId: cid, type: "public-key", clientExtensionResults: {},
+    response: { clientDataJSON: b64u(cd), authenticatorData: b64u(authData), signature: b64u(sign("sha256", Buffer.concat([authData, sha(cd)]), other.privateKey)) } };
+  r = await lver({ credential_id: cid, challenge_id: lo2.challenge_id, response: forged });
+  ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.links.length === 1 && db.fails === 1, "login: signature from another key refused and counted", String(db.fails));
+  db.fails = 0;
+}
+// challenge of someone else / wrong origin / wrong type
+r = await lopt(); const lo3 = await r.json();
+r = await lver({ credential_id: cid, challenge_id: lo3.challenge_id, response: assert("AAAA" + lo3.options.challenge.slice(4)) });
+ok(r.status === 400 && db.links.length === 1, "login: signature over a different challenge refused");
+db.fails = 0;
+r = await lopt(); const lo4 = await r.json();
+r = await lver({ credential_id: cid, challenge_id: randomUUID(), response: assert(lo4.options.challenge) });
+ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.links.length === 1, "login: unknown challenge id refused");
+db.fails = 0;
+r = await lver({ credential_id: "other-device", challenge_id: lo4.challenge_id, response: assert(lo4.options.challenge) });
+ok(r.status === 409 && db.links.length === 1, "login: challenge cannot be used with another credential id");
+r = await lver({ credential_id: cid, challenge_id: "not-a-uuid", response: goodAssertion });
+ok(r.status === 400 && (await errOf(r)) === "invalid_input", "login: challenge id must be a uuid");
+r = await lver({ credential_id: cid, challenge_id: lo4.challenge_id });
+ok(r.status === 400 && (await errOf(r)) === "invalid_input", "login: response is required");
+// counter that does not grow (copied key)
+r = await lopt(); const lo5 = await r.json();
+{
+  const sig = assert(lo5.options.challenge);
+  db.device.count = count + 10;   // the server has already seen a higher counter
+  r = await lver({ credential_id: cid, challenge_id: lo5.challenge_id, response: sig });
+  ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.links.length === 1, "login: counter that does not grow refused, no link");
+  db.device.count = count; db.fails = 0;
+}
+// state changed between the two steps
+r = await lopt(); const lo6 = await r.json();
+db.policy = "off";
+r = await lver({ credential_id: cid, challenge_id: lo6.challenge_id, response: assert(lo6.options.challenge) });
+ok(r.status === 403 && (await errOf(r)) === "biometric_off" && db.links.length === 1, "login: company switched fingerprint off -> refused, no link");
+r = await lopt();
+ok(r.status === 403 && (await errOf(r)) === "biometric_off", "login: options refused while the company has it off");
+db.policy = "required";
+db.mustChange = true;
+r = await lopt();
+ok(r.status === 403 && (await errOf(r)) === "password_required", "login: temporary password -> password_required");
+db.mustChange = false;
+// the link service fails: nothing leaks
+db.fails = 0;
+r = await lopt(); const lo7 = await r.json();
+db.linkError = true;
+r = await lver({ credential_id: cid, challenge_id: lo7.challenge_id, response: assert(lo7.options.challenge) });
+const t7 = await r.text();
+ok(r.status === 500 && JSON.parse(t7).error === "server_error" && !t7.includes("secret-detail"), "login: link failure -> server_error without details", t7);
+db.linkError = false;
+// lock after 5 failures
+db.fails = 0;
+for (let i = 0; i < 5; i++) {
+  r = await lopt(); const lx = await r.json();
+  await lver({ credential_id: cid, challenge_id: lx.challenge_id, response: assert("wrong-" + i) });
+}
+r = await lopt();
+ok(r.status === 429 && (await errOf(r)) === "too_many_attempts", "login: locked after 5 failures");
+const linksBefore = db.links.length;
+r = await lver({ credential_id: cid, challenge_id: randomUUID(), response: goodAssertion });
+ok(r.status === 429 && db.links.length === linksBefore, "login: locked -> no verification, no link");
+db.fails = 0;
+// only the service role makes links
+ok(db.calls.filter((c) => c.fn === "generateLink").every((c) => c.role === "service"), "login: links only with the service key");
+// the authenticated actions still need a real session
+r = await call({ action: "punch-options" }, anon);
+ok(r.status === 401, "punch-options still needs a session");
+r = await call({ action: "register-options" }, anon);
+ok(r.status === 401, "register-options still needs a session");
+
 ok(db.calls.filter((c) => c.fn.startsWith("service_")).every((c) => c.role === "service")
    && db.calls.filter((c) => c.fn === "employee_webauthn_context").every((c) => c.role === "user"), "service RPCs only with the service key; context with the caller's token");
 
