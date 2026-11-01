@@ -199,6 +199,9 @@ export function createMockApi(): WaqtiApi {
       save();
       notify();
     },
+    async signInWithToken() {
+      throw new AppError("forbidden"); // fingerprint sign-in needs the real server
+    },
     async signOut() {
       user = null;
       save();

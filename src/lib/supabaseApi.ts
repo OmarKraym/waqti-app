@@ -177,6 +177,18 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
       throw new AppError("unknown", error.message);
     },
 
+    async signInWithToken(tokenHash) {
+      // The token comes from generateLink; Supabase names its type "magiclink" (older) or "email" (newer).
+      let last: { name?: string; status?: number } | null = null;
+      for (const type of ["magiclink", "email"] as const) {
+        const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type });
+        if (!error) return;
+        if (error.name === "AuthRetryableFetchError" || error.status === 0) throw new AppError("network");
+        last = error;
+      }
+      throw new AppError("biometric_failed", last?.name);
+    },
+
     async signOut() {
       // "local" ends the session on this device only.
       await sb.auth.signOut({ scope: "local" });

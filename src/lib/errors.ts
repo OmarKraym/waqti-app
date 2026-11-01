@@ -29,6 +29,10 @@ export type AppErrorCode =
   | "biometric_failed"
   | "outside_punch_window"
   | "day_off"
+  // fingerprint sign-in (phase 9)
+  | "too_many_attempts"
+  | "password_required"
+  | "biometric_off"
   // requests
   | "invalid_dates"
   | "invalid_duration"
@@ -83,6 +87,7 @@ const KNOWN = new Set<AppErrorCode>([
   "overtime_not_found", "overtime_started", "overtime_closed",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
   "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
+  "too_many_attempts", "password_required", "biometric_off",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -145,5 +150,8 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   biometric_failed: "لم تتم البصمة",
   outside_punch_window: "البصم غير متاح الآن.",
   day_off: "اليوم عطلة.",
+  too_many_attempts: "محاولات كثيرة بالبصمة. انتظر 15 دقيقة، أو ادخل بكلمة المرور.",
+  password_required: "حسابك ما زال بكلمة المرور المؤقتة. ادخل بكلمة المرور أولًا.",
+  biometric_off: "الدخول بالبصمة غير مفعّل لشركتك. ادخل بكلمة المرور.",
   unknown: "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا تكرر تواصل مع الإدارة.",
 };

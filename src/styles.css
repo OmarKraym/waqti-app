@@ -321,6 +321,12 @@ button { font: inherit; }
 .auth-head .muted { font-size: var(--fs-small); max-width: 32ch; }
 .auth-logo { border-radius: 14px; margin-bottom: var(--s2); }
 .auth-card .btn.block { min-height: 52px; }
+.auth-or {
+  display: flex; align-items: center; gap: var(--s3);
+  color: var(--text-2); font-size: var(--fs-small); text-align: center;
+}
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.bio-login .icon { width: 24px; height: 24px; }
 .auth-foot { text-align: center; color: var(--text-2); font-size: var(--fs-small); }
 
 /* ---------------------------------------------------------------- today */

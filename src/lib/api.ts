@@ -21,12 +21,17 @@ export interface WaqtiApi {
   getSessionUser(): Promise<SessionUser | null>;
   onAuthChange(cb: () => void): () => void;
   signIn(email: string, password: string): Promise<void>;
+  /** Opens the session with the one-time token the server gave after a valid fingerprint (no password). */
+  signInWithToken(tokenHash: string): Promise<void>;
   signOut(): Promise<void>;
   changeTemporaryPassword(newPassword: string): Promise<void>;
   getAttendanceState(): Promise<AttendanceState>;
   punch(input: PunchInput): Promise<PunchResult>;
-  /** Fingerprint steps (Edge Function "webauthn"): register this phone, or get a ticket for one punch. */
-  webauthn(action: "register-options" | "register-verify" | "punch-options" | "punch-verify", body?: object): Promise<unknown>;
+  /** Fingerprint steps (Edge Function "webauthn"): register this phone, get a ticket for one punch, or sign in. */
+  webauthn(
+    action: "register-options" | "register-verify" | "punch-options" | "punch-verify" | "login-options" | "login-verify",
+    body?: object,
+  ): Promise<unknown>;
   /** Sends a punch that was saved on the phone without internet. */
   punchOffline(input: OfflinePunchInput): Promise<PunchResult>;
 
