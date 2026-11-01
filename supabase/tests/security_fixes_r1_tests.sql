@@ -28,7 +28,7 @@ begin
   perform pg_temp.ok(not has_function_privilege('authenticated', 'public.employee_punch_offline(uuid, text, text, double precision, double precision, double precision, text, timestamp with time zone, timestamp with time zone, bigint, timestamp with time zone)', 'execute'), 'offline punch closed to employees');
   perform pg_temp.ok(not has_function_privilege('authenticated', 'public.record_attendance(public.attendance_event_type, double precision, double precision, numeric, text, text, uuid, timestamp with time zone)', 'execute'), 'legacy record_attendance closed to employees');
   perform pg_temp.ok(not has_function_privilege('anon', 'public.employee_punch_offline(uuid, text, text, double precision, double precision, double precision, text, timestamp with time zone, timestamp with time zone, bigint, timestamp with time zone)', 'execute'), 'offline punch closed to anon');
-  perform pg_temp.ok(has_function_privilege('authenticated', 'public.employee_punch(uuid, text, text, double precision, double precision, double precision)', 'execute'), 'normal punch still open');
+  perform pg_temp.ok(has_function_privilege('authenticated', 'public.employee_punch(uuid, text, text, double precision, double precision, double precision, text)', 'execute'), 'normal punch still open');
 
   -- SEC-003: normal reading is not flagged
   perform pg_temp.as_user(a);
