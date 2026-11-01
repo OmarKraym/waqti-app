@@ -1,4 +1,10 @@
 -- Runs inside one transaction and always ends with an exception, so nothing is kept.
+\if :{?admin_email}
+\else
+  \echo 'usage: psql -v admin_email=<company admin email> -f <this file>'
+  \quit
+\endif
+select set_config('waqti.admin_email', :'admin_email', false) \g /dev/null
 create temp table t_res (n serial, name text, ok boolean, detail text);
 create function pg_temp.ok(c boolean, name text, detail text default null) returns void language sql as
   $$ insert into t_res (name, ok, detail) values (name, coalesce(c, false), detail) $$;
@@ -11,7 +17,7 @@ do $tests$
 declare
   v_admin uuid; a uuid; v_comp uuid; r jsonb; s text; v_old text; n_audit int;
 begin
-  select u.id into v_admin from auth.users u where lower(u.email) = 'omarkraym5@gmail.com';
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
   select company_id into v_comp from public.employees where id = v_admin;
   select id into a from public.employees e where e.is_active and e.id <> v_admin order by employee_number limit 1;
   select name into v_old from public.companies where id = v_comp;

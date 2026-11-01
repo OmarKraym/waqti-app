@@ -37,6 +37,7 @@ import { useInstallPrompt, useIosInstallHint, useOnline } from "./hooks";
 import { AppBar, Banner, Icon } from "./ui";
 
 const SYNC_EVERY_MS = 30_000;
+const OFFLINE_PUNCHES = false;
 
 export function Home({ user }: { user: SessionUser }) {
   const [state, dispatch] = useReducer(reduce, initialState);
@@ -267,8 +268,10 @@ export function Home({ user }: { user: SessionUser }) {
   }
 
   const data = withQueue(state.data, queue);
-  // Offline punches need storage on the phone and a signed server time to prove the time later.
-  const allowQueue = storage !== null && anchor.current !== null;
+  // Offline punching is switched off (security audit SEC-001: the server cannot prove a phone's clock, so a
+  // punch is only recorded while the server can stamp it). Punches saved on a phone before this change are
+  // still sent once; the server refuses them and they are listed below for the company to correct.
+  const allowQueue = OFFLINE_PUNCHES && storage !== null && anchor.current !== null;
   const waiting = pendingOf(queue);
   const failed = failedOf(queue);
   const working = state.phase === "locating" || state.phase === "submitting";

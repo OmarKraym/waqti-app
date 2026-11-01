@@ -89,14 +89,27 @@ export interface PushSubscriptionKeys {
   auth: string;
 }
 
-/** Sends one push. Returns the HTTP status (201 = accepted; 404/410 = subscription gone). */
+/** Push services the app may send to (the database accepts only these too): Chrome/Android/Opera/Samsung (FCM),
+ *  Firefox (Mozilla), Safari/iPhone (Apple), Edge (Windows). Anything else is never contacted. */
+export function isPushEndpoint(endpoint: string): boolean {
+  const m = /^https:\/\/([a-z0-9.-]+)\//.exec(endpoint);
+  if (!m) return false;
+  const h = m[1];
+  return h === "fcm.googleapis.com" || h === "updates.push.services.mozilla.com" || h === "web.push.apple.com" ||
+    h.endsWith(".push.apple.com") || h.endsWith(".notify.windows.com");
+}
+
+/** Sends one push. Returns the HTTP status (201 = accepted; 404/410 = subscription gone).
+ *  A host that is not a push service is reported as 410 (gone), so the subscription is deleted without a request.
+ *  Each request stops after `timeoutMs` (default 10 s), so one slow server cannot hold the whole batch. */
 export async function sendPush(
   sub: PushSubscriptionKeys,
   payload: unknown,
   v: Vapid,
-  opts: { ttl?: number; urgency?: "very-low" | "low" | "normal" | "high"; topic?: string } = {},
+  opts: { ttl?: number; urgency?: "very-low" | "low" | "normal" | "high"; topic?: string; timeoutMs?: number } = {},
   fetchFn: typeof fetch = fetch,
 ): Promise<{ status: number; body: string }> {
+  if (!isPushEndpoint(sub.endpoint)) return { status: 410, body: "endpoint_not_allowed" };
   const body = await encryptPayload(enc.encode(JSON.stringify(payload)), sub.p256dh, sub.auth);
   const headers: Record<string, string> = {
     "Content-Encoding": "aes128gcm",
@@ -106,6 +119,6 @@ export async function sendPush(
     Authorization: await vapidHeader(sub.endpoint, v),
   };
   if (opts.topic) headers.Topic = opts.topic;
-  const res = await fetchFn(sub.endpoint, { method: "POST", headers, body });
+  const res = await fetchFn(sub.endpoint, { method: "POST", headers, body, signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000) });
   return { status: res.status, body: res.status >= 400 ? (await res.text()).slice(0, 300) : "" };
 }

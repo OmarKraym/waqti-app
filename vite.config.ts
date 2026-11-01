@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -9,10 +9,36 @@ import { VitePWA } from "vite-plugin-pwa";
 // BASE_PATH=/waqti-app/ for GitHub Pages; "/" for a root domain.
 const base = process.env.BASE_PATH ?? "/";
 
-export default defineConfig({
+/** Content-Security-Policy for the built app (security audit SEC-010). GitHub Pages cannot send headers, so it is a
+ *  <meta> tag. Only this site and the Supabase project may be reached; no inline or third-party scripts. Not added in
+ *  dev, where Vite needs its own websocket. */
+function contentSecurityPolicy(supabaseUrl: string | undefined): Plugin {
+  const api = supabaseUrl ? new URL(supabaseUrl).origin : "";
+  const policy = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    `connect-src 'self'${api ? ` ${api}` : ""}`,
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+  return {
+    name: "waqti-csp",
+    apply: "build",
+    transformIndexHtml: () => [{ tag: "meta", attrs: { "http-equiv": "Content-Security-Policy", content: policy }, injectTo: "head-prepend" }],
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   base,
   plugins: [
     react(),
+    contentSecurityPolicy(loadEnv(mode, process.cwd(), "VITE_").VITE_SUPABASE_URL),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png", "push-sw.js"],
@@ -48,4 +74,4 @@ export default defineConfig({
   test: {
     environment: "node",
   },
-});
+}));
