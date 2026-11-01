@@ -156,6 +156,7 @@ export function Home({ user }: { user: SessionUser }) {
   useEffect(() => {
     if (!bio || bio.policy !== "required" || bio.has_device) {
       setUnsupportedNote(false);
+      setSetupNeeded(false); // the company switched the fingerprint off (or the device got registered elsewhere)
       return;
     }
     let cancelled = false;

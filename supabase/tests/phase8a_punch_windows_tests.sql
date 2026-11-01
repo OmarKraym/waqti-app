@@ -137,6 +137,57 @@ begin
   perform pg_temp.ok((select needs_review and (metadata ->> 'missed_checkout')::boolean from public.attendance_events where id = v_ev), 'check-in flagged for review');
   perform pg_temp.ok(private.overtime_actual(a, now() - interval '4 days', now()) = 0, 'missed session does not count as worked time');
 
+  -- final review #1: a session that runs on into an open overtime window is NOT closed (overtime right after the shift)
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_employee_punch_windows(a, null, null, null, null);
+  insert into public.overtime_assignments (company_id, employee_id, assigned_by, start_at, end_at, minutes, status, assign_key)
+  values (v_comp, a, v_admin, (d1 + time '16:00') at time zone v_tz, (d1 + time '18:00') at time zone v_tz, 120, 'assigned', gen_random_uuid());
+  insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, authentication_method, location_policy)
+  values (a, 'check_in', (d1 + time '08:05') at time zone v_tz, true, 'password', 'none') returning id into v_ev;
+  insert into public.attendance_sessions (employee_id, work_date, check_in_event_id, status) values (a, d1, v_ev, 'open') returning id into v_sess;
+  perform pg_temp.ok(not private.close_missed_checkout(a, (d1 + time '17:30') at time zone v_tz)
+                     and (select status::text from public.attendance_sessions where id = v_sess) = 'open',
+                     'shift + overtime: 17:30 not closed (overtime window open)');
+  perform pg_temp.ok(not private.close_missed_checkout(a, (d1 + time '19:00') at time zone v_tz), 'shift + overtime: 19:00 still inside the overtime window');
+  perform pg_temp.ok(private.close_missed_checkout(a, (d1 + time '19:01') at time zone v_tz), 'shift + overtime: closed after the overtime window ends (19:01)');
+  perform pg_temp.ok((select status::text from public.attendance_sessions where id = v_sess) = 'missed_checkout', 'shift + overtime: status is missed_checkout');
+  -- overtime check-in at 16:30 (after an early check-out): the shift window alone ends 17:00, the overtime one 19:00
+  insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, authentication_method, location_policy)
+  values (a, 'check_in', (d1 + time '16:30') at time zone v_tz, true, 'password', 'none') returning id into v_ev;
+  insert into public.attendance_sessions (employee_id, work_date, check_in_event_id, status) values (a, d1, v_ev, 'open') returning id into v_sess;
+  perform pg_temp.ok(not private.close_missed_checkout(a, (d1 + time '17:30') at time zone v_tz), 'overtime check-in 16:30: 17:30 not closed');
+  perform pg_temp.ok(private.close_missed_checkout(a, (d1 + time '19:01') at time zone v_tz), 'overtime check-in 16:30: closed at 19:01');
+  -- without overtime the old rule still holds: a plain shift session closes after 17:00
+  update public.overtime_assignments set status = 'cancelled', cancelled_at = now() where employee_id = a and start_at = (d1 + time '16:00') at time zone v_tz;
+  insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, authentication_method, location_policy)
+  values (a, 'check_in', (d1 + time '08:10') at time zone v_tz, true, 'password', 'none') returning id into v_ev;
+  insert into public.attendance_sessions (employee_id, work_date, check_in_event_id, status) values (a, d1, v_ev, 'open') returning id into v_sess;
+  perform pg_temp.ok(not private.close_missed_checkout(a, (d1 + time '17:00') at time zone v_tz) and private.close_missed_checkout(a, (d1 + time '17:01') at time zone v_tz),
+                     'plain shift: closes only after 17:00');
+
+  -- final review #3: an approved early-leave permission opens a check-out window from the exit time; late-arrival one a check-in window
+  insert into public.permission_types (company_id, name, mode, days_back, days_ahead) values (v_comp, 'tmp early', 'early_leave', 30, 30);
+  insert into public.permission_types (company_id, name, mode, days_back, days_ahead) values (v_comp, 'tmp late', 'late_arrival', 30, 30);
+  select * into w from private.punch_window(a, 'check_out', (d1 + time '11:30') at time zone v_tz);
+  perform pg_temp.ok(not w.allowed, 'early leave: 11:30 refused without a permission', row_to_json(w)::text);
+  select * into w from private.punch_window(a, 'check_in', (d1 + time '12:00') at time zone v_tz);
+  perform pg_temp.ok(not w.allowed, 'late arrival: 12:00 refused without a permission', row_to_json(w)::text);
+  insert into public.requests (employee_id, request_type, status, start_at, end_at, company_id, permission_type_id)
+  select a, 'permission', 'approved', (d1 + time '11:00') at time zone v_tz, (d1 + time '16:00') at time zone v_tz, v_comp, id
+  from public.permission_types where company_id = v_comp and name = 'tmp early';
+  insert into public.requests (employee_id, request_type, status, start_at, end_at, company_id, permission_type_id)
+  select a, 'permission', 'approved', (d1 + time '08:00') at time zone v_tz, (d1 + time '11:30') at time zone v_tz, v_comp, id
+  from public.permission_types where company_id = v_comp and name = 'tmp late';
+  select * into w from private.punch_window(a, 'check_out', (d1 + time '11:30') at time zone v_tz);
+  perform pg_temp.ok(w.allowed, 'early leave: 11:30 allowed with an approved permission (exit 11:00)', row_to_json(w)::text);
+  select * into w from private.punch_window(a, 'check_out', (d1 + time '08:30') at time zone v_tz);
+  perform pg_temp.ok(not w.allowed, 'early leave: 08:30 still refused (before exit time - out_before)', row_to_json(w)::text);
+  select * into w from private.punch_window(a, 'check_in', (d1 + time '12:00') at time zone v_tz);
+  perform pg_temp.ok(w.allowed, 'late arrival: 12:00 allowed with an approved permission (arrival 11:30)', row_to_json(w)::text);
+  update public.requests set status = 'cancelled' where employee_id = a and request_type = 'permission' and start_at = (d1 + time '11:00') at time zone v_tz;
+  select * into w from private.punch_window(a, 'check_out', (d1 + time '11:30') at time zone v_tz);
+  perform pg_temp.ok(not w.allowed, 'early leave: cancelled permission opens nothing', row_to_json(w)::text);
+
   -- validation and access
   perform pg_temp.as_user(v_admin);
   s := pg_temp.err('select public.admin_set_punch_settings(''off'', true, 721, 120, 120, 60)');

@@ -75,6 +75,23 @@ as $$
          case when p_action = 'check_in' then p.st + make_interval(mins => cfg.ia) else p.en + make_interval(mins => cfg.oa) end,
          p.kind
   from periods p cross join cfg
+  union all
+  -- An approved early-leave permission (start_at = the exit time, end_at = the shift end): the check-out window opens
+  -- ob minutes before the exit time and lasts until the shift end + oa. An approved late-arrival permission
+  -- (start_at = the shift start, end_at = the arrival time): the check-in window lasts until the arrival time + ia.
+  select r.start_at - make_interval(mins => cfg.ob), r.end_at + make_interval(mins => cfg.oa), 'shift'::text
+  from cfg join public.requests r on r.employee_id = p_employee and r.request_type = 'permission' and r.status = 'approved'
+  join public.permission_types pt on pt.id = r.permission_type_id and pt.mode = 'early_leave'
+  where p_action = 'check_out'
+    and r.end_at > (p_from::timestamp at time zone cfg.tz) - interval '1 day'
+    and r.start_at < ((p_to + 1)::timestamp at time zone cfg.tz) + interval '1 day'
+  union all
+  select r.start_at - make_interval(mins => cfg.ib), r.end_at + make_interval(mins => cfg.ia), 'shift'::text
+  from cfg join public.requests r on r.employee_id = p_employee and r.request_type = 'permission' and r.status = 'approved'
+  join public.permission_types pt on pt.id = r.permission_type_id and pt.mode = 'late_arrival'
+  where p_action = 'check_in'
+    and r.end_at > (p_from::timestamp at time zone cfg.tz) - interval '1 day'
+    and r.start_at < ((p_to + 1)::timestamp at time zone cfg.tz) + interval '1 day'
 $$;
 revoke all on function private.punch_windows_list(uuid, text, date, date) from public, anon, authenticated;
 
@@ -124,7 +141,8 @@ $$;
 revoke all on function private.punch_window(uuid, text, timestamptz) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- missed check-out
--- The session's check-out window = the first check-out window that ends after the check-in. When it has closed
+-- The session's check-out window = the first check-out window that ends after the check-in, extended by any
+-- check-out window that is already open when it ends (shift + overtime). When it has closed
 -- (or, with no such window, 24 hours after the check-in), the session is closed without a check-out and its check-in
 -- is flagged for review. Only while windows are on. Returns true when it closed one.
 create or replace function private.close_missed_checkout(p_employee uuid, p_at timestamptz)
@@ -134,7 +152,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_sess record; v_in timestamptz; v_tz text; v_on boolean; v_day date; v_close timestamptz;
+  v_sess record; v_in timestamptz; v_tz text; v_on boolean; v_day date; v_close timestamptz; v_next timestamptz;
 begin
   select c.punch_windows_enabled, c.timezone into v_on, v_tz
   from public.employees e join public.companies c on c.id = e.company_id where e.id = p_employee;
@@ -151,9 +169,18 @@ begin
   select t.hi into v_close from private.punch_windows_list(p_employee, 'check_out', v_day - 1, v_day + 1) t
   where t.hi > v_in and t.lo < v_in + interval '24 hours' order by t.hi limit 1;
   v_close := coalesce(v_close, v_in + interval '24 hours');
+  -- A check-out window that is open at the moment the session's own window ends (overtime right after the shift)
+  -- extends the session: keep following windows that start before the current end and finish after it.
+  loop
+    select max(t.hi) into v_next from private.punch_windows_list(p_employee, 'check_out', v_day - 1, v_day + 1) t
+    where t.lo <= v_close and t.hi > v_close;
+    exit when v_next is null;
+    v_close := v_next;
+  end loop;
   if p_at <= v_close then return false; end if;
 
-  update public.attendance_sessions set status = 'missed_checkout' where id = v_sess.id;
+  update public.attendance_sessions set status = 'missed_checkout' where id = v_sess.id and status = 'open';
+  if not found then return false; end if;
   update public.attendance_events
      set needs_review = true, metadata = metadata || jsonb_build_object('missed_checkout', true)
    where id = v_sess.check_in_event_id;

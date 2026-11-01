@@ -1,5 +1,6 @@
 -- Rollback of 20261102090000_phase8a_punch_windows.sql (the enum value missed_checkout stays; nothing uses it after this).
-update public.attendance_sessions set status = 'open' where status = 'missed_checkout';  -- reopen: no data lost
+-- Sessions already closed as missed_checkout are NOT reopened (one open session per employee is unique, so reopening can
+-- fail on real data): they stay as they are, and the status check below is only narrowed back when there are none.
 create or replace function private.record_punch(p_employee_id uuid, p_policy text, p_outside_action text, p_max_accuracy_m numeric,
   p_timezone text, p_request_id uuid, p_expected_action text, p_reading text, p_lat double precision, p_lng double precision,
   p_accuracy_m double precision, p_time timestamp with time zone, p_meta jsonb)
@@ -265,7 +266,15 @@ drop function public.admin_get_punch_settings();
 drop function private.close_missed_checkout(uuid, timestamptz);
 drop function private.punch_window(uuid, text, timestamptz);
 drop function private.punch_windows_list(uuid, text, date, date);
-alter table public.attendance_sessions drop constraint attendance_sessions_status_check;
-alter table public.attendance_sessions add constraint attendance_sessions_status_check check (((status = 'open'::attendance_session_status) and (check_out_event_id is null)) or ((status = 'closed'::attendance_session_status) and (check_out_event_id is not null)));
+do $rb$
+begin
+  if not exists (select 1 from public.attendance_sessions where status::text = 'missed_checkout') then
+    alter table public.attendance_sessions drop constraint attendance_sessions_status_check;
+    alter table public.attendance_sessions add constraint attendance_sessions_status_check check (((status = 'open'::attendance_session_status) and (check_out_event_id is null)) or ((status = 'closed'::attendance_session_status) and (check_out_event_id is not null)));
+  else
+    raise notice 'missed_checkout sessions exist: they are kept and the 3-way status check stays';
+  end if;
+end
+$rb$;
 alter table public.employees drop column in_before_min, drop column in_after_min, drop column out_before_min, drop column out_after_min;
 alter table public.companies drop column biometric_policy, drop column punch_windows_enabled, drop column in_before_min, drop column in_after_min, drop column out_before_min, drop column out_after_min;
