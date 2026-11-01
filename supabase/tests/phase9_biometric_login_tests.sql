@@ -50,8 +50,20 @@ begin
   update public.companies set biometric_policy = 'required' where id = v_comp;
   update public.employees set is_active = false where id = a;
   s := pg_temp.err(format('select public.service_login_context(%L)', 'cred-a'));
-  perform pg_temp.ok(s = 'device_not_registered', 'inactive employee: device_not_registered (nothing revealed)', s);
+  perform pg_temp.ok(s = 'employee_inactive', 'inactive employee: employee_inactive (the phone keeps its saved device)', s);
   update public.employees set is_active = true where id = a;
+  update public.companies set is_active = false where id = v_comp;
+  s := pg_temp.err(format('select public.service_login_context(%L)', 'cred-a'));
+  perform pg_temp.ok(s = 'employee_inactive', 'inactive company: employee_inactive', s);
+  update public.companies set is_active = true where id = v_comp;
+  -- company admins and platform admins sign in with the password only (an admin's account holds company-wide powers)
+  perform public.service_webauthn_register(v_admin, 'cred-admin', k_pub, 0, array['internal'], 'admin phone');
+  s := pg_temp.err(format('select public.service_login_context(%L)', 'cred-admin'));
+  perform pg_temp.ok(s = 'password_required', 'company admin: password only', s);
+  insert into public.platform_admins (user_id) values (b);
+  s := pg_temp.err(format('select public.service_login_context(%L)', 'cred-b'));
+  perform pg_temp.ok(s = 'password_required', 'platform admin: password only', s);
+  delete from public.platform_admins where user_id = b;
   update auth.users set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"must_change_password": true}' where id = a;
   s := pg_temp.err(format('select public.service_login_context(%L)', 'cred-a'));
   perform pg_temp.ok(s = 'password_required', 'temporary password: password_required', s);
@@ -104,6 +116,11 @@ begin
   s := pg_temp.err(format('select public.service_login_result(%L, true, 99)', 'cred-a'));
   perform pg_temp.ok(s = 'too_many_attempts', 'locked: even a good signature is refused', s);
   perform pg_temp.ok((select count(*) from public.audit_log where action = 'auth.biometric_login_locked' and actor_id = a) = 1, 'the lock is audited once');
+  -- the window rolls: one failure ages out, a new one re-locks. Still one audit row (no flooding).
+  delete from private.login_failures where ctid = (select ctid from private.login_failures where credential_id = 'cred-a' order by at limit 1);
+  perform public.service_login_result('cred-a', false, null);
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'auth.biometric_login_locked' and actor_id = a) = 1, 'a re-lock inside the same 15 minutes is not audited again');
+  perform pg_temp.ok((select count(*) from private.login_failures where credential_id = 'cred-a') = 5, 'still exactly 5 failures in the window');
   perform pg_temp.ok(public.service_login_context('cred-b') ->> 'employee_id' = b::text, 'another credential is not affected');
   update private.login_failures set at = now() - interval '16 minutes';
   r := public.service_login_context('cred-a');

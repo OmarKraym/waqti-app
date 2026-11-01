@@ -56,7 +56,7 @@ type Context = {
 
 
 const LOGIN_ERRORS: Record<string, number> = {
-  device_not_registered: 409, too_many_attempts: 429, password_required: 403, biometric_off: 403,
+  device_not_registered: 409, too_many_attempts: 429, password_required: 403, biometric_off: 403, employee_inactive: 403,
 };
 
 /** Maps a service_login_* error to the answer for the phone. Anything unexpected is a plain server_error (no details). */
@@ -90,7 +90,7 @@ async function handleLogin(body: Record<string, any>, admin: any): Promise<Respo
   if (ctxError || !ctxData) return loginError(ctxError?.message);
   const ctx = ctxData as Context & { email: string };
 
-  // Every refusal below is counted against the credential (5 in 15 minutes lock it).
+  // A signature that does not verify is counted against the credential (5 in 15 minutes lock it).
   const refuse = async (): Promise<Response> => {
     const r = await admin.rpc("service_login_result", { p_credential_id: credentialId, p_ok: false, p_new_count: null });
     if (r.error) return loginError(r.error.message);
@@ -98,7 +98,9 @@ async function handleLogin(body: Record<string, any>, admin: any): Promise<Respo
   };
 
   const { data: challenge } = await admin.rpc("service_login_take_challenge", { p_challenge_id: challengeId, p_credential_id: credentialId });
-  if (!challenge) return await refuse();
+  // No challenge (unknown, used, expired, or made for another credential): nothing could have been verified, so it is
+  // refused but NOT counted. Counting it would let anyone who knows a credential id lock that employee out.
+  if (!challenge) return json({ error: "biometric_failed" }, 400);
   let result;
   try {
     result = await verifyAuthentication(body.response, challenge as string, {

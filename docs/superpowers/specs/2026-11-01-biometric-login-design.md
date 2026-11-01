@@ -35,3 +35,15 @@ Native app, app lock on open, changing the RP ID, removing the password.
 ## Risks (told to Omar)
 First unauthenticated path that mints sessions; shared RP ID `omarkraym.github.io`; iOS standalone PWA untested; the
 `generateLink` + `verifyOtp` path can only be proven against the live Auth service after deploy.
+
+## Review fixes (independent review, same day)
+- A missing / used / expired challenge is refused but NOT counted as a failure: nothing was verified, and counting let
+  anyone who knows a credential id lock that employee out. Only a signature that fails to verify counts.
+- Company admins and platform admins sign in with the password only (`password_required`): an admin's account holds
+  company-wide powers, and the accepted "friend's fingerprint" risk was written for employees.
+- Inactive employee or company -> `employee_inactive` (the phone keeps its saved device); only "no such device" clears it.
+- The lock is audited once per 15 minutes, not once per refusal while the window rolls.
+- Still open (accepted, ledgered): someone who holds a credential id and gets a challenge can still lock that employee's
+  FINGERPRINT sign-in with 5 bad signatures (password and punches keep working); 3 `login-options` calls evict a pending
+  challenge (the person just retries); `generateLink` runs before the DB records the result, so a refused race can leave
+  one unused token; a phone keeps the last registered credential even if someone else later signs in by password.

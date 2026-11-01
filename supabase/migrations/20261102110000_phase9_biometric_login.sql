@@ -43,8 +43,9 @@ as $$
 $$;
 revoke all on function private.login_locked(text) from public, anon, authenticated;
 
--- Who may sign in with this credential. Raises: device_not_registered (no such device, or the employee / company is
--- inactive: nothing more is said), too_many_attempts, password_required (temporary password), biometric_off.
+-- Who may sign in with this credential. Raises: device_not_registered (no such device), employee_inactive (employee or
+-- company switched off; the phone keeps its saved device), too_many_attempts, password_required (a temporary password,
+-- or a company / platform admin: those sign in with the password only), biometric_off.
 create or replace function public.service_login_context(p_credential_id text)
 returns jsonb
 language plpgsql
@@ -56,24 +57,31 @@ declare
   v_email text;
   v_must boolean;
   v_policy text;
+  v_active boolean;
 begin
   select * into w from public.webauthn_credentials c where c.credential_id = p_credential_id;
   if not found then
     raise exception 'device_not_registered' using errcode = 'P0001';
   end if;
-  select u.email::text, coalesce((u.raw_app_meta_data ->> 'must_change_password')::boolean, false), c.biometric_policy
-    into v_email, v_must, v_policy
+  select u.email::text, coalesce((u.raw_app_meta_data ->> 'must_change_password')::boolean, false), c.biometric_policy,
+         (e.is_active and c.is_active)
+    into v_email, v_must, v_policy, v_active
   from public.employees e
   join public.companies c on c.id = e.company_id
   join auth.users u on u.id = e.id
-  where e.id = w.employee_id and e.is_active and c.is_active;
+  where e.id = w.employee_id;
   if not found or v_email is null then
     raise exception 'device_not_registered' using errcode = 'P0001';
+  end if;
+  if not v_active then
+    raise exception 'employee_inactive' using errcode = 'P0001';
   end if;
   if private.login_locked(p_credential_id) then
     raise exception 'too_many_attempts' using errcode = 'P0001';
   end if;
-  if v_must then
+  if v_must
+     or exists (select 1 from public.company_members m where m.user_id = w.employee_id and m.role = 'company_admin')
+     or exists (select 1 from public.platform_admins pa where pa.user_id = w.employee_id) then
     raise exception 'password_required' using errcode = 'P0001';
   end if;
   if v_policy is distinct from 'required' then
@@ -157,7 +165,9 @@ begin
     insert into private.login_failures (credential_id) values (p_credential_id);
     select count(*) into v_fails from private.login_failures f
     where f.credential_id = p_credential_id and f.at > now() - interval '15 minutes';
-    if v_fails = 5 then
+    -- one audit row per lock (not one per refusal while the window rolls)
+    if v_fails >= 5 and not exists (select 1 from public.audit_log l
+        where l.action = 'auth.biometric_login_locked' and l.actor_id = w.employee_id and l.created_at > now() - interval '15 minutes') then
       insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
       values (w.company_id, w.employee_id, 'auth.biometric_login_locked', 'employee', w.employee_id::text,
               jsonb_build_object('device_label', w.device_label));

@@ -123,8 +123,8 @@ describe("fingerprint sign-in (after sign-out)", () => {
     expect(h.read()).toBe("cred-1");
     expect(api.signInWithToken).not.toHaveBeenCalled();
   });
-  it("lock, temporary password and company-off errors reach the screen with their own code and keep the phone", async () => {
-    for (const code of ["too_many_attempts", "password_required", "biometric_off"] as const) {
+  it("lock, password-only, company-off and inactive-account errors reach the screen with their own code and keep the phone", async () => {
+    for (const code of ["too_many_attempts", "password_required", "biometric_off", "employee_inactive"] as const) {
       const h = hint("cred-1");
       const { api } = apiFor({ "login-options": new AppError(code) });
       const err = await loginWithFingerprint(api, async () => ({}), h).catch((e) => e);

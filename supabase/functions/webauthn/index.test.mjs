@@ -49,6 +49,7 @@ globalThis.__fake = {
         return no("device_not_registered");
       }
       if (fn === "service_login_context") {
+        if (L.inactiveLogin) return no("employee_inactive");
         if (L.fails >= 5) return no("too_many_attempts");
         if (L.mustChange) return no("password_required");
         if (L.policy !== "required") return no("biometric_off");
@@ -203,6 +204,7 @@ db.fails = 0;
 r = await lopt(); const lo4 = await r.json();
 r = await lver({ credential_id: cid, challenge_id: randomUUID(), response: assert(lo4.options.challenge) });
 ok(r.status === 400 && (await errOf(r)) === "biometric_failed" && db.links.length === 1, "login: unknown challenge id refused");
+ok(db.fails === 0, "login: a missing challenge is NOT counted (nothing could have been verified; counting would let strangers lock someone out)", String(db.fails));
 db.fails = 0;
 r = await lver({ credential_id: "other-device", challenge_id: lo4.challenge_id, response: assert(lo4.options.challenge) });
 ok(r.status === 409 && db.links.length === 1, "login: challenge cannot be used with another credential id");
@@ -231,6 +233,10 @@ db.mustChange = true;
 r = await lopt();
 ok(r.status === 403 && (await errOf(r)) === "password_required", "login: temporary password -> password_required");
 db.mustChange = false;
+db.inactiveLogin = true;
+r = await lopt();
+ok(r.status === 403 && (await errOf(r)) === "employee_inactive", "login: inactive employee/company -> employee_inactive (the phone must not forget its device)");
+db.inactiveLogin = false;
 // the link service fails: nothing leaks
 db.fails = 0;
 r = await lopt(); const lo7 = await r.json();
