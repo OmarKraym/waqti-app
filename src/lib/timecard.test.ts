@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, earlierDays, formatDuration, todayRows } from "./timecard";
+import { dayKey, earlierDays, formatDuration, todayRows, workedToday } from "./timecard";
 import type { AttendanceEvent } from "./types";
 
 const TZ = "Africa/Tripoli"; // UTC+2
@@ -77,5 +77,36 @@ describe("earlier days", () => {
   it("duration text", () => {
     expect(formatDuration(482)).toBe("8 س 02 د");
     expect(formatDuration(45)).toBe("45 د");
+  });
+});
+
+describe("minutes worked today (live, shown on the today screen)", () => {
+  it("nothing today: 0", () => {
+    expect(workedToday(todayRows([], null, NOW, TZ), null, NOW)).toBe(0);
+  });
+
+  it("open session: from the check-in until now", () => {
+    const start = at("2026-10-30T06:02:00Z");
+    const rows = todayRows([ev("a", "check_in", "2026-10-30T06:02:00Z")], start, NOW, TZ);
+    expect(workedToday(rows, start, NOW)).toBe(298);
+  });
+
+  it("closed pairs are added up", () => {
+    const rows = todayRows([
+      ev("a", "check_in", "2026-10-30T05:00:00Z"), ev("b", "check_out", "2026-10-30T07:00:00Z"),
+      ev("c", "check_in", "2026-10-30T08:00:00Z"), ev("d", "check_out", "2026-10-30T09:30:00Z"),
+    ], null, NOW, TZ);
+    expect(workedToday(rows, null, NOW)).toBe(210);
+  });
+
+  it("a punch still on the phone (pencil) counts for nothing", () => {
+    const rows = todayRows([ev("queued:x", "check_in", "2026-10-30T06:00:00Z")], null, NOW, TZ);
+    expect(workedToday(rows, null, NOW)).toBe(0);
+  });
+
+  it("night shift: counts from yesterday's open check-in", () => {
+    const start = at("2026-10-29T20:00:00Z");
+    const rows = todayRows([ev("a", "check_in", "2026-10-29T20:00:00Z")], start, NOW, TZ);
+    expect(workedToday(rows, start, NOW)).toBe(900);
   });
 });

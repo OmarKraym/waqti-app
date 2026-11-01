@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
+import type { RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { currentSubscription, keysOf } from "../lib/push";
 import { Home } from "./Home";
@@ -35,6 +36,8 @@ export function Main({ user }: { user: SessionUser }) {
   const online = useOnline();
   const requests = useRequests();
   const count = requests.overview?.inbox_count ?? 0;
+  // "New request" from the today screen: open the requests tab on the form, with the type already chosen.
+  const [compose, setCompose] = useState<{ n: number; type: RequestType } | null>(null);
 
   const go = (t: Tab) => {
     setTab(t);
@@ -43,6 +46,10 @@ export function Main({ user }: { user: SessionUser }) {
     window.history.replaceState(window.history.state, "", urlWithTab(window.location.href, t));
     if (t === "requests") requests.reload();
     window.scrollTo(0, 0);
+  };
+  const newRequest = (type: RequestType) => {
+    setCompose((c) => ({ n: (c?.n ?? 0) + 1, type }));
+    go("requests");
   };
 
   useEffect(() => {
@@ -66,11 +73,11 @@ export function Main({ user }: { user: SessionUser }) {
   return (
     <div className="with-tabs">
       <div hidden={tab !== "today"}>
-        <Home user={user} />
+        <Home user={user} onNewRequest={newRequest} />
       </div>
       {visited.has("requests") && (
         <div className="app" hidden={tab !== "requests"}>
-          <Requests data={requests} online={online} />
+          <Requests data={requests} online={online} compose={compose} />
         </div>
       )}
       {visited.has("notifications") && (

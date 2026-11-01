@@ -33,8 +33,8 @@ import {
 } from "../lib/offlineQueue";
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
-import { dayKey, earlierDays, formatDuration, todayRows, type CardRow, type DayRow } from "../lib/timecard";
-import type { AttendanceState, LocationStatus } from "../lib/types";
+import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
+import type { AttendanceState, LocationStatus, RequestType } from "../lib/types";
 import { useInstallPrompt, useOnline } from "./hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { AppBar, Banner, Icon } from "./ui";
@@ -42,7 +42,7 @@ import { AppBar, Banner, Icon } from "./ui";
 const SYNC_EVERY_MS = 30_000;
 const OFFLINE_PUNCHES = false;
 
-export function Home({ user }: { user: SessionUser }) {
+export function Home({ user, onNewRequest }: { user: SessionUser; onNewRequest: (type: RequestType) => void }) {
   const [state, dispatch] = useReducer(reduce, initialState);
   const busy = useRef(false); // blocks a second tap while one is being processed
   const online = useOnline();
@@ -360,17 +360,20 @@ export function Home({ user }: { user: SessionUser }) {
           </Banner>
         )}
 
-        <section className="status" aria-live="polite">
+        <section className={`status${data.open_session ? " present" : ""}`}>
           <p className="who">
             <span className="truncate">{data.employee.full_name}</span>
             {data.employee.employee_number && <span className="who-number" dir="ltr">{data.employee.employee_number}</span>}
           </p>
-          <h2 className="status-head">{statusHeadline(data, rows, nowMs, tz)}</h2>
-          <ServerClock offsetMs={offsetMs} timeZone={tz} />
+          <ServerClock offsetMs={offsetMs} timeZone={tz} rows={rows} openStart={data.open_session?.started_at ?? null} />
+          <h2 className="status-head" aria-live="polite">
+            <span className="status-dot" aria-hidden="true" />
+            {statusHeadline(data, rows, nowMs, tz)}
+          </h2>
         </section>
 
         <section className="timecard" aria-label="بطاقة اليوم">
-          <h3 className="timecard-day">{formatDate(new Date(nowMs).toISOString(), tz)}</h3>
+          <h3 className="timecard-day">سجل اليوم</h3>
           <ol className="slots">
             {rows.map((r) => (
               <li key={r.key} className={`slot ${r.action === "check_in" ? "in" : "out"}`}>
@@ -419,6 +422,10 @@ export function Home({ user }: { user: SessionUser }) {
             disabled={!canTap /* a stale tap is still safe: the server checks expected_action */}
             aria-busy={working}
           >
+            <span className="punch-icon" aria-hidden="true">
+              <Icon name={data.biometric?.policy === "required" ? "fingerprint" : action === "check_in" ? "arrive" : "leave"} />
+            </span>
+            <span className="punch-text">
             <span className="punch-label">{actionLabel(action)}</span>
             <span className="punch-sub">
               {bioBusy
@@ -432,6 +439,7 @@ export function Home({ user }: { user: SessionUser }) {
                   : online
                     ? null
                     : "سيُحفظ على الجهاز"}
+            </span>
             </span>
           </button>
         )}
@@ -475,6 +483,21 @@ export function Home({ user }: { user: SessionUser }) {
           </section>
         )}
 
+        <section className="quick" aria-labelledby="quick-title">
+          <h3 id="quick-title" className="section-title">طلب جديد</h3>
+          <div className="quick-row">
+            <button className="quick-btn" onClick={() => onNewRequest("leave")} disabled={!online}>
+              <Icon name="calendar" />إجازة
+            </button>
+            <button className="quick-btn" onClick={() => onNewRequest("permission")} disabled={!online}>
+              <Icon name="clock" />إذن
+            </button>
+            <button className="quick-btn" onClick={() => onNewRequest("other")} disabled={!online}>
+              <Icon name="doc" />طلب آخر
+            </button>
+          </div>
+        </section>
+
         <EarlierDays days={days} timeZone={tz} />
 
         {install && (
@@ -502,7 +525,9 @@ function statusHeadline(data: AttendanceState, rows: CardRow[], nowMs: number, t
 }
 
 /** The server's time (phone clock + the last measured offset), not the phone's own time. */
-function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: string }) {
+function ServerClock({ offsetMs, timeZone, rows, openStart }: {
+  offsetMs: number; timeZone: string; rows: CardRow[]; openStart: string | null;
+}) {
   const [now, setNow] = useState(() => Date.now() + offsetMs);
   useEffect(() => {
     // Tick on each new SERVER second (not every 1000 ms from an arbitrary start), so the
@@ -516,10 +541,23 @@ function ServerClock({ offsetMs, timeZone }: { offsetMs: number; timeZone: strin
     tick();
     return () => clearTimeout(t);
   }, [offsetMs]);
+  const iso = new Date(now).toISOString();
+  const clock = formatClock(iso, timeZone); // HH:MM:SS
+  const worked = workedToday(rows, openStart, now);
   return (
-    <p className="clock-line">
-      الساعة الآن <span dir="ltr">{formatClock(new Date(now).toISOString(), timeZone)}</span>
-    </p>
+    <div className="clock-block">
+      <p className="clock">
+        <span className="sr-only">الساعة الآن </span>
+        <span dir="ltr">
+          <span className="clock-hm">{clock.slice(0, 5)}</span>
+          <span className="clock-s">{clock.slice(5)}</span>
+        </span>
+      </p>
+      <p className="clock-date">{formatDate(iso, timeZone)}</p>
+      {worked > 0 && (
+        <p className="worked">مدة العمل اليوم <span>{formatDuration(worked)}</span></p>
+      )}
+    </div>
   );
 }
 

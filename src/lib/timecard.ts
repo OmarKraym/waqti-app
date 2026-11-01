@@ -102,6 +102,25 @@ export function earlierDays(events: AttendanceEvent[], nowMs: number, timeZone: 
   return rows.sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, max);
 }
 
+/**
+ * Minutes worked on today's card: confirmed (stamped) in/out pairs, plus the open session until now.
+ * Punches still waiting on the phone (pencil) count for nothing until the server confirms them.
+ */
+export function workedToday(rows: CardRow[], openSessionStart: string | null, nowMs: number): number {
+  let ms = 0;
+  let openIn: string | null = null;
+  for (const r of rows) {
+    if (r.kind !== "stamped" || !r.time) continue;
+    if (r.action === "check_in") openIn = r.time;
+    else if (openIn) {
+      ms += Date.parse(r.time) - Date.parse(openIn);
+      openIn = null;
+    }
+  }
+  if (openSessionStart && openIn === openSessionStart) ms += Math.max(0, nowMs - Date.parse(openSessionStart));
+  return Math.floor(ms / 60_000);
+}
+
 /** "8 س 05 د" — hours and minutes, Western digits. */
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

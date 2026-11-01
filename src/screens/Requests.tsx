@@ -31,12 +31,23 @@ import { AppBar, Banner, Icon } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
 
-export function Requests({ data, online }: { data: RequestsData; online: boolean }) {
+export function Requests({ data, online, compose }: {
+  data: RequestsData;
+  online: boolean;
+  /** Set by the today screen's shortcuts: open the form with this type (n changes on every tap). */
+  compose?: { n: number; type: RequestType } | null;
+}) {
   const { overview, inbox, overtime, loading, error, reload } = data;
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState<RequestType | null>(compose?.type ?? null);
   const [assigning, setAssigning] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const done = (text: string, kind: "success" | "error") => { setNote({ kind, text }); reload(); };
+  useEffect(() => {
+    if (!compose) return;
+    setNote(null);
+    setAssigning(false);
+    setComposing(compose.type);
+  }, [compose?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (assigning && overtime) {
     return (
@@ -55,11 +66,12 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
   if (composing && overview) {
     return (
       <NewRequestForm
+        initialType={composing}
         overview={overview}
         online={online}
-        onClose={() => setComposing(false)}
+        onClose={() => setComposing(null)}
         onSent={(r) => {
-          setComposing(false);
+          setComposing(null);
           setNote({ kind: "success", text: sentText(r) });
           reload();
         }}
@@ -69,16 +81,8 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
 
   return (
     <>
-    <AppBar
-      className="req-head"
-      title="الطلبات"
-      action={
-        <button className="btn primary small" onClick={() => { setNote(null); setComposing(true); }} disabled={!overview || !online}>
-          <Icon name="plus" />طلب جديد
-        </button>
-      }
-    />
-    <main className="container requests">
+    <AppBar className="req-head" title="الطلبات" />
+    <main className="container requests has-fab">
       {!online && <Banner kind="warning">الطلبات تحتاج اتصالًا بالإنترنت.</Banner>}
       {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}
 
@@ -109,6 +113,11 @@ export function Requests({ data, online }: { data: RequestsData; online: boolean
         </>
       )}
     </main>
+    {/* The main action of this tab floats where the punch button floats on the today tab. */}
+    <button className="fab new-req" onClick={() => { setNote(null); setComposing("leave"); }} disabled={!overview || !online}>
+      <span className="fab-icon" aria-hidden="true"><Icon name="plus" /></span>
+      <span className="fab-label">طلب جديد</span>
+    </button>
     </>
   );
 }
@@ -328,12 +337,12 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
 
 const PREVIEW_DELAY_MS = 400;
 
-function NewRequestForm({ overview, online, onClose, onSent }: {
-  overview: RequestsOverview; online: boolean; onClose: () => void; onSent: (r: RequestItem) => void;
+function NewRequestForm({ initialType, overview, online, onClose, onSent }: {
+  initialType: RequestType; overview: RequestsOverview; online: boolean; onClose: () => void; onSent: (r: RequestItem) => void;
 }) {
   const tz = overview.timezone;
   const ptypes = overview.permission_types;
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(overview.today, ptypes[0]));
+  const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(overview.today, ptypes[0]), type: initialType }));
   const ptype = ptypes.find((p) => p.id === draft.permission_type_id) ?? null;
   const [preview, setPreview] = useState<{ sig: string; result: RequestPreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ sig: string; code: AppErrorCode } | null>(null);
