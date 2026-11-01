@@ -30,6 +30,7 @@ for t in tests/*.sql; do
   r=$(psql -X -q -d $DB -v admin_email=admin@example.com -f "$t" 2>&1 | grep -oE "RESULT passed=[0-9]+ failed=[0-9]+|FAIL [0-9]+:.*" || true)
   echo "$(basename "$t"): ${r:-NO RESULT}"
   p=$(echo "$r" | sed -nE 's/.*passed=([0-9]+).*/\1/p' | head -1); f=$(echo "$r" | sed -nE 's/.*failed=([0-9]+).*/\1/p' | head -1)
+  [ "${p:-0}" -eq 0 ] && f=$(( ${f:-0} + 1 ))   # a file that passed nothing (stopped on an error) is a failure
   total=$((total + ${p:-0})); failed=$((failed + ${f:-1}))
 done
 echo "TOTAL passed=$total failed=$failed"
