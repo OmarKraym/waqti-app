@@ -1,11 +1,11 @@
-# Generates the PWA icons: a clock on the brand color #004357.
+# Generates the PWA icons: a clock inside a double-ring stamp on ink #101C30.
 import sys
 from PIL import Image, ImageDraw
 
 out = sys.argv[1]
-BRAND = (0, 67, 87, 255)
+BRAND = (16, 28, 48, 255)
 WHITE = (255, 255, 255, 255)
-ACCENT = (125, 211, 224, 255)
+ACCENT = (140, 165, 240, 255)
 
 def icon(size, maskable=False, rounded=True):
     s = size * 4  # draw large, then downscale for smooth edges
@@ -19,6 +19,8 @@ def icon(size, maskable=False, rounded=True):
     c, r = s / 2, s * scale
     w = int(s * 0.055)
     d.ellipse([c - r, c - r, c + r, c + r], outline=WHITE, width=w)
+    r2 = r * 1.2  # outer ring: the second frame of a date stamp
+    d.ellipse([c - r2, c - r2, c + r2, c + r2], outline=WHITE, width=max(2, w // 3))
     d.line([c, c, c, c - r * 0.62], fill=WHITE, width=w)            # minute hand
     d.line([c, c, c + r * 0.45, c + r * 0.12], fill=ACCENT, width=w)  # hour hand
     d.ellipse([c - w, c - w, c + w, c + w], fill=WHITE)
