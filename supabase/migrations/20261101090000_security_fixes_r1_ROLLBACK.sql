@@ -212,6 +212,15 @@ begin
   on conflict (employee_id) do nothing;
 end;
 $$;
+CREATE OR REPLACE FUNCTION public.is_platform_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select exists (select 1 from public.platform_admins p where p.user_id = (select auth.uid()))
+$function$
+;
 drop function private.is_push_endpoint(text);
 set search_path = public;
 grant INSERT on employee_geofences to anon;

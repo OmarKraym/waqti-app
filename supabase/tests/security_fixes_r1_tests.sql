@@ -86,6 +86,13 @@ begin
   perform pg_temp.as_user(a);
   s := pg_temp.err('select count(*) from public.admin_list_employees()');
   perform pg_temp.ok(s = 'forbidden', 'employees still refused', s);
+  insert into public.platform_admins (user_id) values (v_admin) on conflict do nothing;
+  perform pg_temp.as_user(v_admin, '{"must_change_password": true}');
+  s := pg_temp.err('select count(*) from public.platform_list_companies()');
+  perform pg_temp.ok(s = 'forbidden', 'platform functions refused with a temporary password', s);
+  perform pg_temp.as_user(v_admin);
+  s := pg_temp.err('select count(*) from public.platform_list_companies()');
+  perform pg_temp.ok(s = '', 'platform functions work without the flag', s);
 
   -- SEC-007: grants
   perform pg_temp.ok(not has_table_privilege('anon', 'public.employees', 'select')

@@ -45,6 +45,18 @@ begin
 end;
 $$;
 
+-- Same rule for the platform admin (variant found while fixing SEC-006).
+create or replace function public.is_platform_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.platform_admins p where p.user_id = (select auth.uid()))
+     and not coalesce((auth.jwt() -> 'app_metadata' ->> 'must_change_password')::boolean, false)
+$$;
+
 -- ---------------------------------------------------------------- SEC-007
 revoke all on table public.employees, public.employee_geofences, public.attendance_events, public.attendance_sessions from anon;
 revoke insert, update, delete, truncate, references, trigger on table
