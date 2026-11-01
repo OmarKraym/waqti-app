@@ -407,25 +407,32 @@ button { font: inherit; }
   border-radius: 6px;
 }
 
-/* The punch button is an ink pad: it sits on a ledge and sinks when pressed. */
+/* The punch button is an ink pad that floats at the bottom centre, above the tab bar.
+   It sits on a ledge and sinks when pressed. Solid colours only: content scrolls under it. */
 .punch {
-  width: 100%; min-height: 72px; margin-bottom: 5px;
+  position: fixed; z-index: 4;
+  inset-inline: 0; margin-inline: auto;
+  bottom: calc(var(--h-tabbar) + var(--s4) + 5px + env(safe-area-inset-bottom));
+  width: min(calc(100vw - 2 * var(--gutter)), 360px);
+  min-height: 68px;
   display: grid; place-content: center; gap: 2px;
-  border: 0; border-radius: var(--r-hero);
+  border: 0; border-radius: 16px;
   color: #fff; cursor: pointer;
-  transition: transform .08s ease, box-shadow .08s ease, background-color .15s, opacity .2s;
+  transition: transform .08s ease, box-shadow .08s ease, background-color .15s;
 }
-.punch.in { background: var(--brand); box-shadow: 0 5px 0 var(--brand-deep); }
+.punch.in { background: var(--brand); --ledge: var(--brand-deep); }
+.punch.out { background: var(--copper); --ledge: var(--copper-deep); }
+.punch { box-shadow: 0 5px 0 var(--ledge), 0 16px 26px -8px rgba(16, 28, 48, .5); }
 .punch.in:hover:not(:disabled) { background: #2442ad; }
-.punch.out { background: var(--copper); box-shadow: 0 5px 0 var(--copper-deep); }
 .punch.out:hover:not(:disabled) { background: #7a35a1; }
-.punch:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0, 0, 0, .35); }
-.punch:disabled { opacity: .5; cursor: not-allowed; }
+.punch:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--ledge), 0 8px 16px -8px rgba(16, 28, 48, .5); }
+.punch:disabled { background: #6c7690; --ledge: #4f5a73; cursor: not-allowed; }
 .punch:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-.punch[aria-busy="true"] { opacity: .85; }
 .punch-label { font-size: var(--fs-headline); font-weight: 700; }
 .punch-sub { font-size: var(--fs-small); opacity: .92; }
 .punch-sub:empty { display: none; }
+/* Room under the last block so the floating button never hides it */
+.with-tabs .container.has-punch { padding-bottom: calc(var(--h-tabbar) + 68px + var(--s8) + env(safe-area-inset-bottom)); }
 
 .queue-count { color: var(--text-2); font-weight: 600; font-size: var(--fs-small); text-align: center; }
 

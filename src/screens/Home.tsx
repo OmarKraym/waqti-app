@@ -351,7 +351,7 @@ export function Home({ user }: { user: SessionUser }) {
         action={<button className="btn quiet small" onClick={onSignOut}><Icon name="signOut" />خروج</button>}
       />
 
-      <main className="container">
+      <main className="container has-punch">
         {!online && (
           <Banner kind={allowQueue ? "warning" : "error"}>
             {allowQueue
