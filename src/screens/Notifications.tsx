@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { keysOf, currentSubscription, readPushState, subscribe, unsubscribe, type PushState } from "../lib/push";
+import { keepStorage, readNotificationPrefs, saveNotificationPrefs } from "../lib/localSettings";
 import type { NotificationSettings } from "../lib/types";
 import { AppBar, Banner, Icon, Switch } from "./ui";
 
@@ -35,9 +36,14 @@ function ReminderRow({ kind, id, title, selectLabel, on, value, options, atLabel
   );
 }
 
-export function Notifications({ online }: { online: boolean }) {
+export function Notifications({ online, userId }: { online: boolean; userId: string }) {
   const [push, setPush] = useState<PushState | null>(null);
-  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  // The last saved choices are on this phone too: they show at once, survive an app update, and stay if the server is slow.
+  // (`devices` is only known from the server; until it answers it is assumed fine so no false warning shows.)
+  const [settings, setSettings] = useState<NotificationSettings | null>(() => {
+    const kept = readNotificationPrefs(userId);
+    return kept ? { ...kept, devices: 1 } : null;
+  });
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note>(null);
@@ -46,7 +52,9 @@ export function Notifications({ online }: { online: boolean }) {
   async function refresh() {
     setPush(await readPushState());
     try {
-      setSettings(await api.getNotificationSettings());
+      const fresh = await api.getNotificationSettings();
+      setSettings(fresh);
+      saveNotificationPrefs(userId, fresh);
       setLoadError(false);
     } catch (e) {
       if (e instanceof AppError && e.code === "not_authenticated") return void api.signOut();
@@ -56,6 +64,7 @@ export function Notifications({ online }: { online: boolean }) {
 
   useEffect(() => {
     refresh();
+    void keepStorage();
   }, []);
 
   const fail = (e: unknown) => {
@@ -122,6 +131,7 @@ export function Notifications({ online }: { online: boolean }) {
     const mine = ++saveRun.current;
     try {
       const saved = await api.setNotificationSettings(next);
+      saveNotificationPrefs(userId, saved);
       if (mine === saveRun.current) setSettings(saved);
     } catch (e) {
       if (mine === saveRun.current) setSettings(prev);

@@ -130,7 +130,7 @@ export function Main({ user }: { user: SessionUser }) {
       )}
       {visited.has("notifications") && (
         <div className="app" hidden={profile || tab !== "notifications"}>
-          <Notifications online={online} />
+          <Notifications online={online} userId={user.id} />
         </div>
       )}
       <nav className="tabbar three" aria-label="التنقل" hidden={profile}>
