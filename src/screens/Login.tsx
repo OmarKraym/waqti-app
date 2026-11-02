@@ -111,7 +111,7 @@ export function Login() {
             dir="ltr"
             autoComplete="current-password"
             name="password"
-            autoFocus={prefilled}
+            autoFocus={prefilled && !readDeviceHint()}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

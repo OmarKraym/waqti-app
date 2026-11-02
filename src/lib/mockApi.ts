@@ -240,7 +240,7 @@ export function createMockApi(): WaqtiApi {
       await wait(400);
       requireNetwork();
       if (!user) throw new AppError("not_authenticated");
-      if (Date.now() < stateFailUntil) throw new AppError("network");
+      if (Date.now() < stateFailUntil || q.get("statefail") === "always") throw new AppError("network"); // always = server unreachable
       return state();
     },
     async punch(input: PunchInput) {

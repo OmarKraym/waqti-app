@@ -3,7 +3,8 @@ import type { SessionUser } from "../lib/api";
 import { supportsPlatformAuthenticator } from "../lib/biometric";
 import { api } from "../lib/client";
 import { AppError } from "../lib/errors";
-import { iosBrowserTab, nextGate } from "../lib/firstRun";
+import { gateWhenUnreachable, iosBrowserTab, nextGate } from "../lib/firstRun";
+import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { DeviceSetup } from "./DeviceSetup";
 import { Main } from "./Main";
 import { Banner, Icon } from "./ui";
@@ -27,9 +28,13 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
       return gate === "home" ? "ready" : gate;
     } catch (e) {
       if (e instanceof AppError && e.code === "not_authenticated") void api.signOut();
+      // No connection: the state this phone saved last time decides (a returning employee can still start the app).
+      if (e instanceof AppError && e.code === "network") {
+        return gateWhenUnreachable(loadCachedState(browserStorage(), user.id)?.data.biometric);
+      }
       return "error";
     }
-  }, []);
+  }, [user.id]);
 
   // Only the newest check may change the screen (a retry, or React running the effect twice, must not race).
   const latest = useRef(0);
