@@ -174,7 +174,9 @@ Not built now. What I learned, so the next round starts fast:
 ## 10. Delivery and rollout
 
 - Output: the new `waqti-admin/` folder, delivered as **`waqti_admin_12.zip`**, plus an updated `README.md` (new structure, where each control lives, how to run, how to test).
-- **Open decision for Omar:** keep the panel outside the repo (as now), or add it to the repo under `admin/` so it is versioned and reviewed with the database changes. My default: add it under `admin/`. `scripts/deploy-gh-pages.sh` publishes only `dist/`, so the panel is **not** put on GitHub Pages either way.
+- **Decided (Omar, 2026-11-02): the panel stays outside the repo.** He downloads the zip and runs it on his own computer. It is not committed to GitHub and not put on GitHub Pages. Only the specs and plans about it live in `docs/superpowers/`.
+  - Because it is not versioned in git, every delivery has a version number in the zip name (`waqti_admin_12.zip`) and a short changelog at the top of its `README.md`. Omar keeps the old folder as the way back.
+  - The `tests/` folder travels inside the zip for later work, but the panel runs without it. Omar does not need Node or Playwright; I run the tests here before sending the zip.
 - Nothing touches production data. The panel works with the current database. The Part B pane waits for its migration (which needs Omar's yes).
 - Order: build and test → Omar's smoke test → he replaces his folder with version 12. Version 11 stays as the way back (just keep the old folder).
 
