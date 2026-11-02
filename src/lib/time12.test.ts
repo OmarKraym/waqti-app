@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clockParts, format12, from12, to12, zonedHMS } from "./time12";
+import { clockParts, format12, from12, to12, wheelIndex, zonedHMS } from "./time12";
 
 describe("12-hour clock with ص / م", () => {
   it("midnight is 12 ص and noon is 12 م", () => {
@@ -33,5 +33,13 @@ describe("12-hour clock with ص / م", () => {
   it("live clock parts for the today screen", () => {
     expect(clockParts("2026-10-30T18:05:09Z", "Africa/Tripoli")).toEqual({ hm: "8:05", ss: "09", period: "م" });
     expect(clockParts("2026-10-30T22:30:00Z", "Africa/Tripoli")).toEqual({ hm: "12:30", ss: "00", period: "ص" });
+  });
+
+  it("a wheel rests on the nearest row and never leaves the list", () => {
+    expect(wheelIndex(0, 44, 12)).toBe(0);
+    expect(wheelIndex(60, 44, 12)).toBe(1);
+    expect(wheelIndex(66, 44, 12)).toBe(2);
+    expect(wheelIndex(-30, 44, 12)).toBe(0);
+    expect(wheelIndex(9999, 44, 12)).toBe(11);
   });
 });

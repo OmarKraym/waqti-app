@@ -1,12 +1,95 @@
-import { useState } from "react";
-import { from12, to12, type Period } from "../lib/time12";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { format12, from12, to12, wheelIndex, type Period } from "../lib/time12";
+import { Modal } from "./ui";
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const ROW = 44; // keep in step with --wheel-row in styles.css
+const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const PERIODS: Period[] = ["ص", "م"];
+
+/** One column of the picker: scroll it (or tap a row, or use the arrow keys) and the row in the middle band is the choice. */
+function Wheel({ label, items, index, onIndex }: {
+  label: string;
+  items: string[];
+  index: number;
+  onIndex: (i: number) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const last = useRef(index);
+  useLayoutEffect(() => {
+    if (box.current) box.current.scrollTop = index * ROW; // first paint: already resting on the current value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const go = (i: number) => {
+    const n = Math.max(0, Math.min(items.length - 1, i));
+    box.current?.scrollTo({ top: n * ROW, behavior: "smooth" });
+  };
+  return (
+    <div
+      className="wheel" role="listbox" aria-label={label} tabIndex={0} ref={box}
+      aria-activedescendant={`${label}-${index}`}
+      onScroll={(e) => {
+        const i = wheelIndex(e.currentTarget.scrollTop, ROW, items.length);
+        if (i !== last.current) { last.current = i; onIndex(i); }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); go(index + 1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); go(index - 1); }
+      }}
+    >
+      {items.map((t, i) => (
+        <div key={t} id={`${label}-${i}`} role="option" aria-selected={i === index} className={`wheel-row${i === index ? " on" : ""}`} onClick={() => go(i)}>
+          {t}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Picker({ title, value, step, onDone, onClose }: {
+  title: string;
+  value: string;
+  step: 1 | 5;
+  onDone: (hhmm: string) => void;
+  onClose: () => void;
+}) {
+  const start = /^\d{2}:\d{2}$/.test(value) ? to12(Number(value.slice(0, 2)), Number(value.slice(3))) : { h: 9, mm: "00", period: "ص" as Period };
+  const minutes: string[] = [];
+  for (let m = 0; m < 60; m += step) minutes.push(String(m).padStart(2, "0"));
+  if (!minutes.includes(start.mm)) minutes.push(start.mm), minutes.sort(); // a value set elsewhere (e.g. the time of a punch)
+
+  const [h, setH] = useState(HOURS.indexOf(String(start.h)));
+  const [m, setM] = useState(minutes.indexOf(start.mm));
+  const [p, setP] = useState(PERIODS.indexOf(start.period));
+
+  // Esc / tap outside are handled by Modal. Enter confirms.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); done(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  const done = () => onDone(from12(Number(HOURS[h]), minutes[m], PERIODS[p]));
+
+  return (
+    <Modal title={title} onClose={onClose} sheet>
+      <div className="wheels" dir="ltr">
+        <div className="wheel-band" aria-hidden="true" />
+        <Wheel label={`${title}: الساعة`} items={HOURS} index={h} onIndex={setH} />
+        <span className="wheel-colon" aria-hidden="true">:</span>
+        <Wheel label={`${title}: الدقائق`} items={minutes} index={m} onIndex={setM} />
+        <Wheel label={`${title}: صباحاً أو مساءً`} items={PERIODS} index={p} onIndex={setP} />
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn primary block" onClick={done}>تم</button>
+        <button type="button" className="btn block" onClick={onClose}>إلغاء</button>
+      </div>
+    </Modal>
+  );
+}
 
 /**
- * A time of day in 12-hour form (hour, minutes, ص / م). The value is 24-hour "HH:MM" like a native time input
- * ("" = not chosen yet), so the rest of the app does not change. The phone's own time picker follows the phone's
- * settings and cannot be told to show ص / م, which is why the app has its own.
+ * A time of day: one box that shows the time ("8:05 ص"); tapping it opens wheels for hour, minutes and ص / م.
+ * The value is 24-hour "HH:MM" like a native time input ("" = not chosen yet), so the rest of the app does not change.
+ * The phone's own time picker follows the phone's settings and cannot be told to show ص / م, which is why the app has its own.
  */
 export function TimeField({ label, value, onChange, step = 5, disabled }: {
   label: string;
@@ -16,44 +99,19 @@ export function TimeField({ label, value, onChange, step = 5, disabled }: {
   step?: 1 | 5;
   disabled?: boolean;
 }) {
-  // What to use for the other two parts while no hour is chosen yet.
-  const [fallback, setFallback] = useState<{ mm: string; period: Period }>({ mm: "00", period: "ص" });
-  const parsed = /^\d{2}:\d{2}$/.test(value) ? to12(Number(value.slice(0, 2)), Number(value.slice(3))) : null;
-  const hour = parsed ? String(parsed.h) : "";
-  const mm = parsed ? parsed.mm : fallback.mm;
-  const period = parsed ? parsed.period : fallback.period;
-
-  const minutes: string[] = [];
-  for (let m = 0; m < 60; m += step) minutes.push(String(m).padStart(2, "0"));
-  if (!minutes.includes(mm)) minutes.push(mm), minutes.sort(); // a value set elsewhere (e.g. the time of a punch)
-
+  const [open, setOpen] = useState(false);
+  const shown = /^\d{2}:\d{2}$/.test(value) ? format12(Number(value.slice(0, 2)), Number(value.slice(3))) : "";
   return (
-    <div className="field time-field" role="group" aria-label={label}>
-      <span aria-hidden="true">{label}</span>
-      <div className="time-row" dir="ltr">
-        <select aria-label={`${label}: الساعة`} value={hour} disabled={disabled}
-                onChange={(e) => onChange(e.target.value === "" ? "" : from12(Number(e.target.value), mm, period))}>
-          <option value="">--</option>
-          {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
-        </select>
-        <span className="time-colon" aria-hidden="true">:</span>
-        <select aria-label={`${label}: الدقائق`} value={mm} disabled={disabled}
-                onChange={(e) => {
-                  if (!parsed) return setFallback((f) => ({ ...f, mm: e.target.value }));
-                  onChange(from12(parsed.h, e.target.value, period));
-                }}>
-          {minutes.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select aria-label={`${label}: صباحاً أو مساءً`} value={period} disabled={disabled}
-                onChange={(e) => {
-                  const p = e.target.value as Period;
-                  if (!parsed) return setFallback((f) => ({ ...f, period: p }));
-                  onChange(from12(parsed.h, mm, p));
-                }}>
-          <option value="ص">ص</option>
-          <option value="م">م</option>
-        </select>
-      </div>
+    <div className="field time-field">
+      <span id={`tf-${label}`}>{label}</span>
+      <button type="button" className={`time-btn${shown ? "" : " unset"}`} aria-labelledby={`tf-${label}`} aria-haspopup="dialog"
+              disabled={disabled} onClick={() => setOpen(true)}>
+        <span dir="ltr">{shown || "اختر الوقت"}</span>
+      </button>
+      {open && (
+        <Picker title={label} value={value} step={step} onClose={() => setOpen(false)}
+                onDone={(v) => { setOpen(false); onChange(v); }} />
+      )}
     </div>
   );
 }

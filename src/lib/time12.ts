@@ -35,3 +35,8 @@ export function clockParts(iso: string, timeZone: string): { hm: string; ss: str
   const t = to12(h, m);
   return { hm: `${t.h}:${t.mm}`, ss: String(s).padStart(2, "0"), period: t.period };
 }
+
+/** Which row a scrolled wheel is resting on: the nearest row to the scroll position, kept inside the list. */
+export function wheelIndex(scrollTop: number, rowHeight: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, Math.round(scrollTop / rowHeight)));
+}

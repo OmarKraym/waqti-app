@@ -464,18 +464,48 @@ button { font: inherit; }
 .logo-btn:active { transform: scale(.94); }
 .logo-btn .brand-mark { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--line); }
 
-/* Time of day: hour : minute  AM/PM (three selects, left to right like a clock) */
+/* Time of day: one box; tapping it opens a bottom sheet with three wheels (hour : minutes  ص/م) */
 .stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
 .time-field { gap: var(--s2); }
-.time-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--s2); }
-.time-colon { font-size: var(--fs-title); font-weight: 600; color: var(--text-2); }
-.field .time-row select {
-  padding-inline: var(--s3) 30px;
-  text-align: start;
-  font-variant-numeric: tabular-nums;
-  background-position: right 8px center;
-  background-size: 16px;
+.time-btn {
+  width: 100%; min-height: var(--h-control); padding: 0 var(--s4);
+  display: flex; align-items: center; justify-content: flex-start;
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: var(--fs-body); font-variant-numeric: tabular-nums; text-align: start; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
 }
+.time-btn.unset { color: var(--text-2); }
+.time-btn:focus-visible { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--ink-tint); }
+.time-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.wheels {
+  --wheel-row: 44px;
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--s2);
+  padding-inline: var(--s2);
+}
+.wheel-band {
+  position: absolute; inset-inline: 0; top: calc(50% - var(--wheel-row) / 2); height: var(--wheel-row);
+  background: var(--ink-tint); border-radius: var(--r-sm); pointer-events: none;
+}
+.wheel {
+  position: relative; height: calc(var(--wheel-row) * 5);
+  overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain;
+  padding-block: calc(var(--wheel-row) * 2);
+  scrollbar-width: none; border-radius: var(--r-sm);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+}
+.wheel::-webkit-scrollbar { display: none; }
+.wheel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.wheel-row {
+  height: var(--wheel-row); display: grid; place-items: center;
+  scroll-snap-align: center;
+  font-size: var(--fs-title); font-variant-numeric: tabular-nums; color: var(--text-2); cursor: pointer;
+}
+.wheel-row.on { color: var(--ink-fg); font-weight: 700; }
+.wheel-colon { font-size: var(--fs-title); font-weight: 600; color: var(--text-2); position: relative; }
 
 /* Confirmation dialog */
 .modal-backdrop {
@@ -495,9 +525,17 @@ button { font: inherit; }
 .modal-title { font-family: var(--font-display); font-size: var(--fs-headline); font-weight: 700; color: var(--text); }
 .modal-text { color: var(--text-2); line-height: 1.7; font-size: var(--fs-body); }
 .modal-actions { display: grid; gap: var(--s2); margin-top: var(--s2); }
+.modal-backdrop.sheet { place-items: end center; padding: 0; }
+.modal-backdrop.sheet .modal {
+  width: min(100%, 480px);
+  border-end-start-radius: 0; border-end-end-radius: 0;
+  padding-bottom: calc(var(--s6) + env(safe-area-inset-bottom));
+  animation: sheet-up .22s ease-out;
+}
+@keyframes sheet-up { from { opacity: 0; transform: translateY(40px); } }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
-@media (prefers-reduced-motion: reduce) { .modal-backdrop, .modal { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .modal-backdrop, .modal, .modal-backdrop.sheet .modal { animation: none; } }
 
 /* Profile */
 .profile-head { display: grid; justify-items: center; gap: var(--s2); padding-top: var(--s4); text-align: center; }
