@@ -12,7 +12,7 @@ import {
 } from "../lib/attendance";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { readLocation } from "../lib/location";
+import { gpsPrompt, readLocation } from "../lib/location";
 import {
   anchorFromCache,
   anchorFromServer,
@@ -87,6 +87,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   // Fingerprint (phase 8b): register this phone first / the check before a punch.
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
+  const [gpsNote, setGpsNote] = useState<string | null>(null);
   const [bioNote, setBioNote] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
 
@@ -248,7 +249,18 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     busy.current = true;
     setSyncNote(null);
     setBioNote(null);
-    // Fingerprint first (phase 8b). A cancelled prompt records nothing.
+    setGpsNote(null);
+    // GPS first: if the phone cannot give a position, ask the employee to switch it on before anything else
+    // (no fingerprint, no server call). The reading is reused below for the punch.
+    setBioBusy(true); // the button shows it is working while the phone looks for a position
+    const earlyReading = await readLocation(view.location_policy).finally(() => setBioBusy(false));
+    const prompt = gpsPrompt(earlyReading);
+    if (prompt) {
+      setGpsNote(prompt);
+      busy.current = false;
+      return;
+    }
+    // Fingerprint next (phase 8b). A cancelled prompt records nothing.
     const requestId = newRequestId();
     let biometric: "ticket" | "unsupported" = "ticket";
     try {
@@ -276,7 +288,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     const tapPerf = performance.now();
     const pending: Pending = { request_id: requestId, action: view.next_action, reading: null, biometric };
     dispatch({ type: "TAP", request_id: pending.request_id, action: pending.action });
-    const reading = await readLocation(view.location_policy);
+    const reading = earlyReading;
     dispatch({ type: "LOCATED", reading });
     const full = { ...pending, reading };
 
@@ -454,6 +466,9 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
 
         {state.phase === "ready" && state.notice && (
           <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
+        )}
+        {gpsNote && (
+          <Banner kind="error" className="gps-note" onClose={() => setGpsNote(null)}>{gpsNote}</Banner>
         )}
         {bioNote && (
           <Banner kind={bioNote.kind} className="bio-note" onClose={() => setBioNote(null)}>{bioNote.text}</Banner>

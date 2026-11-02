@@ -13,7 +13,6 @@ import {
   formatDay,
   formatPeriod,
   formatTimes,
-  localTime,
   permissionLeft,
   permissionTimesFilled,
   progressLine,
@@ -405,6 +404,8 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
     setDraft((d) => {
       const next = { ...d, ...patch };
       if (patch.start_date && next.end_date < patch.start_date) next.end_date = patch.start_date;
+      // "Other" request: the employee is not asked for a date; it is today (whatever was picked on the leave form before).
+      if (next.type === "other") { next.start_date = overview.today; next.end_date = overview.today; }
       return next;
     });
   };
@@ -506,7 +507,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
             )}
           </>
           )
-        ) : (
+        ) : draft.type === "leave" ? (
           <div className="two">
             <label className="field">
               <span>من</span>
@@ -519,7 +520,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
                      onChange={(e) => set({ end_date: e.target.value })} />
             </label>
           </div>
-        )}
+        ) : null}
 
         <label className="field">
           <span>{draft.type === "other" ? "ما الذي تطلبه؟" : "السبب (اختياري)"}</span>
@@ -528,8 +529,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
         </label>
       </div>
 
-      <PreviewLine draft={draft} preview={current} problem={problem} ptype={ptype} timeZone={tz}
-                   waiting={built.ok && online && current === null && problem === null} />
+      {problem && <ProblemLine problem={problem} draft={draft} ptype={ptype} />}
 
       {sendError && (
         <Banner kind="error">{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</Banner>
@@ -555,35 +555,9 @@ function permissionErrorText(code: AppErrorCode, p: PermissionUsage | null): str
   return ERROR_TEXT[code];
 }
 
-function PreviewLine({ draft, preview, problem, waiting, ptype, timeZone }: {
-  draft: Draft; preview: RequestPreview | null; problem: AppErrorCode | null; waiting: boolean;
-  ptype: PermissionUsage | null; timeZone: string;
-}) {
-  if (problem) {
-    const text = problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
-      : draft.type === "permission" ? permissionErrorText(problem, ptype) : ERROR_TEXT[problem];
-    return <p className="preview bad" role="alert">{text}</p>;
-  }
-  if (waiting) return <p className="preview muted" aria-live="polite">جارٍ التحقق…</p>;
-  if (!preview) return null;
-  if (draft.type === "leave" && preview.days !== null) {
-    const after = remainingAfter(preview.balance, preview.days);
-    return (
-      <p className="preview ok" aria-live="polite">
-        {formatDays(preview.days)} عمل{after !== null && <> · يبقى من رصيدك <strong>{formatDays(after)}</strong></>}
-      </p>
-    );
-  }
-  if (draft.type === "permission" && preview.minutes !== null && preview.permission) {
-    const u = preview.permission;
-    const left = u.max_per_month === null ? null : u.max_per_month - u.used - u.pending - 1;
-    return (
-      <p className="preview ok" aria-live="polite">
-        <span>{localTime(preview.start_at, timeZone)} – {localTime(preview.end_at, timeZone)}</span>
-        {" · "}{formatMinutes(preview.minutes)}
-        {left !== null && <> · يبقى لك من هذا الإذن هذا الشهر <strong>{left > 0 ? formatTimes(left) : "لا شيء"}</strong></>}
-      </p>
-    );
-  }
-  return <p className="preview ok" aria-live="polite">الطلب جاهز للإرسال.</p>;
+/** The only line under the form: why the request cannot be sent yet. Nothing is shown while all is well. */
+function ProblemLine({ problem, draft, ptype }: { problem: AppErrorCode; draft: Draft; ptype: PermissionUsage | null }) {
+  const text = problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
+    : draft.type === "permission" ? permissionErrorText(problem, ptype) : ERROR_TEXT[problem];
+  return <p className="preview bad" role="alert">{text}</p>;
 }

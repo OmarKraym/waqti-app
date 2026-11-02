@@ -30,3 +30,21 @@ export function readLocation(policy: LocationPolicy, geo: Geolocation | undefine
     );
   });
 }
+
+/**
+ * What to tell the employee when the phone gave no position. null = a position was read (or none is wanted).
+ * The punch is NOT sent in that case, so no fingerprint and no server call is wasted.
+ */
+export function gpsPrompt(reading: LocationReading): string | null {
+  switch (reading.kind) {
+    case "denied":
+      return "الموقع ممنوع لهذا التطبيق. اسمح له بالوصول إلى الموقع من إعدادات الهاتف أو المتصفح، وشغّل GPS، ثم اضغط مرة أخرى.";
+    case "timeout":
+      return "لم نصل إلى موقعك. تأكد أن GPS مشغّل وانتقل إلى مكان مفتوح، ثم اضغط مرة أخرى.";
+    case "unavailable":
+    case "unsupported":
+      return "شغّل GPS (خدمة الموقع) في هاتفك، ثم اضغط مرة أخرى.";
+    default:
+      return null;
+  }
+}
