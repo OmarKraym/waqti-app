@@ -53,3 +53,26 @@ export async function keepStorage(): Promise<boolean> {
     return false;
   }
 }
+
+const EMAIL_KEY = "waqti-last-email";
+
+/** The email used last on this phone, to pre-fill the sign-in form. Not a secret. Null when nothing valid is saved. */
+export function readLastEmail(store: Store | null = defaultStore()): string | null {
+  try {
+    const v = store?.getItem(EMAIL_KEY);
+    return v && isEmail(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastEmail(email: string, store: Store | null = defaultStore()): void {
+  try {
+    const v = email.trim().toLowerCase();
+    if (isEmail(v)) store?.setItem(EMAIL_KEY, v);
+  } catch {
+    /* blocked storage: the form is just not pre-filled next time */
+  }
+}
+
+const isEmail = (v: string) => v.length <= 254 && /^[^\s@]+@[^\s@]+$/.test(v);

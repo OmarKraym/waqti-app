@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readNotificationPrefs, saveNotificationPrefs } from "./localSettings";
+import { readLastEmail, readNotificationPrefs, saveLastEmail, saveNotificationPrefs } from "./localSettings";
 
 function memory(initial: Record<string, string> = {}) {
   const m = new Map(Object.entries(initial));
@@ -32,5 +32,28 @@ describe("reminder choices kept on the phone", () => {
     expect(readNotificationPrefs("u1", bad)).toBeNull();
     expect(() => saveNotificationPrefs("u1", prefs, null)).not.toThrow();
     expect(readNotificationPrefs("u1", null)).toBeNull();
+  });
+});
+
+describe("last email kept on the phone (to pre-fill the sign-in form)", () => {
+  it("is trimmed and lower-cased", () => {
+    const s = memory();
+    saveLastEmail("  Ahmed@Example.COM ", s);
+    expect(readLastEmail(s)).toBe("ahmed@example.com");
+  });
+  it("nothing saved, or an odd value, gives null", () => {
+    expect(readLastEmail(memory())).toBeNull();
+    expect(readLastEmail(memory({ "waqti-last-email": "x" }))).toBeNull();
+    expect(readLastEmail(memory({ "waqti-last-email": "a@" + "b".repeat(300) }))).toBeNull();
+  });
+  it("saving an invalid email changes nothing", () => {
+    const s = memory({ "waqti-last-email": "ok@example.com" });
+    saveLastEmail("not an email", s);
+    expect(readLastEmail(s)).toBe("ok@example.com");
+  });
+  it("blocked storage never throws", () => {
+    const blocked = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+    expect(() => saveLastEmail("a@b.co", blocked)).not.toThrow();
+    expect(readLastEmail(blocked)).toBeNull();
   });
 });
