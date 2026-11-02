@@ -166,6 +166,8 @@ export interface RequestsOverview {
   inbox_count: number;
   timezone: string;
   today: string; // YYYY-MM-DD in the company time zone
+  /** Earliest day a leave may start (company rule). Missing = the server does not say (older database). */
+  leave_earliest?: string;
 }
 
 export type NewRequest =

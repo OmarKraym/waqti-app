@@ -7,7 +7,9 @@ import {
   STATUS_LABEL,
   addDays,
   draftToRequest,
+  clampLeaveDates,
   emptyDraft,
+  leaveEarliest,
   formatDays,
   formatMinutes,
   formatDay,
@@ -369,7 +371,8 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
 }) {
   const tz = overview.timezone;
   const ptypes = overview.permission_types;
-  const [draft, setDraft] = useState<Draft>(() => initialDraft ?? { ...emptyDraft(overview.today, ptypes[0]), type: initialType });
+  const earliest = leaveEarliest(overview);
+  const [draft, setDraft] = useState<Draft>(() => clampLeaveDates(initialDraft ?? { ...emptyDraft(overview.today, ptypes[0]), type: initialType }, earliest));
   const ptype = ptypes.find((p) => p.id === draft.permission_type_id) ?? null;
   const [preview, setPreview] = useState<{ sig: string; result: RequestPreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ sig: string; code: AppErrorCode } | null>(null);
@@ -406,7 +409,8 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
       if (patch.start_date && next.end_date < patch.start_date) next.end_date = patch.start_date;
       // "Other" request: the employee is not asked for a date; it is today (whatever was picked on the leave form before).
       if (next.type === "other") { next.start_date = overview.today; next.end_date = overview.today; }
-      return next;
+      // Switching to a leave starts from an allowed day; typing a date is never moved under the finger (the message tells why).
+      return patch.type ? clampLeaveDates(next, earliest) : next;
     });
   };
 
@@ -415,6 +419,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
     ? (draft.type === "permission" && !permissionTimesFilled(draft)) || (draft.type === "other" && built.error === "reason_required")
       ? null // not filled in yet: no red text
       : built.error
+    : draft.type === "leave" && draft.start_date < earliest ? "leave_date_not_allowed"
     : previewError && previewError.sig === sig ? previewError.code : null;
   const canSend = built.ok && current !== null && problem === null && !sending && online;
 
@@ -511,7 +516,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
           <div className="two">
             <label className="field">
               <span>من</span>
-              <input type="date" value={draft.start_date} min={addDays(overview.today, -30)} max={addDays(overview.today, 365)}
+              <input type="date" value={draft.start_date} min={earliest} max={addDays(overview.today, 365)}
                      onChange={(e) => set({ start_date: e.target.value })} />
             </label>
             <label className="field">
@@ -529,7 +534,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
         </label>
       </div>
 
-      {problem && <ProblemLine problem={problem} draft={draft} ptype={ptype} />}
+      {problem && <ProblemLine problem={problem} draft={draft} ptype={ptype} earliest={earliest} />}
 
       {sendError && (
         <Banner kind="error">{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</Banner>
@@ -556,8 +561,9 @@ function permissionErrorText(code: AppErrorCode, p: PermissionUsage | null): str
 }
 
 /** The only line under the form: why the request cannot be sent yet. Nothing is shown while all is well. */
-function ProblemLine({ problem, draft, ptype }: { problem: AppErrorCode; draft: Draft; ptype: PermissionUsage | null }) {
-  const text = problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
+function ProblemLine({ problem, draft, ptype, earliest }: { problem: AppErrorCode; draft: Draft; ptype: PermissionUsage | null; earliest: string }) {
+  const text = problem === "leave_date_not_allowed" ? `لا يمكن طلب إجازة تبدأ قبل ${formatDay(earliest)} حسب قواعد الشركة.`
+    : problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
     : draft.type === "permission" ? permissionErrorText(problem, ptype) : ERROR_TEXT[problem];
   return <p className="preview bad" role="alert">{text}</p>;
 }

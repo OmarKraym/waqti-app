@@ -226,6 +226,17 @@ export function permissionTimesFilled(d: Draft): boolean {
   return d.from !== "" && d.to !== "";
 }
 
+/** The earliest day a leave may start. Without the company rule (older database) the server accepts up to 30 days back. */
+export function leaveEarliest(o: { today: string; leave_earliest?: string }): string {
+  return o.leave_earliest ?? addDays(o.today, -30);
+}
+
+/** A draft whose leave dates are not before the earliest allowed day (the end moves with the start). */
+export function clampLeaveDates(d: Draft, earliest: string): Draft {
+  if (d.type !== "leave" || d.start_date >= earliest) return d;
+  return { ...d, start_date: earliest, end_date: d.end_date < earliest ? earliest : d.end_date };
+}
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^\d{2}:\d{2}$/;
 

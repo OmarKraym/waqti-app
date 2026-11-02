@@ -256,8 +256,13 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
       });
     },
 
-    getRequestsOverview() {
-      return rpc<RequestsOverview>("employee_requests_overview");
+    async getRequestsOverview() {
+      // The leave rule comes from a newer database function; without it the screen keeps the old limits.
+      const [overview, win] = await Promise.all([
+        rpc<RequestsOverview>("employee_requests_overview"),
+        rpc<{ earliest: string }>("employee_leave_window").catch(() => null),
+      ]);
+      return win?.earliest ? { ...overview, leave_earliest: win.earliest } : overview;
     },
 
     previewRequest(request) {

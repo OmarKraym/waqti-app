@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampLeaveDates,
+  leaveEarliest,
   addDays,
   draftToRequest,
   emptyDraft,
@@ -201,3 +203,23 @@ export const sample: RequestItem = {
   reason: null, decision_note: null, decided_at: null, created_at: "", current_step: 1,
   employee: { full_name: "", employee_number: null, department: null, job_title: null }, steps: [],
 };
+
+describe("when a leave may start", () => {
+  const today = "2026-11-02";
+  it("the company rule decides; without it the old 30 days back apply", () => {
+    expect(leaveEarliest({ today, leave_earliest: "2026-11-02" })).toBe("2026-11-02");
+    expect(leaveEarliest({ today, leave_earliest: "2026-11-04" })).toBe("2026-11-04");
+    expect(leaveEarliest({ today })).toBe("2026-10-03");
+  });
+  it("a start before the earliest day moves to it, and the end never ends before the start", () => {
+    const d = { ...emptyDraft(today), start_date: "2026-11-01", end_date: "2026-11-01" };
+    expect(clampLeaveDates(d, "2026-11-02")).toMatchObject({ start_date: "2026-11-02", end_date: "2026-11-02" });
+    expect(clampLeaveDates({ ...d, end_date: "2026-11-09" }, "2026-11-04")).toMatchObject({ start_date: "2026-11-04", end_date: "2026-11-09" });
+  });
+  it("a valid start, or a request that is not a leave, is left alone", () => {
+    const ok = { ...emptyDraft(today), start_date: "2026-11-05", end_date: "2026-11-06" };
+    expect(clampLeaveDates(ok, "2026-11-02")).toBe(ok);
+    const perm = { ...emptyDraft(today), type: "permission" as const, start_date: "2026-10-01" };
+    expect(clampLeaveDates(perm, "2026-11-02")).toBe(perm);
+  });
+});

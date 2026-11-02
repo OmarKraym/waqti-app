@@ -15,7 +15,7 @@
 import type { SessionUser, WaqtiApi } from "./api";
 import { newRequestId } from "./attendance";
 import { AppError } from "./errors";
-import { localDate } from "./requests";
+import { addDays, localDate } from "./requests";
 import type {
   OvertimeInput,
   OvertimeItem,
@@ -38,6 +38,9 @@ import type {
 } from "./types";
 
 const q = new URLSearchParams(globalThis.location?.search ?? "");
+// ?leaveNotice=2 = a leave must start 2 days from today; ?leaveBack=3 = it may start 3 days back (default: from today)
+const leaveNotice = Number(q.get("leaveNotice") ?? 0);
+const leaveBack = Number(q.get("leaveBack") ?? 0);
 const policy = (q.get("policy") ?? "geofence") as AttendanceState["location_policy"];
 const outside = (q.get("outside") ?? "flag") as AttendanceState["outside_action"];
 const pos = q.get("pos") ?? "inside";
@@ -422,6 +425,7 @@ function createMockRequests() {
         inbox_count: inbox.length,
         timezone: TZ,
         today: t,
+        leave_earliest: addDays(t, leaveNotice - leaveBack),
       };
     },
     async previewRequest(r: NewRequest) {
@@ -432,6 +436,7 @@ function createMockRequests() {
       await online(600);
       const known = byKey.get(key);
       if (known) return mine.find((x) => x.id === known)!;
+      if (r.type === "leave" && r.start_date < addDays(today(), leaveNotice - leaveBack)) throw new AppError("leave_date_not_allowed");
       const p = check(r);
       const pt = r.type === "permission" ? PERMISSION_TYPES.find((x) => x.id === r.permission_type_id) : undefined;
       const item = make({ type: r.type, leave_type: r.type === "leave" ? r.leave_type : null, start_at: p.start_at, end_at: p.end_at,

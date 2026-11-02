@@ -36,6 +36,7 @@ export type AppErrorCode =
   | "login_disabled"
   // requests
   | "invalid_dates"
+  | "leave_date_not_allowed"
   | "invalid_duration"
   | "crosses_year"
   | "no_working_days"
@@ -88,7 +89,7 @@ const KNOWN = new Set<AppErrorCode>([
   "overtime_not_found", "overtime_started", "overtime_closed",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
   "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
-  "too_many_attempts", "password_required", "biometric_off", "login_disabled",
+  "too_many_attempts", "password_required", "biometric_off", "login_disabled", "leave_date_not_allowed",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -116,6 +117,7 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   offline_too_old: "وصل هذا التسجيل بعد أكثر من 72 ساعة، فلم يُقبل. تواصل مع الإدارة.",
   invalid_dates: "التاريخ غير صالح. تأكد أن النهاية بعد البداية، وأن التاريخ ليس بعيدًا جدًا في الماضي أو المستقبل.",
   invalid_duration: "مدة الإذن يجب أن تكون بين ربع ساعة و8 ساعات.",
+  leave_date_not_allowed: "لا يمكن طلب إجازة تبدأ في هذا التاريخ حسب قواعد الشركة. اختر تاريخًا أبعد.",
   crosses_year: "الإجازة لا يمكن أن تمتد إلى السنة التالية. قسّمها إلى طلبين.",
   no_working_days: "لا توجد أيام عمل في هذه الفترة حسب جدول دوامك.",
   insufficient_balance: "رصيدك لا يكفي لهذه الإجازة (الطلبات المعلّقة محسوبة).",
