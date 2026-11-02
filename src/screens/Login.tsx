@@ -2,11 +2,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
+import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
 import { Icon } from "./ui";
 
 export function Login() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => readLastEmail() ?? "");
+  const [prefilled] = useState(() => readLastEmail() !== null);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function Login() {
     setError(null);
     try {
       await api.signIn(email.trim(), password);
+      saveLastEmail(email);
       // App switches screens on the auth change.
     } catch (err) {
       const code = err instanceof AppError ? err.code : "unknown";
@@ -90,6 +93,11 @@ export function Login() {
             dir="ltr"
             inputMode="email"
             autoComplete="username"
+            name="email"
+            id="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -102,6 +110,8 @@ export function Login() {
             type="password"
             dir="ltr"
             autoComplete="current-password"
+            name="password"
+            autoFocus={prefilled}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
+import { saveLastEmail } from "../lib/localSettings";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 
 // Same rules as the change-password Edge Function (the server checks them again).
@@ -14,6 +15,7 @@ function localCheck(p: string, confirm: string): string | null {
 export function ChangePassword({ email }: { email: string | null }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  useEffect(() => { if (email) saveLastEmail(email); }, [email]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,16 +56,18 @@ export function ChangePassword({ email }: { email: string | null }) {
         </p>
         </div>
 
-        {/* Hidden username helps password managers save the new password for the right account. */}
-        <input type="email" autoComplete="username" value={email ?? ""} readOnly hidden />
+        {/* Username for password managers (Android and iPhone) to save the new password for the right account.
+            Visually hidden, NOT display:none / hidden: managers may ignore those. */}
+        <input className="sr-only" type="email" name="email" id="email" autoComplete="username" value={email ?? ""}
+               readOnly tabIndex={-1} aria-hidden="true" />
 
         <label className="field">
           <span>كلمة المرور الجديدة</span>
-          <input type="password" dir="ltr" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input type="password" dir="ltr" autoComplete="new-password" name="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <label className="field">
           <span>تأكيد كلمة المرور</span>
-          <input type="password" dir="ltr" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <input type="password" dir="ltr" autoComplete="new-password" name="confirm-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
         <p className="hint-line">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
 
