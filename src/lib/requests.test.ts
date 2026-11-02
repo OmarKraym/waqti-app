@@ -13,6 +13,7 @@ import {
   permissionLeft,
   permissionTimesFilled,
   progressLine,
+  visibleNote,
   remainingAfter,
   requestSignature,
   requestTitle,
@@ -125,6 +126,16 @@ describe("approval progress", () => {
     expect(progressLine({ status: "cancelled", steps: [] })).toBe("ألغيته");
     expect(progressLine({ status: "cancelled", steps: [], decision_note: null })).toBe("ألغيته");
     expect(progressLine({ status: "cancelled", steps: [], decision_note: "أُلغيت إجازتك بسبب تسجيل حضورك يوم 2026-11-02" })).toBe("ألغته الإدارة");
+  });
+
+  it("the note under a request: a reason when rejected or cancelled, and on an approved leave the note about the days the administration cancelled", () => {
+    const cut = "أُلغيت أيام من إجازتك (2026-11-04) بسبب تسجيل حضورك يوم 2026-11-04";
+    expect(visibleNote({ status: "approved", decision_note: cut })).toBe(cut);
+    expect(visibleNote({ status: "rejected", decision_note: "ضغط عمل" })).toBe("ضغط عمل");
+    expect(visibleNote({ status: "cancelled", decision_note: cut })).toBe(cut);
+    expect(visibleNote({ status: "approved", decision_note: null })).toBeNull();
+    expect(visibleNote({ status: "approved", decision_note: "   " })).toBeNull();
+    expect(visibleNote({ status: "pending", decision_note: "x" })).toBeNull();
   });
 });
 

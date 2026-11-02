@@ -15,7 +15,7 @@
 - Nothing is applied to production or deployed without an explicit "نعم" from Omar for this part.
 - The migration starts from the LATEST `record_punch` (phase 13 file) and the phase 14 `admin_review_queue`; it must keep `missing_checkin` handling and every other field.
 - Balance is derived from approved requests (`private.leave_balance`): cancelling = `requests.status = 'cancelled'`, nothing else to restore.
-- All-or-nothing: the whole leave is cancelled (no partial shortening).
+- (Changed by Omar after the first delivery: the all-or-nothing rule is gone.) The admin cancels the days he picks, or all of them.
 - Arabic RTL only. No service_role. Admin panel stays outside the repo (zip).
 
 ## Rulings (the spec is silent or ambiguous)
@@ -23,6 +23,11 @@
 - R1 Flag only the FIRST punch of a local day on a leave (the check-out of the same day is not a second item). `keep_leave` applies to that day only; the next leave day flags again.
 - R2 A day inside the leave range that is not a working day of the employee is not a conflict (`private.leave_days(emp, d, d) = 0`).
 - R3 The approval rows of the cancelled request stay as history (who approved); only `waiting`/`pending` rows become `cancelled` (matters for the Part 5 handling step). The spec said "approval rows become cancelled": that would erase the record of who approved.
+- R7 (Omar: "cancel specific days or all") `admin_resolve_leave_conflict(event, decision, note, days date[])`; `days` null = every working day. A request is one continuous range, so cancelling days in the middle SPLITS it: the first remaining part keeps the original request (shrunk), each later part is a new approved request (same type, same decision, finished approvals copied). Balance and every consumer of leave ranges (overlap check, reminders, overtime, attendance state) stay correct without being touched. The split parts are inserted already approved, so `enforce_leave_window` now skips non-pending inserts.
+- R8 Only working days of the employee can be cancelled; a run made only of days off between cancelled days is not a part (no request with 0 days). Cancelling every working day = cancelling the request.
+- R9 The admin may cancel days other than the day of the punch; the punch is resolved either way. In the panel the punch day is pre-selected.
+- R10 Other flagged events of the leave follow the part that covers their day (their `leave_request_id` is repointed); a day no longer on leave is cleared when the leave was its only reason.
+- R11 `decision_note` of the original/parts is replaced by the cancellation text (the previous note is kept in the audit log); the app shows the note on approved requests too.
 - R4 On cancel, other events of the same leave that are still flagged only because of the leave are cleared automatically (otherwise the admin sees a conflict with a leave that no longer exists).
 - R5 The old `admin_resolve_review(..., 'accept')` on a leave row still works (it leaves the leave as it is, like keep, without marking it).
 - R6 "In-app notice" = the existing push notification (`request_decided`) + the reason in `requests.decision_note`, shown on the cancelled request card.

@@ -352,6 +352,10 @@ function createMockRequests() {
     mine.push(make({ type: "leave", leave_type: "annual", status: "cancelled", start_at: startOfDay(plusDays(t, -1)), end_at: startOfDay(plusDays(t, 2)), days: 3,
                      current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -10)),
                      decision_note: "أُلغيت إجازتك بسبب تسجيل حضورك يوم " + t }));
+    // a leave the administration cut in the middle: the later part is its own approved request carrying the note
+    mine.push(make({ type: "leave", leave_type: "annual", status: "approved", start_at: startOfDay(plusDays(t, 3)), end_at: startOfDay(plusDays(t, 6)), days: 3,
+                     current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -12)),
+                     decision_note: "أُلغيت أيام من إجازتك (" + plusDays(t, 2) + ") بسبب تسجيل حضورك يوم " + t }));
   }
   if (q.get("requests") === "1") {
     const t = today();

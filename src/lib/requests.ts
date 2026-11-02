@@ -196,6 +196,13 @@ export function progressLine(r: Pick<RequestItem, "status" | "steps"> & { decisi
   return r.decision_note ? "ألغته الإدارة" : "ألغيته";
 }
 
+/** The note shown under a request: the reason when rejected, the administration's note when it cancelled (all or some days of a leave).
+ *  A pending request shows none. */
+export function visibleNote(r: Pick<RequestItem, "status" | "decision_note">): string | null {
+  if (r.status === "pending") return null;
+  return r.decision_note?.trim() ? r.decision_note : null;
+}
+
 // ---------------------------------------------------------------- the form
 
 export interface Draft {

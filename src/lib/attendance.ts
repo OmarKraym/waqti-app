@@ -157,7 +157,7 @@ export function successNotice(r: PunchResult, timeZone: string): Notice {
     // The punch is never refused. The first one of the day is sent to the manager, who may cancel the leave: say so plainly.
     const head = r.missing_checkin ? `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل.` : `تم تسجيل ${what} الساعة ${at}.`;
     const tail = r.needs_review
-      ? "لديك إجازة معتمدة اليوم؛ سيراجع المدير هذه الحركة وقد تُلغى إجازتك."
+      ? "لديك إجازة معتمدة اليوم؛ سيراجع المدير هذه الحركة وقد تُلغى إجازتك أو بعض أيامها."
       : "لديك إجازة معتمدة اليوم، والمدير يراجع حركتك.";
     return { kind: "warning", text: `${head} ${tail}` };
   }

@@ -118,6 +118,7 @@ describe("attendance state machine", () => {
     expect(n.text).toContain("تم تسجيل الحضور");
     expect(n.text).toContain("إجازة معتمدة");
     expect(n.text).toContain("قد تُلغى إجازتك");
+    expect(n.text).toContain("أو بعض أيامها");
   });
 
   it("a later punch the same leave day only reminds him; it is not a second warning about cancelling", () => {

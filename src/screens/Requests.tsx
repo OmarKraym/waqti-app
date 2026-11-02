@@ -18,6 +18,7 @@ import {
   permissionLeft,
   permissionTimesFilled,
   progressLine,
+  visibleNote,
   remainingAfter,
   requestSignature,
   requestTitle,
@@ -354,7 +355,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
         </ol>
       )}
       <p className="req-progress">{progressLine(item)}</p>
-      {(item.status === "rejected" || item.status === "cancelled") && item.decision_note && <p className="req-reason">«{keepDatesTogether(item.decision_note)}»</p>}
+      {visibleNote(item) && <p className="req-reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
       {item.status === "pending" && (
         <button className="btn ghost small cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
       )}
