@@ -46,6 +46,9 @@
   /* RED = alert, error, check-out */
   --out: #dc2626;
   --out-hover: #b91c1c;
+  /* The check-out button only: a calmer red than --out, so the big button does not glare */
+  --punch-out: #b83a3a;
+  --punch-out-hover: #a33232;
   --out-text: #b91c1c;
   --out-tint: #fee2e2;
   --out-tint-2: #fecaca;
@@ -72,7 +75,7 @@
   --shadow-hero: 0 18px 32px -22px rgba(9, 90, 128, .75);
   --shadow-pop: 0 6px 14px -8px rgba(9, 90, 128, .7);
   --shadow-in: 0 14px 28px -12px rgba(19, 136, 63, .65);
-  --shadow-out: 0 14px 28px -12px rgba(220, 38, 38, .6);
+  --shadow-out: 0 14px 28px -12px rgba(184, 58, 58, .38);
   --shadow-fab: 0 14px 28px -12px rgba(9, 90, 128, .7);
   --shadow-modal: 0 24px 60px -20px rgba(8, 22, 36, .6);
 
@@ -144,6 +147,8 @@
 
   --out: #dc2626;
   --out-hover: #ef4444;
+  --punch-out: #a83a3a;
+  --punch-out-hover: #b94444;
   --out-text: #fca5a5;
   --out-tint: #3a1519;
   --out-tint-2: #4d1d22;
@@ -211,6 +216,8 @@
 
     --out: #dc2626;
     --out-hover: #ef4444;
+    --punch-out: #a83a3a;
+    --punch-out-hover: #b94444;
     --out-text: #fca5a5;
     --out-tint: #3a1519;
     --out-tint-2: #4d1d22;
@@ -629,9 +636,9 @@ button { font: inherit; }
   padding-inline: var(--s2) var(--s6);
 }
 .punch.in { background: var(--in); box-shadow: var(--shadow-in); }
-.punch.out { background: var(--out); box-shadow: var(--shadow-out); }
+.punch.out { background: var(--punch-out); box-shadow: var(--shadow-out); }
 .punch.in:hover:not(:disabled) { background: var(--in-hover); }
-.punch.out:hover:not(:disabled) { background: var(--out-hover); }
+.punch.out:hover:not(:disabled) { background: var(--punch-out-hover); }
 .punch:disabled { background: var(--disabled-fill); box-shadow: none; cursor: not-allowed; }
 .punch-icon, .fab-icon {
   flex: none; display: grid; place-items: center;
