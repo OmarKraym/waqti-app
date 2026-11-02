@@ -91,3 +91,30 @@ pill behind the active icon.
 4. **Action cards look different.** Things waiting for you (approve, overtime you were given) have a
    brand border; your own history has a hairline.
 5. **Two colours mean in and out**, nothing else is coloured unless it is a state.
+
+---
+
+# v3 — bright palette, dark mode, one switch (2026-11-02)
+
+Omar did not like the dark teal / maroon look and asked for brighter, calmer colours that *mean* something.
+This section **replaces the colour table above** (v2). Type, space, shape, frame and principles are unchanged.
+The tokens live in `src/styles.css` (light in `:root`, dark in `:root[data-theme="dark"]` and the matching
+`prefers-color-scheme` block). Same token names in both themes.
+
+| Meaning | Tokens | Light | Where |
+|---|---|---|---|
+| **Green** = success, check-in | `--in` `--in-hover` `--in-text` `--in-tint` | `#13883f` | check-in button and stamp, "approved" chip, approve button, switch (on), success messages |
+| **Red** = alert, error, check-out | `--out` `--danger` `--*-text` `--*-tint` | `#dc2626` | check-out button and stamp, errors, reject, sign-out |
+| **Amber** = waiting, needs attention | `--sun` `--warn` `--warn-tint` | `#f59e0b` / `#92400e` | "pending" chip, badges, review notes, section markers |
+| **Blue** = brand, neutral actions | `--ink` `--ink-fg` `--ink-tint` `--hero-bg` | `#0b6fa4` | buttons, active tab, hero cards, focus ring |
+
+- Surfaces: page `#f2f7fb`, card `#ffffff`. Text `#12263a`, secondary `#546a7e` (5.2:1).
+- **Never use a fill token for text.** Text uses `--in-text`, `--out-text`, `--danger-text`, `--ink-fg`, `--warn`
+  (they get lighter in dark mode). Fills (`--in`, `--out`, `--ink`) always carry white text.
+- Request kinds are not states, so they are not green/red: leave = blue, permission = amber, other = grey.
+- **Dark mode.** Light / Dark / Auto, chosen on the profile screen, saved on the phone (`waqti-theme`). Auto follows the
+  phone. `public/theme-init.js` applies the choice before the first paint (an external file: the CSP forbids inline scripts).
+- **Guard:** `src/lib/palette.test.ts` checks that both dark blocks are identical, that every colour token exists in both
+  themes, and the contrast of the main pairs in both themes (4.5:1 for text, 3:1 for switches and borders).
+- **One switch.** `Switch` in `screens/ui.tsx` (role="switch") inside a `.switch-row`. The old notification switches
+  were a second `.switch` rule that clashed with the profile switch; the test above fails if a second one appears.

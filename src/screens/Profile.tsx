@@ -4,8 +4,9 @@ import { api } from "../lib/client";
 import { loginToggle, setLoginEnabled, supportsPlatformAuthenticator } from "../lib/biometric";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { browserStorage, loadQueue, pendingOf } from "../lib/offlineQueue";
+import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, type ThemeChoice } from "../lib/theme";
 import type { AttendanceState } from "../lib/types";
-import { AppBar, Icon, Modal } from "./ui";
+import { AppBar, Icon, Modal, Switch } from "./ui";
 
 /** What the profile shows; it comes from the today screen's data (nothing extra is fetched). */
 export type ProfileInfo = Pick<AttendanceState, "employee" | "company" | "biometric">;
@@ -28,6 +29,33 @@ export function ConfirmSignOut({ user, onCancel }: { user: SessionUser; onCancel
         <button className="btn danger" onClick={() => void api.signOut()}><Icon name="signOut" />تأكيد الخروج</button>
       </div>
     </Modal>
+  );
+}
+
+/** Light / dark / auto. Saved on this phone only. */
+function ThemeCard() {
+  const [choice, setChoice] = useState<ThemeChoice>(currentChoice);
+  const pick = (next: ThemeChoice) => {
+    setChoice(next);
+    chooseTheme(next);
+  };
+  return (
+    <section className="group theme-card" aria-labelledby="theme-title">
+      <div className="theme-head">
+        <span className="theme-ico" aria-hidden="true"><Icon name="contrast" /></span>
+        <div className="bio-text">
+          <span className="bio-title" id="theme-title">المظهر</span>
+          <span className="theme-note">{THEME_HINT[choice]}</span>
+        </div>
+      </div>
+      <div className="seg" role="radiogroup" aria-labelledby="theme-title">
+        {THEME_CHOICES.map((c) => (
+          <button key={c} type="button" role="radio" aria-checked={choice === c} className={`seg-btn${choice === c ? " on" : ""}`} onClick={() => pick(c)}>
+            {THEME_LABEL[c]}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -72,14 +100,10 @@ function BiometricLogin({ biometric, online, onChanged }: {
           <span className="bio-detail">{detail}</span>
         </div>
         {toggle.kind === "switch" && (
-          <button
-            type="button" role="switch" className={`switch${toggle.on ? " on" : ""}`}
-            aria-checked={toggle.on} aria-labelledby="bio-title"
+          <Switch
+            checked={toggle.on} labelledBy="bio-title" onChange={flip}
             disabled={busy || !online || (!toggle.on && !toggle.canTurnOn)}
-            onClick={() => flip(!toggle.on)}
-          >
-            <span className="switch-knob" aria-hidden="true" />
-          </button>
+          />
         )}
       </div>
       {toggle.kind === "switch" && !toggle.on && !toggle.canTurnOn && (
@@ -114,6 +138,8 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged 
             {user.email && (<div><dt>البريد</dt><dd dir="ltr">{user.email}</dd></div>)}
           </dl>
         </section>
+
+        <ThemeCard />
 
         <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
 

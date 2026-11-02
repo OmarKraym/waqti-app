@@ -10,7 +10,11 @@ import "@fontsource/readex-pro/arabic-700.css";
 import "@fontsource/readex-pro/latin-500.css";
 import "@fontsource/readex-pro/latin-700.css";
 import "./styles.css";
+import { initTheme } from "./lib/theme";
 import { App } from "./App";
+
+// Saved light/dark choice (public/theme-init.js already applied it before the first paint; this also follows the phone in "auto").
+initTheme();
 
 // App shell only (see vite.config.ts). Updates install themselves on the next open.
 registerSW({ immediate: true });

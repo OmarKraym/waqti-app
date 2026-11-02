@@ -3,7 +3,7 @@ import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { keysOf, currentSubscription, readPushState, subscribe, unsubscribe, type PushState } from "../lib/push";
 import type { NotificationSettings } from "../lib/types";
-import { AppBar, Banner, Icon } from "./ui";
+import { AppBar, Banner, Icon, Switch } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string } | null;
 
@@ -11,6 +11,29 @@ const BEFORE_IN = [0, 5, 10, 15, 30, 60];
 const BEFORE_OUT = [0, 5, 10, 15, 30];
 
 const minutesLabel = (m: number, at: string) => (m === 0 ? at : m === 60 ? "قبلها بساعة" : `قبلها بـ ${m} دقيقة`);
+
+/** One reminder: green icon for check-in, red for check-out; title and switch on one line; the time picker below. */
+function ReminderRow({ kind, id, title, selectLabel, on, value, options, atLabel, online, onToggle, onValue }: {
+  kind: "in" | "out"; id: string; title: string; selectLabel: string;
+  on: boolean; value: number; options: number[]; atLabel: string; online: boolean;
+  onToggle: (next: boolean) => void; onValue: (minutes: number) => void;
+}) {
+  return (
+    <div className={`rem-row${on ? "" : " off"}`}>
+      <div className="switch-row">
+        <span className={`rem-ico ${kind}`} aria-hidden="true"><Icon name={kind === "in" ? "arrive" : "leave"} /></span>
+        <span className="switch-label" id={`${id}-label`}>{title}</span>
+        <Switch checked={on} labelledBy={`${id}-label`} disabled={!online} onChange={onToggle} />
+      </div>
+      <label className="rem-when">
+        <span>متى يصلك التذكير؟</span>
+        <select aria-label={selectLabel} value={value} disabled={!online || !on} onChange={(e) => onValue(Number(e.target.value))}>
+          {options.map((m) => <option key={m} value={m}>{minutesLabel(m, atLabel)}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
 
 export function Notifications({ online }: { online: boolean }) {
   const [push, setPush] = useState<PushState | null>(null);
@@ -156,28 +179,18 @@ export function Notifications({ online }: { online: boolean }) {
           )
         ) : (
           <>
-            <div className="rem-row">
-              <label className="switch">
-                <span>تذكير بتسجيل الحضور</span>
-                <input type="checkbox" checked={settings.remind_check_in} disabled={!online}
-                       onChange={(e) => save({ ...settings, remind_check_in: e.target.checked })} />
-              </label>
-              <select aria-label="وقت تذكير الحضور" value={settings.check_in_before} disabled={!online || !settings.remind_check_in}
-                      onChange={(e) => save({ ...settings, check_in_before: Number(e.target.value) })}>
-                {BEFORE_IN.map((m) => <option key={m} value={m}>{minutesLabel(m, "عند بداية الدوام")}</option>)}
-              </select>
-            </div>
-            <div className="rem-row">
-              <label className="switch">
-                <span>تذكير بتسجيل الانصراف</span>
-                <input type="checkbox" checked={settings.remind_check_out} disabled={!online}
-                       onChange={(e) => save({ ...settings, remind_check_out: e.target.checked })} />
-              </label>
-              <select aria-label="وقت تذكير الانصراف" value={settings.check_out_before} disabled={!online || !settings.remind_check_out}
-                      onChange={(e) => save({ ...settings, check_out_before: Number(e.target.value) })}>
-                {BEFORE_OUT.map((m) => <option key={m} value={m}>{minutesLabel(m, "عند نهاية الدوام")}</option>)}
-              </select>
-            </div>
+            <ReminderRow
+              kind="in" id="rem-in" title="تذكير بتسجيل الحضور" selectLabel="وقت تذكير الحضور"
+              on={settings.remind_check_in} value={settings.check_in_before} options={BEFORE_IN} atLabel="عند بداية الدوام" online={online}
+              onToggle={(v) => save({ ...settings, remind_check_in: v })}
+              onValue={(m) => save({ ...settings, check_in_before: m })}
+            />
+            <ReminderRow
+              kind="out" id="rem-out" title="تذكير بتسجيل الانصراف" selectLabel="وقت تذكير الانصراف"
+              on={settings.remind_check_out} value={settings.check_out_before} options={BEFORE_OUT} atLabel="عند نهاية الدوام" online={online}
+              onToggle={(v) => save({ ...settings, remind_check_out: v })}
+              onValue={(m) => save({ ...settings, check_out_before: m })}
+            />
             {(settings.remind_check_in || settings.remind_check_out) && settings.devices === 0 && (
               <p className="hint-line alert-text">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
             )}

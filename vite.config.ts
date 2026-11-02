@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => ({
     contentSecurityPolicy(loadEnv(mode, process.cwd(), "VITE_").VITE_SUPABASE_URL),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png", "push-sw.js"],
+      includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png", "push-sw.js", "theme-init.js"],
       manifest: {
         name: "وقتي - الحضور والانصراف",
         short_name: "وقتي",
@@ -53,8 +53,8 @@ export default defineConfig(({ mode }) => ({
         scope: base,
         display: "standalone",
         orientation: "portrait",
-        background_color: "#F0F3F4",
-        theme_color: "#F0F3F4",
+        background_color: "#f2f7fb",
+        theme_color: "#f2f7fb",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
