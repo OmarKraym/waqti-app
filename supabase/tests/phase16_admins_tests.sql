@@ -48,7 +48,7 @@ end $$;
 do $tests$
 declare
   v_admin uuid; a uuid; b uuid; x uuid; v_comp uuid; v_comp2 uuid; e2 uuid; e2b uuid;
-  r jsonb; s text; n int; n2 int; t timestamptz; rec record; v_req_before int;
+  r jsonb; s text; n int; n2 int; t timestamptz; rec record; v_req_before int; ap public.request_approvals;
 begin
   select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
   select company_id into v_comp from public.employees where id = v_admin;
@@ -113,6 +113,10 @@ begin
                      'the list is ordered by start time, so the first admin comes first');
   s := pg_temp.try_as(a, 'select count(*) from public.admin_list_employees()');
   perform pg_temp.ok(s = '', 'the new admin can use the admin functions at once', s);
+  -- Existing rule, pinned here because it is a side effect of this feature: an admin is the "hr" approver of the company.
+  ap := jsonb_populate_record(null::public.request_approvals, jsonb_build_object('approver_kind', 'hr', 'company_id', v_comp));
+  perform pg_temp.ok(private.can_decide(ap, a) and private.can_decide(ap, v_admin), 'a new admin can decide the "hr" steps, like the first one');
+  perform pg_temp.ok(not private.can_decide(ap, b), '... an ordinary employee cannot');
   s := pg_temp.try_as(v_admin, format('select public.admin_add_admin(%L)', a));
   perform pg_temp.ok(s = 'already_admin', 'adding an admin again is refused', s);
   s := pg_temp.try_as(v_admin, format('select public.admin_add_admin(%L)', v_admin));
@@ -151,6 +155,7 @@ begin
                      'one audit row admin.removed');
   s := pg_temp.try_as(a, 'select count(*) from public.admin_list_employees()');
   perform pg_temp.ok(s = 'forbidden', 'the removed admin is stopped at once', s);
+  perform pg_temp.ok(not private.can_decide(ap, a), '... and can no longer decide "hr" steps');
   select count(*) into n from pg_temp.admins_as(v_admin);
   perform pg_temp.ok(n = 1, 'the list is back to one admin', n::text);
 

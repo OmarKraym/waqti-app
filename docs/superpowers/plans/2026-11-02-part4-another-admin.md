@@ -18,6 +18,7 @@
 - R6. A promoted person with a temporary password is not blocked here: `require_company_admin()` already stops every admin call until the password is changed. The panel pane shows a hint.
 - R7. Fingerprint login is already refused for admins (`password_required`, phase 9/10); a promoted employee who had a registered device simply signs in with the password. Told to Omar; not changed.
 - R8. `reset-employee-password` already refuses to reset an admin (`cannot_reset_manager`). Kept: a promoted admin's password can only be changed by themselves.
+- R10. **Side effect, existing rule:** `private.can_decide` and the "approval needed" notice treat every active company admin as the `hr` approver. So a new admin can decide `hr` steps and is notified of them at once; a removed admin loses both. Not changed (the spec calls the admin the system admin and `hr` steps are the admin's); pinned by two tests and written in the pane text and README so Omar is not surprised.
 - R9. No notice to the promoted/removed person (admin notices stay inside the panel; spec says nothing more).
 
 ## Contracts
