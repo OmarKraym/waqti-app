@@ -38,6 +38,25 @@ begin
   values (p_comp, v, 1, 'hr', case p_status when 'approved' then 'approved' when 'rejected' then 'rejected' else 'pending' end);
   return v;
 end $$;
+-- A flagged punch on a leave day, written directly (noon of that local day).
+create function pg_temp.flag_ev(p_emp uuid, p_tz text, p_day date, p_leave uuid) returns uuid language plpgsql as $$
+declare v uuid;
+begin
+  insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, needs_review, location_status, metadata)
+  values (p_emp, 'check_in', (p_day::timestamp + time '12:00') at time zone p_tz, true, true, 'not_requested',
+          jsonb_build_object('suspect', jsonb_build_array('on_approved_leave'), 'leave_request_id', p_leave))
+  returning id into v;
+  return v;
+end $$;
+create function pg_temp.cancel_days(p_admin uuid, p_ev uuid, p_note text, p_days date[]) returns jsonb language plpgsql as $$
+declare r jsonb;
+begin
+  perform pg_temp.as_user(p_admin);
+  set local role authenticated;
+  r := public.admin_resolve_leave_conflict(p_ev, 'cancel_leave', p_note, p_days);
+  reset role;
+  return r;
+end $$;
 create function pg_temp.clean(p_emp uuid) returns void language plpgsql as $$
 begin
   delete from public.attendance_sessions where employee_id = p_emp;
@@ -50,6 +69,7 @@ declare
   v_admin uuid; a uuid; b uuid; v_comp uuid; v_tz text; r jsonb; s text; today date;
   l1 uuid; l2 uuid; l3 uuid; v_ev uuid; v_ev2 uuid; v_ev3 uuid; v_ev4 uuid; n int; v_used numeric;
   v_comp2 uuid; e2 uuid; v_evx uuid; ev record;
+  l4 uuid; l5 uuid; c1 uuid; c2 uuid; v_s1 uuid; v_s2 uuid; v_s3 uuid; v_s4 uuid; qr record; w int;
 begin
   select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
   select company_id into v_comp from public.employees where id = v_admin;
@@ -240,6 +260,160 @@ begin
                      and (select not needs_review from public.attendance_events where id = v_ev4)
                      and (select count(*) from public.notifications where user_id = a and kind = 'request_decided' and title like 'أُلغيت إجازتك%') = 1,
                      'cancelling an already cancelled leave only clears the flag (no second notice)', r::text);
+
+
+  -- ---------------------------------------------------------------- cancel only some days (flexible)
+  -- (1) the day he came + a duplicate in the list: the first days go, the leave shrinks, no new request
+  perform pg_temp.clean(a);
+  delete from public.notifications where user_id = a;
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 3);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  v_s2 := pg_temp.flag_ev(a, v_tz, today + 1, l4);
+  r := pg_temp.cancel_days(v_admin, v_s1, 'عاد للعمل', array[today, today]);
+  perform pg_temp.ok((select status = 'approved' and start_at = (today + 1)::timestamp at time zone v_tz
+                             and end_at = (today + 4)::timestamp at time zone v_tz and days = 3
+                      from public.requests where id = l4) and (select count(*) from public.requests where employee_id = a) = 1,
+                     'cancelling the first day shrinks the leave in place (no new request)',
+                     (select concat_ws(' ', status, start_at, end_at, days) from public.requests where id = l4));
+  perform pg_temp.ok((private.leave_balance(a, 'annual', extract(year from today)::int) ->> 'used')::numeric = 3,
+                     'the balance counts only the days that remain (4 -> 3)');
+  perform pg_temp.ok(private.approved_leave_on(a, today) is null and private.approved_leave_on(a, today + 1) = l4,
+                     'the cancelled day is no longer covered, the next one still is');
+  perform pg_temp.ok((select not needs_review and metadata -> 'review' ->> 'action' = 'cancel_leave' and metadata -> 'review' -> 'days' ? today::text
+                      from public.attendance_events where id = v_s1), 'the punch is cleared and the review records which days were cancelled');
+  perform pg_temp.ok((select needs_review and metadata ->> 'leave_request_id' = l4::text from public.attendance_events where id = v_s2),
+                     'another flagged day that is still on leave stays flagged');
+  perform pg_temp.ok((select count(*) from public.notifications where user_id = a and kind = 'request_decided' and title = 'أُلغيت بعض أيام إجازتك'
+                             and body like '%' || today::text || '%') = 1, 'the employee is told which days were cancelled (one notice)');
+  perform pg_temp.ok((select decision_note like '%' || today::text || '%' and decision_note like '%عاد للعمل%' from public.requests where id = l4),
+                     'the note on the request says which days and why', (select decision_note from public.requests where id = l4));
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'leave.cancelled_for_attendance' and target_id = l4::text
+                             and jsonb_array_length(details -> 'cancelled_days') = 1 and not (details ->> 'whole')::boolean) = 1,
+                     'the audit log lists the cancelled days and says it was not the whole leave');
+  perform pg_temp.ok(not (r ->> 'leave_cancelled')::boolean and not (r ->> 'leave_already_cancelled')::boolean and (r ->> 'days_cancelled')::int = 1,
+                     'the answer: not the whole leave, 1 day cancelled', r::text);
+
+  -- (2) a day in the middle: the leave splits in two, flagged days follow their leave, the cancelled day is cleared
+  perform pg_temp.clean(a);
+  delete from public.notifications where user_id = a;
+  l5 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 5);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l5);
+  v_s2 := pg_temp.flag_ev(a, v_tz, today + 1, l5);
+  v_s3 := pg_temp.flag_ev(a, v_tz, today + 2, l5);
+  v_s4 := pg_temp.flag_ev(a, v_tz, today + 4, l5);
+  r := pg_temp.cancel_days(v_admin, v_s1, 'يوم الورشة', array[today + 2]);
+  select id into c1 from public.requests where employee_id = a and id <> l5;
+  perform pg_temp.ok((select count(*) from public.requests where employee_id = a) = 2 and c1 is not null, 'one new request is made for the later part');
+  perform pg_temp.ok((select status = 'approved' and start_at = today::timestamp at time zone v_tz and end_at = (today + 2)::timestamp at time zone v_tz and days = 2
+                      from public.requests where id = l5), 'the first part keeps the original request (days 0-1)');
+  perform pg_temp.ok((select status = 'approved' and leave_type = 'annual' and start_at = (today + 3)::timestamp at time zone v_tz
+                             and end_at = (today + 6)::timestamp at time zone v_tz and days = 3 and decided_at is not null and request_key is null
+                             and decided_by is not distinct from (select decided_by from public.requests where id = l5)
+                      from public.requests where id = c1), 'the later part is an approved request of the same type (days 3-5)');
+  perform pg_temp.ok((private.leave_balance(a, 'annual', extract(year from today)::int) ->> 'used')::numeric = 5, 'the balance counts 5 days (6 - the 1 cancelled)');
+  perform pg_temp.ok(private.approved_leave_on(a, today + 1) = l5 and private.approved_leave_on(a, today + 2) is null
+                     and private.approved_leave_on(a, today + 3) = c1 and private.approved_leave_on(a, today + 5) = c1,
+                     'each day is covered by its own part; the cancelled day by none');
+  perform pg_temp.ok((select count(*) from public.request_approvals where request_id = c1 and status = 'approved') = 1,
+                     'the finished approval is copied, so the later part still shows who approved');
+  perform pg_temp.ok((select needs_review and metadata ->> 'leave_request_id' = l5::text from public.attendance_events where id = v_s2)
+                     and (select needs_review and metadata ->> 'leave_request_id' = c1::text from public.attendance_events where id = v_s4),
+                     'flagged days now point to the part that covers them');
+  perform pg_temp.ok((select not needs_review and not (metadata -> 'suspect' ? 'on_approved_leave') from public.attendance_events where id = v_s3),
+                     'the flagged event on the cancelled day is cleared');
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select * into qr from public.admin_review_queue() x where x.event_id = v_s4;
+  reset role;
+  perform pg_temp.ok(qr.leave ->> 'request_id' = c1::text and (qr.leave ->> 'days')::numeric = 3 and jsonb_array_length(qr.leave -> 'working_days') = 3
+                     and qr.leave -> 'working_days' ->> 0 = (today + 3)::text, 'the queue describes the part and lists its working days', qr.leave::text);
+  perform pg_temp.ok(jsonb_array_length(r -> 'segments') = 2 and not (r ->> 'leave_cancelled')::boolean, 'the answer lists both parts', r::text);
+  perform pg_temp.ok((select count(*) from public.notifications where user_id = a and title = 'أُلغيت بعض أيام إجازتك') = 1, 'one notice for the employee');
+
+  -- (2b) cancel inside a part that was already split: it splits again
+  r := pg_temp.cancel_days(v_admin, v_s4, null, array[today + 4]);
+  perform pg_temp.ok((select count(*) from public.requests where employee_id = a and status = 'approved') = 3
+                     and (select days from public.requests where id = c1) = 1
+                     and (private.leave_balance(a, 'annual', extract(year from today)::int) ->> 'used')::numeric = 4,
+                     'a second cancellation splits the later part again (3 requests, 4 days left)');
+  select id into c2 from public.requests where employee_id = a and id not in (l5, c1);
+  perform pg_temp.ok(private.approved_leave_on(a, today + 3) = c1 and private.approved_leave_on(a, today + 4) is null and private.approved_leave_on(a, today + 5) = c2,
+                     'days 3 and 5 are covered by their own parts, day 4 by none');
+
+  -- (3) the last days: the leave is shortened from the end
+  perform pg_temp.clean(a);
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'sick', today, today + 3);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  r := pg_temp.cancel_days(v_admin, v_s1, null, array[today + 2, today + 3]);
+  perform pg_temp.ok((select start_at = today::timestamp at time zone v_tz and end_at = (today + 2)::timestamp at time zone v_tz and days = 2 and status = 'approved'
+                      from public.requests where id = l4) and (select count(*) from public.requests where employee_id = a) = 1,
+                     'cancelling the last days shortens the leave (no new request)');
+
+  -- (4) listing every day = the whole leave
+  perform pg_temp.clean(a);
+  delete from public.notifications where user_id = a;
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 1);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  r := pg_temp.cancel_days(v_admin, v_s1, null, array[today, today + 1]);
+  perform pg_temp.ok((select status = 'cancelled' from public.requests where id = l4) and (r ->> 'leave_cancelled')::boolean
+                     and (select count(*) from public.notifications where user_id = a and title = 'أُلغيت إجازتك') = 1,
+                     'selecting all the days cancels the whole leave (same as before)', r::text);
+
+  -- (5) a part that starts in the past is allowed (the leave-window rule is for new requests only)
+  perform pg_temp.clean(a);
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today - 30, today);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  s := pg_temp.err(format('select pg_temp.cancel_days(%L, %L, null, array[%L::date])', v_admin, v_s1, today - 20));
+  perform pg_temp.ok(s = '' and (select count(*) from public.requests where employee_id = a and start_at = (today - 19)::timestamp at time zone v_tz) = 1,
+                     'splitting a leave whose later part starts in the past is accepted', s);
+
+  -- (6) wrong days are refused and nothing changes (the second day of the leave is a day off)
+  perform pg_temp.clean(a);
+  select extract(dow from today + 1)::int into w;
+  update public.employee_work_schedules set is_workday = false where employee_id = a and weekday = w;
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 3);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  s := pg_temp.err(format('select pg_temp.cancel_days(%L, %L, null, array[%L::date])', v_admin, v_s1, today + 10));
+  perform pg_temp.ok(s = 'invalid_days', 'a day outside the leave is refused', s);
+  s := pg_temp.err(format('select pg_temp.cancel_days(%L, %L, null, array[%L::date])', v_admin, v_s1, today + 1));
+  perform pg_temp.ok(s = 'invalid_days', 'a day off inside the leave cannot be selected', s);
+  s := pg_temp.err(format('select pg_temp.cancel_days(%L, %L, null, %L::date[])', v_admin, v_s1, '{}'));
+  perform pg_temp.ok(s = 'invalid_days', 'an empty list is refused', s);
+  perform pg_temp.ok((select needs_review from public.attendance_events where id = v_s1) and (select days from public.requests where id = l4) = 3
+                     and (select count(*) from public.requests where employee_id = a) = 1, 'after the refusals the event and the leave are untouched');
+
+  -- (7) a run made only of days off between two cancelled days is not a part of its own
+  r := pg_temp.cancel_days(v_admin, v_s1, null, array[today, today + 2]);
+  perform pg_temp.ok((select count(*) from public.requests where employee_id = a) = 1
+                     and (select status = 'approved' and days = 1 and start_at = (today + 3)::timestamp at time zone v_tz
+                                and end_at = (today + 4)::timestamp at time zone v_tz from public.requests where id = l4),
+                     'the day off left between two cancelled days makes no request with 0 days', r::text);
+  -- (7b) only a day off would remain: the whole leave is cancelled
+  perform pg_temp.clean(a);
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 2);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  r := pg_temp.cancel_days(v_admin, v_s1, null, array[today, today + 2]);
+  perform pg_temp.ok((select status = 'cancelled' from public.requests where id = l4) and (r ->> 'leave_cancelled')::boolean
+                     and (select count(*) from public.requests where employee_id = a) = 1,
+                     'cancelling every working day cancels the whole leave even though a day off is left between them', r::text);
+  perform pg_temp.sched_all(a, v_comp);
+
+  -- (8) "keep" ignores the list
+  perform pg_temp.clean(a);
+  l4 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 1);
+  v_s1 := pg_temp.flag_ev(a, v_tz, today, l4);
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  r := public.admin_resolve_leave_conflict(v_s1, 'keep_leave', null, array[today]);
+  reset role;
+  perform pg_temp.ok((select days = 2 and status = 'approved' and start_at = today::timestamp at time zone v_tz from public.requests where id = l4)
+                     and (select not needs_review from public.attendance_events where id = v_s1),
+                     'keep_leave leaves every day of the leave (the list is ignored)');
+
+  -- the text of the dates in a notice: runs of days are joined
+  perform pg_temp.ok(private.dates_text(array['2026-11-03', '2026-11-04', '2026-11-05', '2026-11-08', '2026-11-03']::date[]) = '2026-11-03 إلى 2026-11-05، 2026-11-08'
+                     and private.dates_text(array['2026-11-03']::date[]) = '2026-11-03', 'dates_text joins consecutive days and drops duplicates',
+                     private.dates_text(array['2026-11-03', '2026-11-04', '2026-11-05', '2026-11-08', '2026-11-03']::date[]));
 
   -- ---------------------------------------------------------------- the old "accept" still works on a leave row
   perform pg_temp.clean(a);

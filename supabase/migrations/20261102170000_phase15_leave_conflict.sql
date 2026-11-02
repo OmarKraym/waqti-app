@@ -3,7 +3,9 @@
 --   * private.approved_leave_on(employee, date): the approved leave covering that working day (null if none).
 --   * private.record_punch: phase 13 text + the leave check (first punch of the local day is flagged, all punches are saved).
 --   * public.admin_review_queue: now also returns `leave` (jsonb) for those events.
---   * public.admin_resolve_leave_conflict(event, 'cancel_leave' | 'keep_leave', note).
+--   * public.admin_resolve_leave_conflict(event, 'cancel_leave' | 'keep_leave', note, days): the admin cancels the days he chooses (or all of
+--     them); a leave is only ever a continuous range, so cancelling days in the middle splits it into separate approved requests.
+--   * private.enforce_leave_window: only for new (pending) requests; a part created by a split is already approved.
 -- Rollback: 20261102170000_phase15_leave_conflict_ROLLBACK.sql
 do $guard$
 begin
@@ -56,6 +58,64 @@ as $$
                      where x.v <> 'on_approved_leave')
 $$;
 revoke all on function private.review_only_leave(text, jsonb) from public, anon, authenticated;
+
+-- "2026-11-03 إلى 2026-11-05، 2026-11-08": runs of consecutive days are joined, duplicates dropped (used in notices and notes).
+create or replace function private.dates_text(p_days date[])
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  d date;
+  v_from date;
+  v_prev date;
+  v_parts text[] := '{}';
+begin
+  for d in select distinct x from unnest(p_days) as x where x is not null order by 1 loop
+    if v_from is null then
+      v_from := d;
+    elsif d <> v_prev + 1 then
+      v_parts := v_parts || case when v_prev = v_from then v_from::text else v_from::text || ' إلى ' || v_prev::text end;
+      v_from := d;
+    end if;
+    v_prev := d;
+  end loop;
+  if v_from is not null then
+    v_parts := v_parts || case when v_prev = v_from then v_from::text else v_from::text || ' إلى ' || v_prev::text end;
+  end if;
+  return array_to_string(v_parts, '، ');
+end;
+$$;
+revoke all on function private.dates_text(date[]) from public, anon, authenticated;
+
+-- Phase 11 rule (the earliest date a leave may start) is for a NEW request, which is always inserted pending. A part made when the admin
+-- cancels some days of an approved leave is inserted already approved and may start in the past: it is not a new request.
+create or replace function private.enforce_leave_window()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_tz text;
+  v_company uuid;
+  v_today date;
+begin
+  if new.request_type::text <> 'leave' or new.status::text <> 'pending' then
+    return new;
+  end if;
+  select c.timezone, c.id into v_tz, v_company
+  from public.employees e join public.companies c on c.id = e.company_id
+  where e.id = new.employee_id;
+  v_today := (now() at time zone v_tz)::date;
+  if (new.start_at at time zone v_tz)::date < private.leave_earliest(v_company, v_today) then
+    raise exception 'leave_date_not_allowed' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.enforce_leave_window() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- the punch (phase 13 text + the leave check)
 create or replace function private.record_punch(p_employee_id uuid, p_policy text, p_outside_action text, p_max_accuracy_m numeric,
@@ -291,7 +351,13 @@ begin
          case when ev.metadata ? 'leave_request_id' then
            (select jsonb_build_object('request_id', r.id, 'leave_type', r.leave_type, 'status', r.status, 'days', r.days,
                                       'start_date', (r.start_at at time zone c.timezone)::date,
-                                      'end_date', ((r.end_at - interval '1 second') at time zone c.timezone)::date)
+                                      'end_date', ((r.end_at - interval '1 second') at time zone c.timezone)::date,
+                                      -- the days of the leave the admin can cancel (his working days inside the range)
+                                      'working_days', coalesce((
+                                        select jsonb_agg(g::date order by g)
+                                        from generate_series((r.start_at at time zone c.timezone)::date,
+                                                             ((r.end_at - interval '1 second') at time zone c.timezone)::date, interval '1 day') as g
+                                        where r.status = 'approved' and private.leave_days(r.employee_id, g::date, g::date) > 0), '[]'::jsonb))
             from public.requests r join public.companies c on c.id = r.company_id
             where r.id = (ev.metadata ->> 'leave_request_id')::uuid and r.company_id = v_company)
          end
@@ -306,10 +372,14 @@ revoke all on function public.admin_review_queue(integer) from public, anon;
 grant execute on function public.admin_review_queue(integer) to authenticated;
 
 -- ---------------------------------------------------------------- admin: decide
--- keep_leave: the punch stays recorded, the leave stays approved (this day only).
--- cancel_leave: the WHOLE leave becomes cancelled (no partial shortening): the balance returns by itself, the employee is told, the other
---   days of this leave that were flagged only because of it are cleared. Waiting / pending approval rows are cancelled; finished ones stay.
-create or replace function public.admin_resolve_leave_conflict(p_event_id uuid, p_decision text, p_note text default null)
+-- keep_leave: the punch stays recorded, the leave stays approved (this day only; the list of days is ignored).
+-- cancel_leave: the admin cancels the days he picks (p_days; null = every working day of the leave). Cancelling every day cancels the
+--   request. Otherwise the rest of the leave is rebuilt as continuous parts: the first part keeps the original request, each later part is a
+--   new approved request (same type, same decision and approval history). A leave day off between cancelled days is not a part of its own.
+--   The balance returns by itself (derived from the days of the approved requests), the employee is told, and the other flagged events of
+--   that leave follow the part that covers their day (or are cleared when their day is no longer on leave and nothing else was wrong).
+--   Waiting / pending approval rows of a fully cancelled request are cancelled; finished ones stay.
+create or replace function public.admin_resolve_leave_conflict(p_event_id uuid, p_decision text, p_note text default null, p_days date[] default null)
 returns jsonb
 language plpgsql
 security definer
@@ -325,7 +395,20 @@ declare
   v_review jsonb;
   v_note text := left(nullif(trim(coalesce(p_note, '')), ''), 300);
   v_text text;
-  v_cancelled boolean := false;
+  v_first date;
+  v_last date;
+  v_work date[] := '{}';
+  v_cancel date[] := '{}';
+  v_whole boolean := false;
+  v_done boolean := false;
+  v_start date;
+  v_cnt numeric;
+  v_ids uuid[] := '{}';
+  v_new uuid;
+  v_seg record;
+  v_cov uuid;
+  d date;
+  x record;
 begin
   if p_decision is null or p_decision not in ('cancel_leave', 'keep_leave') then
     raise exception 'invalid_action' using errcode = '22023';
@@ -350,44 +433,112 @@ begin
   end if;
   select c.timezone into v_tz from public.companies c where c.id = v_company;
   v_day := (v_ev.occurred_at at time zone v_tz)::date;
-  v_review := jsonb_build_object('action', p_decision, 'by', v_admin, 'at', now(), 'note', v_note);
 
   if p_decision = 'cancel_leave' and v_req.status = 'approved' then
-    v_text := 'أُلغيت إجازتك بسبب تسجيل حضورك يوم ' || to_char(v_day, 'YYYY-MM-DD') || coalesce(' — ' || v_note, '');
-    update public.request_approvals set status = 'cancelled' where request_id = v_req.id and status in ('waiting', 'pending');
-    update public.requests
-       set status = 'cancelled', decided_by = v_admin, decided_at = now(), decision_note = left(v_text, 500), current_step = null
-     where id = v_req.id;
-    perform private.notify(v_req.employee_id, v_req.company_id, 'request_decided', 'أُلغيت إجازتك',
-      private.request_summary(v_req.id) || E'\n' || v_text, '?tab=requests', 'request-' || v_req.id::text, 86400 * 7);
+    v_first := (v_req.start_at at time zone v_tz)::date;
+    v_last := ((v_req.end_at - interval '1 second') at time zone v_tz)::date;
+    select coalesce(array_agg(g::date order by g), '{}') into v_work
+    from generate_series(v_first, v_last, interval '1 day') as g
+    where private.leave_days(v_req.employee_id, g::date, g::date) > 0;
+    if p_days is null then
+      v_cancel := v_work;
+    else
+      select coalesce(array_agg(distinct y order by y), '{}') into v_cancel from unnest(p_days) as y where y is not null;
+      if cardinality(v_cancel) = 0 or exists (select 1 from unnest(v_cancel) as y where not (y = any (v_work))) then
+        raise exception 'invalid_days' using errcode = '22023';
+      end if;
+    end if;
+    v_whole := v_cancel = v_work;
+    v_done := true;
+
+    if v_whole then
+      v_text := 'أُلغيت إجازتك بسبب تسجيل حضورك يوم ' || to_char(v_day, 'YYYY-MM-DD') || coalesce(' — ' || v_note, '');
+      update public.request_approvals set status = 'cancelled' where request_id = v_req.id and status in ('waiting', 'pending');
+      update public.requests
+         set status = 'cancelled', decided_by = v_admin, decided_at = now(), decision_note = left(v_text, 500), current_step = null, updated_at = now()
+       where id = v_req.id;
+      v_ids := array[v_req.id];
+      perform private.notify(v_req.employee_id, v_req.company_id, 'request_decided', 'أُلغيت إجازتك',
+        private.request_summary(v_req.id) || E'\n' || v_text, '?tab=requests', 'request-' || v_req.id::text, 86400 * 7);
+    else
+      v_text := 'أُلغيت أيام من إجازتك (' || private.dates_text(v_cancel) || ') بسبب تسجيل حضورك يوم ' || to_char(v_day, 'YYYY-MM-DD')
+                || coalesce(' — ' || v_note, '');
+      -- The parts: maximal runs of dates that are not cancelled; a run with no working day (only days off) is not a leave.
+      for d in select g::date from generate_series(v_first, v_last + 1, interval '1 day') as g loop
+        if d <= v_last and not (d = any (v_cancel)) then
+          v_start := coalesce(v_start, d);
+        elsif v_start is not null then
+          v_cnt := private.leave_days(v_req.employee_id, v_start, d - 1);
+          if v_cnt > 0 then
+            if cardinality(v_ids) = 0 then
+              -- the first part keeps the original request
+              update public.requests
+                 set start_at = v_start::timestamp at time zone v_tz, end_at = d::timestamp at time zone v_tz, days = v_cnt,
+                     decision_note = left(v_text, 500), updated_at = now()
+               where id = v_req.id;
+              v_ids := array[v_req.id];
+            else
+              -- a later part: a copy of the request (already approved, so the new-request leave window does not apply)
+              v_new := gen_random_uuid();
+              insert into public.requests
+              select (jsonb_populate_record(null::public.requests, to_jsonb(v_req) || jsonb_build_object(
+                'id', v_new, 'start_at', v_start::timestamp at time zone v_tz, 'end_at', d::timestamp at time zone v_tz, 'days', v_cnt,
+                'request_key', null, 'decision_note', left(v_text, 500), 'updated_at', now()))).*;
+              insert into public.request_approvals
+              select (jsonb_populate_record(null::public.request_approvals, to_jsonb(a) || jsonb_build_object('id', gen_random_uuid(), 'request_id', v_new))).*
+              from public.request_approvals a where a.request_id = v_req.id and a.status in ('approved', 'skipped');
+              v_ids := v_ids || v_new;
+            end if;
+          end if;
+          v_start := null;
+        end if;
+      end loop;
+      perform private.notify(v_req.employee_id, v_req.company_id, 'request_decided', 'أُلغيت بعض أيام إجازتك',
+        v_text, '?tab=requests', 'request-' || v_req.id::text, 86400 * 7);
+    end if;
+
     perform public.audit_write(v_company, 'leave.cancelled_for_attendance', 'request', v_req.id::text,
       jsonb_build_object('employee_id', v_req.employee_id, 'event_id', v_ev.id, 'day', v_day, 'leave_type', v_req.leave_type,
-                         'days', v_req.days, 'note', v_note));
-    v_cancelled := true;
+                         'days', cardinality(v_cancel), 'cancelled_days', to_jsonb(v_cancel), 'whole', v_whole,
+                         'previous_note', v_req.decision_note, 'requests', to_jsonb(v_ids), 'note', v_note));
   end if;
 
+  v_review := jsonb_build_object('action', p_decision, 'by', v_admin, 'at', now(), 'note', v_note)
+              || case when v_done then jsonb_build_object('days', to_jsonb(v_cancel)) else '{}'::jsonb end;
   update public.attendance_events
      set needs_review = false, metadata = metadata || jsonb_build_object('review', v_review)
    where id = v_ev.id;
 
-  -- The other flagged days of the same leave: the reason is gone. Cleared when it was the only reason, otherwise only the leave
-  -- reason is removed.
+  -- The other flagged days of this leave. A day that is still on leave follows the part that covers it; a day that is no longer on leave
+  -- loses the leave reason, and is cleared when that was the only reason.
   if p_decision = 'cancel_leave' then
-    update public.attendance_events x
-       set metadata = jsonb_set(x.metadata, '{suspect}', (x.metadata -> 'suspect') - 'on_approved_leave')
-                      || case when private.review_only_leave(x.location_status, x.metadata)
-                              then jsonb_build_object('review', v_review || jsonb_build_object('auto', true)) else '{}'::jsonb end,
-           needs_review = x.needs_review and not private.review_only_leave(x.location_status, x.metadata)
-     where x.employee_id = v_ev.employee_id and x.id <> v_ev.id and x.needs_review
-       and x.metadata ->> 'leave_request_id' = v_req.id::text and x.metadata -> 'suspect' ? 'on_approved_leave';
+    for x in select e.id, e.location_status, e.metadata, e.occurred_at from public.attendance_events e
+             where e.employee_id = v_ev.employee_id and e.id <> v_ev.id and e.needs_review
+               and e.metadata ->> 'leave_request_id' = v_req.id::text and e.metadata -> 'suspect' ? 'on_approved_leave'
+             for update loop
+      v_cov := private.approved_leave_on(v_ev.employee_id, (x.occurred_at at time zone v_tz)::date);
+      if v_cov is not null then
+        if v_cov <> v_req.id then
+          update public.attendance_events set metadata = jsonb_set(metadata, '{leave_request_id}', to_jsonb(v_cov::text)) where id = x.id;
+        end if;
+      else
+        update public.attendance_events e
+           set metadata = jsonb_set(e.metadata, '{suspect}', (e.metadata -> 'suspect') - 'on_approved_leave')
+                          || case when private.review_only_leave(x.location_status, x.metadata)
+                                  then jsonb_build_object('review', v_review || jsonb_build_object('auto', true)) else '{}'::jsonb end,
+               needs_review = not private.review_only_leave(x.location_status, x.metadata)
+         where e.id = x.id;
+      end if;
+    end loop;
   end if;
 
   perform public.audit_write(v_company, 'attendance.review_' || p_decision, 'attendance_event', v_ev.id::text,
     jsonb_build_object('employee_id', v_ev.employee_id, 'event_type', v_ev.event_type, 'occurred_at', v_ev.occurred_at,
-                       'leave_request_id', v_req.id, 'leave_cancelled', v_cancelled, 'note', v_note));
+                       'leave_request_id', v_req.id, 'leave_cancelled', v_whole, 'days_cancelled', cardinality(v_cancel), 'note', v_note));
   return jsonb_build_object('event_id', v_ev.id, 'decision', p_decision, 'leave_request_id', v_req.id,
-                            'leave_cancelled', v_cancelled, 'leave_already_cancelled', p_decision = 'cancel_leave' and not v_cancelled);
+                            'leave_cancelled', v_whole, 'leave_already_cancelled', p_decision = 'cancel_leave' and not v_done,
+                            'days_cancelled', cardinality(v_cancel), 'cancelled_days', to_jsonb(v_cancel), 'segments', to_jsonb(v_ids));
 end;
 $$;
-revoke all on function public.admin_resolve_leave_conflict(uuid, text, text) from public, anon;
-grant execute on function public.admin_resolve_leave_conflict(uuid, text, text) to authenticated;
+revoke all on function public.admin_resolve_leave_conflict(uuid, text, text, date[]) from public, anon;
+grant execute on function public.admin_resolve_leave_conflict(uuid, text, text, date[]) to authenticated;

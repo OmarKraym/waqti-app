@@ -1,7 +1,34 @@
 -- Rollback of 20261102170000_phase15_leave_conflict.sql: record_punch back to the phase 13 text, the queue back to the phase 14 shape.
 -- Events already flagged 'on_approved_leave' keep that mark in their metadata (the old panel shows them as "للمراجعة"); leaves that were
--- cancelled stay cancelled.
-drop function if exists public.admin_resolve_leave_conflict(uuid, text, text);
+-- cancelled stay cancelled, and parts made by a split stay as separate approved requests.
+drop function if exists public.admin_resolve_leave_conflict(uuid, text, text, date[]);
+drop function if exists private.dates_text(date[]);
+-- the leave-window trigger function back to the phase 11 text (it checks every inserted leave again)
+create or replace function private.enforce_leave_window()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_tz text;
+  v_company uuid;
+  v_today date;
+begin
+  if new.request_type::text <> 'leave' then
+    return new;
+  end if;
+  select c.timezone, c.id into v_tz, v_company
+  from public.employees e join public.companies c on c.id = e.company_id
+  where e.id = new.employee_id;
+  v_today := (now() at time zone v_tz)::date;
+  if (new.start_at at time zone v_tz)::date < private.leave_earliest(v_company, v_today) then
+    raise exception 'leave_date_not_allowed' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.enforce_leave_window() from public, anon, authenticated;
 drop function if exists public.admin_review_queue(integer);
 create or replace function public.admin_review_queue(p_limit integer default 200)
 returns table(event_id uuid, employee_id uuid, employee_number text, full_name text, event_type public.attendance_event_type,
