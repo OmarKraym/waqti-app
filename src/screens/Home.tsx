@@ -297,7 +297,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     // Older punches are still waiting: try to send them first, so the order stays right.
     if (navigator.onLine && pendingOf(queueRef.current).length > 0) await sync();
 
-    if (allowQueue && !override && (!navigator.onLine || pendingOf(queueRef.current).length > 0)) {
+    if (allowQueue && !override && !view.forgot_check_in && (!navigator.onLine || pendingOf(queueRef.current).length > 0)) {
       if (!enqueue(full, tapTime, tapPerf)) dispatch({ type: "PUNCH_FAIL", error: new AppError("network") });
       busy.current = false;
       return;
@@ -354,9 +354,10 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const failed = failedOf(queue);
   const working = state.phase === "locating" || state.phase === "submitting";
   const action = state.phase === "ready" ? data.next_action : state.pending.action;
+  const forgot = !!data.forgot_check_in; // phase 14: the button is already "check out" (no check-in today)
   // Phase 8a: outside the allowed times the button is off (the server refuses anyway). Old cached states have no window.
   const blocked = !!data.punch_window && !data.punch_window.allowed && fromCache === null;
-  const canTap = !working && !bioBusy && !blocked && (online || allowQueue);
+  const canTap = !working && !bioBusy && !blocked && (online || (allowQueue && !data.forgot_check_in));
   const tz = data.company.timezone;
   const nowMs = Date.now() + offsetMs;
   const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
@@ -457,16 +458,18 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
                 ? "جارٍ تحديد الموقع…"
                 : state.phase === "submitting"
                   ? "جارٍ الإرسال للخادم…"
-                  : online
-                    ? null
-                    : "سيُحفظ على الجهاز"}
+                  : !online
+                    ? "سيُحفظ على الجهاز"
+                    : forgot
+                      ? "لم يُسجَّل حضورك — تظهر الحركة للمراجعة"
+                      : null}
             </span>
             </span>
           </button>
         )}
 
 
-        {state.phase === "ready" && online && fromCache === null && data.can_check_out_without_in && waiting.length === 0 && !setupNeeded && (
+        {state.phase === "ready" && online && fromCache === null && data.can_check_out_without_in && !forgot && waiting.length === 0 && !setupNeeded && (
           <button className="btn ghost forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
             نسيت تسجيل الحضور؟ سجّل الانصراف فقط
           </button>

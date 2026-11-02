@@ -49,6 +49,8 @@ const flaky = q.get("net") === "flaky";
 const bio = q.get("bio") === "1" || q.get("bio") === "new";
 /** ?bio=new: required, but this phone is not registered yet (the registration screen can be tried). */
 const bioNew = q.get("bio") === "new";
+/** ?forgot=1: no check-in yet, the check-in window is over and the check-out window is open (the button is "check out"). */
+const forgotMode = q.get("forgot") === "1";
 /** ?statefail=1: for 1.5 s after the new password is saved, reading the attendance state fails (the gate must stay closed). */
 let stateFailUntil = 0;
 const MAX_OFFLINE_MS = 72 * 3_600_000;
@@ -115,11 +117,13 @@ export function createMockApi(): WaqtiApi {
   const state = (): AttendanceState => {
     const last = events[0];
     const open = last?.action === "check_in";
+    const forgot = forgotMode && !open && last?.action !== "check_out";
     return {
       employee: { full_name: "أحمد سالم", employee_number: "1024" },
       company: { name: "شركة تجريبية", timezone: "Africa/Tripoli" },
-      next_action: open ? "check_out" : "check_in",
+      next_action: open || forgot ? "check_out" : "check_in",
       can_check_out_without_in: !open && last?.action !== "check_out",
+      forgot_check_in: forgot,
       open_session: open ? { started_at: last.server_time } : null,
       location_policy: policy,
       outside_action: outside,
@@ -128,7 +132,9 @@ export function createMockApi(): WaqtiApi {
       server_time: new Date(serverNow()).toISOString(),
       time_token: tokenAt(serverNow()),
       // The fake server has no punch windows and no fingerprint (both are off by default on the real one too).
-      punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
+      punch_window: forgotMode && !forgot && !open
+        ? { allowed: false, opens_at: null, closes_at: null, reason: "too_late" }
+        : { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
       biometric: bio ? { policy: "required", has_device: hasDevice, login_enabled: loginEnabled } : { policy: "off", has_device: false },
     };
   };
@@ -141,7 +147,7 @@ export function createMockApi(): WaqtiApi {
 
     const s = state();
     // Phase 13: a check-out is also accepted when there is no check-in (he forgot it), once, if the last punch is not a check-out.
-    const orphan = input.expected_action === "check_out" && s.next_action === "check_in" && !!s.can_check_out_without_in;
+    const orphan = input.expected_action === "check_out" && !s.open_session && !!s.can_check_out_without_in;
     if (input.expected_action !== s.next_action && !orphan) throw new AppError("state_changed");
 
     const r = input.reading;

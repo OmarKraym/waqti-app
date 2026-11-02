@@ -35,6 +35,8 @@ export interface AttendanceState {
   next_action: AttendanceAction;
   /** Phase 13: no check-in today but a check-out may still be recorded (he forgot to check in). */
   can_check_out_without_in?: boolean;
+  /** Phase 14: the check-in window is over and only the check-out window is open: the main button is "check out". */
+  forgot_check_in?: boolean;
   open_session: { started_at: string } | null;
   location_policy: LocationPolicy;
   outside_action: OutsideAction;

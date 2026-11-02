@@ -137,6 +137,7 @@ function applyResult(data: AttendanceState, r: PunchResult): AttendanceState {
     ...data,
     next_action: r.action === "check_in" ? "check_out" : "check_in",
     can_check_out_without_in: false,
+    forgot_check_in: false,
     open_session: r.action === "check_in" ? { started_at: r.server_time } : null,
     recent_events: [event, ...data.recent_events.filter((e) => e.id !== r.event_id)].slice(0, 10),
     server_time: r.server_time,

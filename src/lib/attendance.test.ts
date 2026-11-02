@@ -65,6 +65,18 @@ describe("attendance state machine", () => {
     expect(s.notice?.text).toContain("9:05 ص");
   });
 
+  it("after a check-out saved without a check-in the button goes back to check-in and nothing is offered again", () => {
+    const forgot = { ...ready, data: { ...base, next_action: "check_out" as const, forgot_check_in: true, can_check_out_without_in: true } };
+    const submitting = reduce(reduce(forgot, { type: "TAP", request_id: "r1", action: "check_out" }), { type: "LOCATED", reading: { kind: "not_requested" } });
+    const s = reduce(submitting, { type: "PUNCH_OK", result: { ...ok, action: "check_out", needs_review: true, missing_checkin: true } });
+    expect(s.phase).toBe("ready");
+    if (s.phase !== "ready") return;
+    expect(s.data.next_action).toBe("check_in");
+    expect(s.data.forgot_check_in).toBe(false);
+    expect(s.data.can_check_out_without_in).toBe(false);
+    expect(s.data.open_session).toBeNull();
+  });
+
   it("network error = unconfirmed (not failed, not saved), and retry keeps the same request id", () => {
     const s1 = reduce(toSubmitting(), { type: "PUNCH_FAIL", error: new AppError("network") });
     expect(s1.phase).toBe("unconfirmed");
