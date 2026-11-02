@@ -33,6 +33,8 @@ export interface AttendanceState {
   employee: { full_name: string; employee_number: string | null };
   company: { name: string; timezone: string };
   next_action: AttendanceAction;
+  /** Phase 13: no check-in today but a check-out may still be recorded (he forgot to check in). */
+  can_check_out_without_in?: boolean;
   open_session: { started_at: string } | null;
   location_policy: LocationPolicy;
   outside_action: OutsideAction;
@@ -85,6 +87,8 @@ export interface PunchResult {
   location_status: LocationStatus;
   needs_review: boolean;
   recorded_offline?: boolean;
+  /** Phase 13: a check-out saved without a check-in (flagged for review). */
+  missing_checkin?: boolean;
   /** true = the server had already processed this request_id (safe retry). */
   duplicate: boolean;
   /** Fresh signed server-time token. */

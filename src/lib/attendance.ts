@@ -136,6 +136,7 @@ function applyResult(data: AttendanceState, r: PunchResult): AttendanceState {
   return {
     ...data,
     next_action: r.action === "check_in" ? "check_out" : "check_in",
+    can_check_out_without_in: false,
     open_session: r.action === "check_in" ? { started_at: r.server_time } : null,
     recent_events: [event, ...data.recent_events.filter((e) => e.id !== r.event_id)].slice(0, 10),
     server_time: r.server_time,
@@ -151,6 +152,9 @@ const REVIEW_REASON: Partial<Record<LocationStatus, string>> = {
 export function successNotice(r: PunchResult, timeZone: string): Notice {
   const what = r.action === "check_in" ? "الحضور" : "الانصراف";
   const at = formatTime(r.server_time, timeZone);
+  if (r.missing_checkin) {
+    return { kind: "warning", text: `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل، وسيُراجع من الإدارة.` };
+  }
   if (r.needs_review) {
     const why = REVIEW_REASON[r.location_status] ?? "يحتاج مراجعة";
     return { kind: "warning", text: `تم تسجيل ${what} الساعة ${at}، مع ملاحظة للمراجعة: ${why}.` };

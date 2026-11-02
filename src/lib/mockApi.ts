@@ -114,6 +114,7 @@ export function createMockApi(): WaqtiApi {
       employee: { full_name: "أحمد سالم", employee_number: "1024" },
       company: { name: "شركة تجريبية", timezone: "Africa/Tripoli" },
       next_action: open ? "check_out" : "check_in",
+      can_check_out_without_in: !open && last?.action !== "check_out",
       open_session: open ? { started_at: last.server_time } : null,
       location_policy: policy,
       outside_action: outside,
@@ -134,7 +135,9 @@ export function createMockApi(): WaqtiApi {
     if (events[0] && timeMs <= Date.parse(events[0].server_time)) throw new AppError("time_order");
 
     const s = state();
-    if (input.expected_action !== s.next_action) throw new AppError("state_changed");
+    // Phase 13: a check-out is also accepted when there is no check-in (he forgot it), once, if the last punch is not a check-out.
+    const orphan = input.expected_action === "check_out" && s.next_action === "check_in" && !!s.can_check_out_without_in;
+    if (input.expected_action !== s.next_action && !orphan) throw new AppError("state_changed");
 
     const r = input.reading;
     let status: LocationStatus;
@@ -156,10 +159,11 @@ export function createMockApi(): WaqtiApi {
 
     const result: PunchResult = {
       event_id: newRequestId(),
-      action: s.next_action,
+      action: orphan ? "check_out" : s.next_action,
       server_time: new Date(timeMs).toISOString(),
       location_status: status,
-      needs_review: review,
+      needs_review: review || orphan,
+      missing_checkin: orphan,
       recorded_offline: offline,
       duplicate: false,
       time_token: tokenAt(serverNow()),
@@ -167,7 +171,7 @@ export function createMockApi(): WaqtiApi {
     byRequest.set(input.request_id, result);
     events.unshift({
       id: result.event_id, action: result.action, server_time: result.server_time,
-      location_status: status, needs_review: review, recorded_offline: offline,
+      location_status: status, needs_review: review || orphan, recorded_offline: offline,
     });
     return result;
   }

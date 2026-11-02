@@ -1144,3 +1144,6 @@ div.preview { display: grid; gap: 2px; }
 .req-card.mine .chip { grid-area: chip; justify-self: start; }
 .req-card.mine .req-head-text { grid-area: text; }
 .balance.annual::after { top: -90px; inset-inline-end: -128px; opacity: .8; }
+
+/* Phase 13: check out without a check-in */
+.forgot-in { align-self: center; font-size: var(--fs-small); min-height: 44px; }

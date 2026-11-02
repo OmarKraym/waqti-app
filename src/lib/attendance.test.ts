@@ -94,6 +94,12 @@ describe("attendance state machine", () => {
     expect(reduce(s, { type: "LOAD_OK", data: base })).toBe(s);
   });
 
+  it("a check-out without a check-in says so and is a warning", () => {
+    const n = successNotice({ ...ok, action: "check_out", needs_review: true, missing_checkin: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("warning");
+    expect(n.text).toContain("بدون حضور");
+  });
+
   it("flagged punches say they were saved AND need review", () => {
     const n = successNotice({ ...ok, location_status: "outside", needs_review: true }, "Africa/Tripoli");
     expect(n.kind).toBe("warning");

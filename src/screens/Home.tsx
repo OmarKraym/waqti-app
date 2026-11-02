@@ -34,12 +34,12 @@ import {
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
 import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
-import type { AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
+import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
 import { useInstallPrompt, useOnline } from "./hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
-import { Banner, Icon } from "./ui";
+import { Banner, Icon, Modal } from "./ui";
 
 const SYNC_EVERY_MS = 30_000;
 const OFFLINE_PUNCHES = false;
@@ -89,6 +89,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const [bioBusy, setBioBusy] = useState(false);
   const [gpsNote, setGpsNote] = useState<string | null>(null);
   const [bioNote, setBioNote] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
+  const [confirmNoIn, setConfirmNoIn] = useState(false); // phase 13: confirm "check out without a check-in"
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
 
   const load = useCallback(async () => {
@@ -244,7 +245,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     [load, setAnchor, onPunched], // enqueue only uses refs and stable setters
   );
 
-  async function onTap(view: AttendanceState, allowQueue: boolean) {
+  /** `override` = record a check-out although there is no check-in (phase 13). It is never queued: the server must stamp it. */
+  async function onTap(view: AttendanceState, allowQueue: boolean, override?: AttendanceAction) {
     if (busy.current) return;
     busy.current = true;
     setSyncNote(null);
@@ -286,7 +288,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     // The time of the TAP (not of the GPS answer) is what is recorded offline.
     const tapTime = Date.now();
     const tapPerf = performance.now();
-    const pending: Pending = { request_id: requestId, action: view.next_action, reading: null, biometric };
+    const pending: Pending = { request_id: requestId, action: override ?? view.next_action, reading: null, biometric };
     dispatch({ type: "TAP", request_id: pending.request_id, action: pending.action });
     const reading = earlyReading;
     dispatch({ type: "LOCATED", reading });
@@ -295,7 +297,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     // Older punches are still waiting: try to send them first, so the order stays right.
     if (navigator.onLine && pendingOf(queueRef.current).length > 0) await sync();
 
-    if (allowQueue && (!navigator.onLine || pendingOf(queueRef.current).length > 0)) {
+    if (allowQueue && !override && (!navigator.onLine || pendingOf(queueRef.current).length > 0)) {
       if (!enqueue(full, tapTime, tapPerf)) dispatch({ type: "PUNCH_FAIL", error: new AppError("network") });
       busy.current = false;
       return;
@@ -394,7 +396,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
         <section className="timecard" aria-label="بطاقة اليوم">
           <h3 className="timecard-day">سجل اليوم</h3>
           <ol className="slots">
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <li key={r.key} className={`slot ${r.action === "check_in" ? "in" : "out"}`}>
                 <span className="slot-label">{r.action === "check_in" ? "حضور" : "انصراف"}</span>
                 {r.kind === "empty" ? (
@@ -409,7 +411,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
                     </span>
                     {r.kind === "pencil" && <span className="slot-note"><Icon name="phone" />لم يُرسل بعد</span>}
                     {r.kind === "stamped" && r.needsReview && (
-                      <span className="slot-note review"><Icon name="alert" />{STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
+                      <span className="slot-note review"><Icon name="alert" />{noCheckIn(rows, i) ? "بدون حضور مسجّل" : STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
                     )}
                   </span>
                 )}
@@ -464,6 +466,20 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
         )}
 
 
+        {state.phase === "ready" && online && fromCache === null && data.can_check_out_without_in && waiting.length === 0 && !setupNeeded && (
+          <button className="btn ghost forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
+            نسيت تسجيل الحضور؟ سجّل الانصراف فقط
+          </button>
+        )}
+        {confirmNoIn && (
+          <Modal title="تسجيل انصراف بدون حضور" onClose={() => setConfirmNoIn(false)}>
+            <p>لم يُسجَّل حضورك. سيُسجَّل الانصراف فقط، وتظهر الحركة للإدارة للمراجعة.</p>
+            <div className="row">
+              <button className="btn primary" onClick={() => { setConfirmNoIn(false); void onTap(data, false, "check_out"); }}>تسجيل الانصراف</button>
+              <button className="btn ghost" onClick={() => setConfirmNoIn(false)}>إلغاء</button>
+            </div>
+          </Modal>
+        )}
         {state.phase === "ready" && state.notice && (
           <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
         )}
@@ -528,6 +544,11 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
       </main>
     </div>
   );
+}
+
+/** A check-out with no check-in before it (the employee forgot to check in). */
+function noCheckIn(rows: CardRow[], i: number): boolean {
+  return rows[i].action === "check_out" && rows[i].kind === "stamped" && (i === 0 || rows[i - 1].action === "check_out");
 }
 
 function statusHeadline(data: AttendanceState, rows: CardRow[], nowMs: number, tz: string): string {
