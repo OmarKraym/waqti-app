@@ -122,7 +122,7 @@ New dialog **"ظهور بيانات الموظف"** opened from the company sett
 - Buttons: **إظهار الكل**, **إخفاء الكل**, **الإعداد الافتراضي** (sets the switches to the defaults, nothing saved yet), and **حفظ**.
 - Save sends all 11 keys to `admin_set_profile_visibility`. After saving, show "تم الحفظ — يسري على جميع الموظفين عند فتح صفحة حسابي".
 - A short note under the title: "هذا الإعداد لكل الشركة، ولا يؤثر على ما تراه أنت في لوحة التحكم."
-- The panel's code is written after Omar attaches `waqti_admin.zip` (or its files), so it follows the panel's own style (`config.js`, `app.js`, `styles.css`).
+- The panel files are now available (`waqti_admin_11.zip`). This dialog is built as the **«ظهور بيانات الموظف» pane of the new Settings window**, see `2026-11-02-admin-panel-rebuild-design.md` (section 6). It calls the two functions above. If the migration is not applied yet, the pane shows "غير متاح بعد" instead of failing.
 
 ## 7. Errors
 
@@ -166,4 +166,4 @@ Until step 3, the admin has no screen to change the switches, so the company sta
 - **Inference leak:** when an employee has no saved annual leave, the default is 30 days, or 45 for age 50 and over. If `birth_date` is hidden but `leave` is shown, an employee can see "45" and learn the age band. Accepted for this version; the admin note in the dialog will mention it.
 - **One setting for everyone:** a manager cannot be allowed to see data that staff cannot. This is the "company default only" choice. If it becomes a need, a per-employee override can be added later without changing these functions' shape.
 - **Screen exposure:** if salary is turned on, it is visible to anyone looking at the phone. "Tap to reveal" is the planned follow-up (section 2).
-- **Admin panel code is not available to me yet.** Section 6 is a contract; the real change is estimated only after I see the files.
+- **Admin panel code** was received later (2026-11-02). Its part of this work is planned inside the admin panel rebuild, not as a separate change to the old `app.js`.
