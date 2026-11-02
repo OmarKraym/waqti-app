@@ -5,7 +5,7 @@ import { AppError, ERROR_TEXT } from "../lib/errors";
 import { Banner, Icon } from "./ui";
 
 /** Shown in place of the punch button until this phone is registered (company requires the fingerprint). */
-export function DeviceSetup({ onDone }: { onDone: () => void }) {
+export function DeviceSetup({ onDone, onSignOut }: { onDone: () => void; onSignOut?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +34,9 @@ export function DeviceSetup({ onDone }: { onDone: () => void }) {
       <button className="btn primary block" onClick={register} disabled={busy} aria-busy={busy}>
         {busy ? "جارٍ التسجيل…" : "تسجيل البصمة"}
       </button>
+      {onSignOut && (
+        <button className="btn quiet block" onClick={onSignOut} disabled={busy}>تسجيل الخروج</button>
+      )}
     </section>
   );
 }

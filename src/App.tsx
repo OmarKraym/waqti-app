@@ -3,7 +3,7 @@ import type { SessionUser } from "./lib/api";
 import { api, isMock } from "./lib/client";
 import { ChangePassword } from "./screens/ChangePassword";
 import { Login } from "./screens/Login";
-import { Main } from "./screens/Main";
+import { GateAfterPassword } from "./screens/GateAfterPassword";
 
 type Gate = { status: "booting" } | { status: "ready"; user: SessionUser | null };
 
@@ -37,7 +37,7 @@ export function App() {
       ) : gate.user.mustChangePassword ? (
         <ChangePassword email={gate.user.email} />
       ) : (
-        <Main user={gate.user} />
+        <GateAfterPassword user={gate.user} />
       )}
     </>
   );

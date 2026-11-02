@@ -1147,3 +1147,6 @@ div.preview { display: grid; gap: 2px; }
 
 /* Phase 13: check out without a check-in */
 .forgot-in { align-self: center; font-size: var(--fs-small); min-height: 44px; }
+
+/* Fingerprint gate right after the first password */
+.gate-stack { display: grid; gap: var(--s3); width: min(100%, 420px); }

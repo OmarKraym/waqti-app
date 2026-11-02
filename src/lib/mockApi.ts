@@ -46,7 +46,11 @@ const outside = (q.get("outside") ?? "flag") as AttendanceState["outside_action"
 const pos = q.get("pos") ?? "inside";
 const flaky = q.get("net") === "flaky";
 /** ?bio=1: the company asks for the fingerprint and this account has a registered phone (the profile switch can be tried). */
-const bio = q.get("bio") === "1";
+const bio = q.get("bio") === "1" || q.get("bio") === "new";
+/** ?bio=new: required, but this phone is not registered yet (the registration screen can be tried). */
+const bioNew = q.get("bio") === "new";
+/** ?statefail=1: for 1.5 s after the new password is saved, reading the attendance state fails (the gate must stay closed). */
+let stateFailUntil = 0;
 const MAX_OFFLINE_MS = 72 * 3_600_000;
 const TOLERANCE_MS = 120_000;
 
@@ -89,6 +93,7 @@ export function createMockApi(): WaqtiApi {
   };
 
   let loginEnabled = true;
+  let hasDevice = !bioNew;
   const events: AttendanceEvent[] = [];
   if (q.get("history") === "1") {
     // Three earlier days (newest first), times in Tripoli = UTC+2.
@@ -124,7 +129,7 @@ export function createMockApi(): WaqtiApi {
       time_token: tokenAt(serverNow()),
       // The fake server has no punch windows and no fingerprint (both are off by default on the real one too).
       punch_window: { allowed: true, opens_at: null, closes_at: null, reason: "no_limits" },
-      biometric: bio ? { policy: "required", has_device: true, login_enabled: loginEnabled } : { policy: "off", has_device: false },
+      biometric: bio ? { policy: "required", has_device: hasDevice, login_enabled: loginEnabled } : { policy: "off", has_device: false },
     };
   };
 
@@ -227,6 +232,7 @@ export function createMockApi(): WaqtiApi {
       if ([...p].length < 8) throw new AppError("password_too_short");
       if (!/\p{L}/u.test(p) || !/\p{N}/u.test(p)) throw new AppError("password_too_weak");
       if (user) user = { ...user, mustChangePassword: false };
+      if (q.get("statefail") === "1") stateFailUntil = Date.now() + 1500;
       save();
       notify();
     },
@@ -234,6 +240,7 @@ export function createMockApi(): WaqtiApi {
       await wait(400);
       requireNetwork();
       if (!user) throw new AppError("not_authenticated");
+      if (Date.now() < stateFailUntil) throw new AppError("network");
       return state();
     },
     async punch(input: PunchInput) {
@@ -254,6 +261,15 @@ export function createMockApi(): WaqtiApi {
                  allowCredentials: [{ id: "bW9jay1jcmVk", type: "public-key", transports: ["internal"] }] };
       }
       if (action === "punch-verify") return { ok: true };
+      if (action === "register-options") {
+        return { challenge: "bW9jay1yZWctY2hhbGxlbmdl", rp: { name: "Waqti", id: "localhost" },
+                 user: { id: "bW9jay11c2Vy", name: "ahmed@example.com", displayName: "أحمد سالم" },
+                 pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }], timeout: 60000,
+                 authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+                 attestation: "none" };
+      }
+      // ?regfail=1: the server answers "ok" but the device is not saved (the gate must not let the employee through)
+      if (action === "register-verify") { if (q.get("regfail") !== "1") hasDevice = true; return { ok: true }; }
       if (action === "set-login") {
         loginEnabled = (body as { enabled: boolean }).enabled;
         return { login_enabled: loginEnabled };
