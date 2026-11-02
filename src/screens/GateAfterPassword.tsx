@@ -3,7 +3,7 @@ import type { SessionUser } from "../lib/api";
 import { supportsPlatformAuthenticator } from "../lib/biometric";
 import { api } from "../lib/client";
 import { AppError } from "../lib/errors";
-import { nextGate } from "../lib/firstRun";
+import { iosBrowserTab, nextGate } from "../lib/firstRun";
 import { DeviceSetup } from "./DeviceSetup";
 import { Main } from "./Main";
 import { Banner, Icon } from "./ui";
@@ -81,6 +81,9 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
           <p className="muted">
             شركتك تطلب البصمة، لكن هذا الهاتف لا يدعمها. تستطيع المتابعة، وستُعلَّم بصماتك للمراجعة من الإدارة.
           </p>
+          {iosBrowserTab(navigator.userAgent, (navigator as { standalone?: boolean }).standalone) && (
+            <p className="hint-line">إن لم تعمل البصمة، أضف التطبيق إلى الشاشة الرئيسية وافتحه منها.</p>
+          )}
           <button className="btn primary block" onClick={() => setStep("ready")}>متابعة</button>
         </div>
       </main>
