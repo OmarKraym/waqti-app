@@ -179,7 +179,8 @@ export function visibleSteps(steps: ApprovalStep[]): ApprovalStep[] {
 }
 
 /** One line under a request: who has it now, or how it ended. */
-export function progressLine(r: Pick<RequestItem, "status" | "steps">): string {
+/** `decision_note` on a cancelled request exists only when the administration cancelled it (an employee cancels his own pending request without one). */
+export function progressLine(r: Pick<RequestItem, "status" | "steps"> & { decision_note?: string | null }): string {
   const steps = visibleSteps(r.steps);
   if (r.status === "pending") {
     const at = steps.find((s) => s.status === "pending");
@@ -192,7 +193,7 @@ export function progressLine(r: Pick<RequestItem, "status" | "steps">): string {
     return by ? `رفضه: ${by.kind === "hr" ? KIND_LABEL.hr : (by.approver_name ?? KIND_LABEL[by.kind])}` : "مرفوض";
   }
   if (r.status === "approved") return "اكتملت الموافقات";
-  return "ألغيته";
+  return r.decision_note ? "ألغته الإدارة" : "ألغيته";
 }
 
 // ---------------------------------------------------------------- the form

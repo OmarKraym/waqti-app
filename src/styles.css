@@ -907,6 +907,7 @@ button { font: inherit; }
 .step-of { flex: none; font-size: var(--fs-caption); font-weight: 600; color: var(--text-2); white-space: nowrap; padding: 3px 10px; border-radius: 999px; background: var(--sunken); }
 .req-period { font-size: var(--fs-small); font-weight: 500; color: var(--text); }
 .req-period span { font-variant-numeric: tabular-nums; }
+.req-reason bdi { white-space: nowrap; }
 .req-reason { color: var(--text-2); font-size: var(--fs-small); border-inline-start: 3px solid var(--line); padding-inline-start: var(--s3); }
 .req-meta { font-size: var(--fs-small); }
 .req-meta strong { color: var(--ink-fg); }

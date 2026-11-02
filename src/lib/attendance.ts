@@ -153,6 +153,14 @@ const REVIEW_REASON: Partial<Record<LocationStatus, string>> = {
 export function successNotice(r: PunchResult, timeZone: string): Notice {
   const what = r.action === "check_in" ? "الحضور" : "الانصراف";
   const at = formatTime(r.server_time, timeZone);
+  if (r.on_approved_leave) {
+    // The punch is never refused. The first one of the day is sent to the manager, who may cancel the leave: say so plainly.
+    const head = r.missing_checkin ? `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل.` : `تم تسجيل ${what} الساعة ${at}.`;
+    const tail = r.needs_review
+      ? "لديك إجازة معتمدة اليوم؛ سيراجع المدير هذه الحركة وقد تُلغى إجازتك."
+      : "لديك إجازة معتمدة اليوم، والمدير يراجع حركتك.";
+    return { kind: "warning", text: `${head} ${tail}` };
+  }
   if (r.missing_checkin) {
     return { kind: "warning", text: `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل، وسيُراجع من الإدارة.` };
   }

@@ -91,6 +91,8 @@ export interface PunchResult {
   recorded_offline?: boolean;
   /** Phase 13: a check-out saved without a check-in (flagged for review). */
   missing_checkin?: boolean;
+  /** Phase 15: an approved leave covers today. The punch is saved; the manager decides about the leave. */
+  on_approved_leave?: boolean;
   /** true = the server had already processed this request_id (safe retry). */
   duplicate: boolean;
   /** Fresh signed server-time token. */

@@ -51,6 +51,9 @@ const bio = q.get("bio") === "1" || q.get("bio") === "new";
 const bioNew = q.get("bio") === "new";
 /** ?forgot=1: no check-in yet, the check-in window is over and the check-out window is open (the button is "check out"). */
 const forgotMode = q.get("forgot") === "1";
+/** ?onleave=1: an approved leave covers today (the first punch is saved, flagged; the request list has a leave the manager cancelled). */
+const onLeaveMode = q.get("onleave") === "1";
+let leaveFlagged = false;
 /** ?statefail=1: for 1.5 s after the new password is saved, reading the attendance state fails (the gate must stay closed). */
 let stateFailUntil = 0;
 const MAX_OFFLINE_MS = 72 * 3_600_000;
@@ -153,6 +156,9 @@ export function createMockApi(): WaqtiApi {
     const r = input.reading;
     let status: LocationStatus;
     let review = false;
+    // Phase 15: a punch on an approved-leave day is saved; only the first one of the day goes to the manager.
+    const leaveReview = onLeaveMode && !leaveFlagged;
+    if (leaveReview) leaveFlagged = true;
     if (s.location_policy === "none") status = "not_requested";
     else if (r.kind !== "ok") status = "unavailable";
     else if (pos === "far-accuracy" || r.accuracy_m > s.max_accuracy_m) status = "inaccurate";
@@ -173,8 +179,9 @@ export function createMockApi(): WaqtiApi {
       action: orphan ? "check_out" : s.next_action,
       server_time: new Date(timeMs).toISOString(),
       location_status: status,
-      needs_review: review || orphan,
+      needs_review: review || orphan || leaveReview,
       missing_checkin: orphan,
+      on_approved_leave: onLeaveMode || undefined,
       recorded_offline: offline,
       duplicate: false,
       time_token: tokenAt(serverNow()),
@@ -182,7 +189,7 @@ export function createMockApi(): WaqtiApi {
     byRequest.set(input.request_id, result);
     events.unshift({
       id: result.event_id, action: result.action, server_time: result.server_time,
-      location_status: status, needs_review: review || orphan, recorded_offline: offline,
+      location_status: status, needs_review: review || orphan || leaveReview, recorded_offline: offline,
     });
     return result;
   }
@@ -340,6 +347,12 @@ function createMockRequests() {
     employee: ME, steps: steps("خالد المبروك", "pending", "waiting"), ...over,
   });
 
+  if (onLeaveMode) {
+    const t = today();
+    mine.push(make({ type: "leave", leave_type: "annual", status: "cancelled", start_at: startOfDay(plusDays(t, -1)), end_at: startOfDay(plusDays(t, 2)), days: 3,
+                     current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -10)),
+                     decision_note: "أُلغيت إجازتك بسبب تسجيل حضورك يوم " + t }));
+  }
   if (q.get("requests") === "1") {
     const t = today();
     mine.push(

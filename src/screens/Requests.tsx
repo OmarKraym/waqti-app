@@ -354,12 +354,17 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
         </ol>
       )}
       <p className="req-progress">{progressLine(item)}</p>
-      {item.status === "rejected" && item.decision_note && <p className="req-reason">«{item.decision_note}»</p>}
+      {(item.status === "rejected" || item.status === "cancelled") && item.decision_note && <p className="req-reason">«{keepDatesTogether(item.decision_note)}»</p>}
       {item.status === "pending" && (
         <button className="btn ghost small cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
       )}
     </article>
   );
+}
+
+/** A date like 2026-11-02 inside Arabic text must not be split over two lines (the hyphens allow a break). */
+function keepDatesTogether(text: string) {
+  return text.split(/(\d{4}-\d{2}-\d{2})/).map((part, i) => (i % 2 ? <bdi key={i}>{part}</bdi> : part));
 }
 
 // ---------------------------------------------------------------- new request

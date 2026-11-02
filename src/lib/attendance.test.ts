@@ -112,6 +112,28 @@ describe("attendance state machine", () => {
     expect(n.text).toContain("بدون حضور");
   });
 
+  it("a punch on an approved-leave day is saved, and says the manager will review it and the leave may be cancelled", () => {
+    const n = successNotice({ ...ok, needs_review: true, on_approved_leave: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("warning");
+    expect(n.text).toContain("تم تسجيل الحضور");
+    expect(n.text).toContain("إجازة معتمدة");
+    expect(n.text).toContain("قد تُلغى إجازتك");
+  });
+
+  it("a later punch the same leave day only reminds him; it is not a second warning about cancelling", () => {
+    const n = successNotice({ ...ok, action: "check_out", needs_review: false, on_approved_leave: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("warning");
+    expect(n.text).toContain("تم تسجيل الانصراف");
+    expect(n.text).toContain("إجازة معتمدة");
+    expect(n.text).not.toContain("قد تُلغى إجازتك");
+  });
+
+  it("a check-out without a check-in on a leave day says both", () => {
+    const n = successNotice({ ...ok, action: "check_out", needs_review: true, missing_checkin: true, on_approved_leave: true }, "Africa/Tripoli");
+    expect(n.text).toContain("بدون حضور");
+    expect(n.text).toContain("إجازة معتمدة");
+  });
+
   it("flagged punches say they were saved AND need review", () => {
     const n = successNotice({ ...ok, location_status: "outside", needs_review: true }, "Africa/Tripoli");
     expect(n.kind).toBe("warning");

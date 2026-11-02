@@ -120,6 +120,12 @@ describe("approval progress", () => {
     const r = { status: "rejected" as const, steps: [step(1, "direct_manager", "rejected", "خالد"), step(2, "hr", "cancelled")] };
     expect(progressLine(r)).toBe("رفضه: خالد");
   });
+
+  it("a cancelled request says who cancelled it: him, or the administration (a note is saved only then)", () => {
+    expect(progressLine({ status: "cancelled", steps: [] })).toBe("ألغيته");
+    expect(progressLine({ status: "cancelled", steps: [], decision_note: null })).toBe("ألغيته");
+    expect(progressLine({ status: "cancelled", steps: [], decision_note: "أُلغيت إجازتك بسبب تسجيل حضورك يوم 2026-11-02" })).toBe("ألغته الإدارة");
+  });
 });
 
 describe("the form", () => {
