@@ -56,7 +56,9 @@ begin
   -- ------------------------------------------------ settings
   perform pg_temp.as_user(a);
   r := public.employee_get_notification_settings();
-  perform pg_temp.ok(r ->> 'remind_check_in' = 'false' and (r ->> 'devices')::int = 1, 'reminders are off by default; 1 device', r::text);
+  -- phase 16b: reminders are ON by default (5 minutes before the shift, and at its end)
+  perform pg_temp.ok(r ->> 'remind_check_in' = 'true' and (r ->> 'check_in_before')::int = 5 and r ->> 'remind_check_out' = 'true'
+    and (r ->> 'devices')::int = 1, 'reminders are on by default (phase 16b); 1 device', r::text);
   r := public.employee_set_notification_settings(true, 10, true, 0);
   perform pg_temp.ok((r ->> 'remind_check_in')::boolean and (r ->> 'check_in_before')::int = 10, 'employee turns reminders on', r::text);
   s := pg_temp.err('select public.employee_set_notification_settings(true, 500, false, 0)');
@@ -118,7 +120,8 @@ begin
   perform pg_temp.ok(n = 1 and pg_temp.box(a, 'reminder_check_in') = 1
     and (select body from public.notifications where user_id = a) like 'يبدأ دوامك الساعة 08:00%', 'check-in reminder at 07:51', n::text);
   n := private.enqueue_due_reminders(pg_temp.at(v_day, '07:55'));
-  perform pg_temp.ok(n = 0, 'sent once per day');
+  -- (since phase 16b the other employees with a device get their own default reminder at 07:55: count A only)
+  perform pg_temp.ok(pg_temp.box(a, 'reminder_check_in') = 1, 'sent once per day');
   n := private.enqueue_due_reminders(pg_temp.at(v_day, '16:01'));
   perform pg_temp.ok(n = 0, 'check-out reminder: not sent when he never checked in');
 

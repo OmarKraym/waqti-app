@@ -4,13 +4,17 @@ import { lateCandidate } from "../lib/lateOffer";
 import { draftToRequest, formatMinutes, formatTimes, permissionLeft, type Draft } from "../lib/requests";
 import type { PunchResult, RequestType } from "../lib/types";
 import { api } from "../lib/client";
-import { currentSubscription, keysOf } from "../lib/push";
+import { readPushState } from "../lib/push";
+import { ensureSubscription, geoPermission } from "../lib/permissions";
+import { keepStorage } from "../lib/localSettings";
+import { browserStorage, loadCachedState } from "../lib/offlineQueue";
+import { PermissionsSetup } from "./PermissionsSetup";
 import { Home } from "./Home";
 import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "./hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Modal } from "./ui";
+import { Banner, Modal } from "./ui";
 import { useRequests } from "./useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -104,13 +108,41 @@ export function Main({ user }: { user: SessionUser }) {
       }
     };
     navigator.serviceWorker?.addEventListener("message", onMessage);
-    // This phone already allowed notifications: make sure the server knows it belongs to THIS account.
-    if ("Notification" in window && Notification.permission === "granted" && navigator.onLine) {
-      currentSubscription().then((sub) => sub && api.savePushSubscription(keysOf(sub))).catch(() => undefined);
+    // Every start: if this phone allowed notifications, keep it subscribed (a lost subscription is renewed) and make
+    // sure the server knows it belongs to THIS account. Never asks by itself.
+    if ("Notification" in window && "serviceWorker" in navigator && navigator.onLine) {
+      navigator.serviceWorker.ready
+        .then((reg) => ensureSubscription({ permission: Notification.permission, pushManager: reg.pushManager }))
+        .then((keys) => keys && api.savePushSubscription(keys))
+        .catch(() => undefined);
     }
+    // Ask the browser not to delete the data saved on this phone (settings, last state) when space runs low.
+    void keepStorage();
     return () => navigator.serviceWorker?.removeEventListener("message", onMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per sign-in
   }, [user.id]);
+
+  // Something from the first-run setup is still missing on this phone (location blocked, notifications off).
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const checkMissing = useCallback(async () => {
+    const policy = loadCachedState(browserStorage(), user.id)?.data.location_policy ?? "none";
+    const [push, geo] = await Promise.all([readPushState(), policy === "none" ? Promise.resolve("granted" as const) : geoPermission()]);
+    setMissing(push === "off" || push === "ios_install" || push === "denied" || geo === "denied" || geo === "prompt");
+  }, [user.id]);
+  useEffect(() => { void checkMissing(); }, [checkMissing]);
+
+  if (setupOpen) {
+    const cached = loadCachedState(browserStorage(), user.id)?.data;
+    return (
+      <PermissionsSetup
+        user={user}
+        locationPolicy={cached?.location_policy ?? "geofence"}
+        biometric={cached?.biometric}
+        onDone={() => { setSetupOpen(false); void checkMissing(); }}
+      />
+    );
+  }
 
   return (
     <div className="with-tabs">
@@ -121,6 +153,14 @@ export function Main({ user }: { user: SessionUser }) {
         />
       )}
       <div hidden={profile || tab !== "today"}>
+        {missing && (
+          <div className="setup-nudge">
+            <Banner kind="warning">
+              هاتفك لم يُجهَّز بالكامل (الموقع أو الإشعارات). قد لا يصلك تذكير البصمة.{" "}
+              <button className="link-btn" onClick={() => setSetupOpen(true)}>إكمال الإعداد</button>
+            </Banner>
+          </div>
+        )}
         <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} onPunched={onPunched} />
       </div>
       {visited.has("requests") && (

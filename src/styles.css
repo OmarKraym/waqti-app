@@ -1151,3 +1151,25 @@ div.preview { display: grid; gap: 2px; }
 
 /* Fingerprint gate right after the first password */
 .gate-stack { display: grid; gap: var(--s3); width: min(100%, 420px); }
+
+/* ---------------------------------------------------------------- first-run setup (location, fingerprint, notifications) */
+.perm-card { width: min(100%, 460px); display: grid; gap: var(--s3); padding: var(--s6) var(--s5); }
+.perm-card .pad-title { text-align: center; }
+.perm-card > .hint-line { text-align: center; }
+.perm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
+.perm-step { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
+.perm-step.done { background: var(--in-tint); border-color: transparent; }
+.perm-head { display: flex; align-items: center; gap: var(--s3); }
+.perm-ico { flex: none; width: 36px; height: 36px; padding: 8px; border-radius: 50%; background: var(--ink-tint); color: var(--ink-fg); }
+.perm-ico .icon { width: 20px; height: 20px; }
+.perm-step.done .perm-ico { background: var(--surface); color: var(--in-text); }
+.perm-step.blocked .perm-ico { background: var(--warn-tint); color: var(--warn); }
+.perm-title { flex: 1; font-weight: 700; }
+.perm-chip { flex: none; height: 24px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center;
+  font-size: var(--fs-caption); font-weight: 700; background: var(--sunken); color: var(--text-2); }
+.perm-chip.done { background: var(--surface); color: var(--in-text); }
+.perm-chip.blocked { background: var(--warn-tint); color: var(--warn); }
+.perm-body { display: grid; gap: var(--s2); }
+.perm-diag { font-size: var(--fs-caption); color: var(--text-2); background: var(--sunken); border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+.setup-nudge { padding: var(--s3) var(--s4) 0; max-width: 640px; margin: 0 auto; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
