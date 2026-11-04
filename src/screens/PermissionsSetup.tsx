@@ -3,7 +3,7 @@ import type { SessionUser } from "../lib/api";
 import { registerDevice, supportsPlatformAuthenticator, type BiometricState } from "../lib/biometric";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { readLocation } from "../lib/location";
+import { geoGrantedBefore, readLocation } from "../lib/location";
 import { BIO_HELP, bioReason, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, type BioEnv } from "../lib/permissions";
 import { readPushState, subscribe, type PushState } from "../lib/push";
 import type { LocationPolicy } from "../lib/types";
@@ -59,6 +59,7 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
   const [geo, setGeo] = useState<Status>("todo");
   const [geoText, setGeoText] = useState<string | null>(null);
   useEffect(() => {
+    if (needLocation && geoGrantedBefore()) { setGeo("done"); return; }
     if (needLocation) void geoPermission().then((s) => {
       if (s === "granted") setGeo("done");
       else if (s === "denied") { setGeo("blocked"); setGeoText(geoHelp("denied", os)); }

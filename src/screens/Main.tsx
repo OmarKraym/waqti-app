@@ -6,6 +6,7 @@ import type { PunchResult, RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { readPushState } from "../lib/push";
 import { ensureSubscription, geoPermission } from "../lib/permissions";
+import { geoGrantedBefore } from "../lib/location";
 import { keepStorage } from "../lib/localSettings";
 import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { PermissionsSetup } from "./PermissionsSetup";
@@ -127,7 +128,9 @@ export function Main({ user }: { user: SessionUser }) {
   const [missing, setMissing] = useState(false);
   const checkMissing = useCallback(async () => {
     const policy = loadCachedState(browserStorage(), user.id)?.data.location_policy ?? "none";
-    const [push, geo] = await Promise.all([readPushState(), policy === "none" ? Promise.resolve("granted" as const) : geoPermission()]);
+    // Location allowed once on this phone = done (a switched-off GPS later is not a setup problem).
+    const geoDone = policy === "none" || geoGrantedBefore();
+    const [push, geo] = await Promise.all([readPushState(), geoDone ? Promise.resolve("granted" as const) : geoPermission()]);
     setMissing(push === "off" || push === "ios_install" || push === "denied" || geo === "denied" || geo === "prompt");
   }, [user.id]);
   useEffect(() => { void checkMissing(); }, [checkMissing]);
