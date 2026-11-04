@@ -6,6 +6,7 @@ import { AppError, ERROR_TEXT } from "../lib/errors";
 import { browserStorage, loadQueue, pendingOf } from "../lib/offlineQueue";
 import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, type ThemeChoice } from "../lib/theme";
 import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
+import { loadCalendar, offLabel } from "../lib/calendar";
 import type { AttendanceState, ProfileSummary } from "../lib/types";
 import { AppBar, Icon, Modal, Switch } from "./ui";
 
@@ -85,7 +86,7 @@ function MySummary({ userId, online }: { userId: string; online: boolean }) {
   }, [userId]);
   useEffect(() => { void load(); }, [load, online]);
 
-  const groups = data ? summaryGroups(data) : [];
+  const groups = data ? summaryGroups(data, new Date(), offLabel(loadCalendar(userId))) : [];
   if (data && groups.length === 0 && state !== "error") return null; // nothing allowed: no section at all
   return (
     <section className="summary" aria-labelledby="summary-title" aria-busy={state === "loading"}>

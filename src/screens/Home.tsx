@@ -33,6 +33,7 @@ import {
 } from "../lib/offlineQueue";
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
+import { holidayBanner, loadCalendar, offLabel, saveCalendar, type Calendar } from "../lib/calendar";
 import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
@@ -91,6 +92,13 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const [bioNote, setBioNote] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
   const [confirmNoIn, setConfirmNoIn] = useState(false); // phase 13: confirm "check out without a check-in"
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
+
+  // Company calendar (phase 16e): today's official holiday and the name of the weekly day off. Saved on the phone.
+  const [calendar, setCalendar] = useState<Calendar | null>(() => loadCalendar(user.id));
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    api.getCalendar().then((c) => { if (c) { saveCalendar(user.id, c); setCalendar(c); } }).catch(() => undefined);
+  }, [user.id]);
 
   const load = useCallback(async () => {
     dispatch({ type: "LOAD_START" });
@@ -374,6 +382,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
       </header>
 
       <main className="container has-punch">
+        {holidayBanner(calendar) && <Banner kind="success">{holidayBanner(calendar)}</Banner>}
         {!online && (
           <Banner kind={allowQueue ? "warning" : "error"}>
             {allowQueue
@@ -453,7 +462,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
               {bioBusy
                 ? "أكّد بصمتك…"
                 : blocked
-                ? windowText(data.punch_window, data.company.timezone)
+                ? windowText(data.punch_window, data.company.timezone, offLabel(calendar))
                 : state.phase === "locating"
                 ? "جارٍ تحديد الموقع…"
                 : state.phase === "submitting"

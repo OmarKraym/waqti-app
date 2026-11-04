@@ -30,13 +30,13 @@ const DAY = ["الأحد", "الإثنين", "الثلاثاء", "الأربعا
 const WEEK = [6, 0, 1, 2, 3, 4, 5]; // Libyan week: Saturday first
 
 /** Following days with the same hours become one line: "السبت – الأربعاء" 08:00–16:00. */
-export function groupSchedule(rows: NonNullable<ProfileSummary["schedule"]>): { days: string; hours: string }[] {
+export function groupSchedule(rows: NonNullable<ProfileSummary["schedule"]>, offLabel = "إجازة"): { days: string; hours: string }[] {
   const byDay = new Map(rows.map((r) => [r.weekday, r]));
   const out: { days: string; hours: string; first: number; last: number }[] = [];
   for (const d of WEEK) {
     const r = byDay.get(d);
     if (!r) continue;
-    const hours = r.is_workday && r.start_time && r.end_time ? `${r.start_time}–${r.end_time}` : "إجازة";
+    const hours = r.is_workday && r.start_time && r.end_time ? `${r.start_time}–${r.end_time}` : offLabel;
     const prev = out[out.length - 1];
     if (prev && prev.hours === hours && WEEK.indexOf(prev.last) + 1 === WEEK.indexOf(d)) prev.last = d;
     else out.push({ days: "", hours, first: d, last: d });
@@ -55,7 +55,7 @@ export interface SummaryRow { label: string; value: string; note?: string; ltr?:
 export interface SummaryGroup { title: string; rows: SummaryRow[] }
 
 /** The groups to draw. Rows without a value are dropped; a group without rows is dropped. */
-export function summaryGroups(s: ProfileSummary, today: Date = new Date()): SummaryGroup[] {
+export function summaryGroups(s: ProfileSummary, today: Date = new Date(), offLabel = "إجازة"): SummaryGroup[] {
   const e = s.employee ?? {};
   const job: SummaryRow[] = [];
   if (e.department) job.push({ label: "القسم", value: e.department });
@@ -65,7 +65,7 @@ export function summaryGroups(s: ProfileSummary, today: Date = new Date()): Summ
     const since = serviceLength(e.hire_date, today);
     job.push({ label: "تاريخ التعيين", value: e.hire_date, ...(since ? { note: since } : {}), ltr: true });
   }
-  const work: SummaryRow[] = groupSchedule(s.schedule ?? []).map((g) => ({ label: g.days, value: g.hours, ltr: g.hours !== "إجازة" }));
+  const work: SummaryRow[] = groupSchedule(s.schedule ?? [], offLabel).map((g) => ({ label: g.days, value: g.hours, ltr: /^\d/.test(g.hours) }));
   const leave: SummaryRow[] = (s.leave ?? []).map((l) => ({ label: LEAVE_LABEL[l.type as LeaveType] ?? l.type, value: days(l.days) }));
   const pay: SummaryRow[] = [];
   if (s.salary?.base_salary !== undefined) pay.push({ label: "الراتب الأساسي", value: money(s.salary.base_salary), ltr: true });

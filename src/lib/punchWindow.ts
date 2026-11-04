@@ -9,9 +9,9 @@ export interface PunchWindow {
 }
 
 /** The line under a disabled punch button; null when punching is allowed. */
-export function windowText(w: PunchWindow, timeZone: string): string | null {
+export function windowText(w: PunchWindow, timeZone: string, offLabel = "عطلة"): string | null {
   if (w.allowed) return null;
-  if (w.reason === "day_off") return "اليوم عطلة";
+  if (w.reason === "day_off") return `اليوم ${offLabel}`;
   if (w.reason === "too_early" && w.opens_at && w.closes_at) {
     return `البصم متاح من ${formatTime(w.opens_at, timeZone)} إلى ${formatTime(w.closes_at, timeZone)}`;
   }

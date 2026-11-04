@@ -8,6 +8,7 @@ import {
   type User,
 } from "@supabase/supabase-js";
 import type { SessionUser, WaqtiApi } from "./api";
+import type { Calendar } from "./calendar";
 import { getDeviceKey } from "./deviceKey";
 import { SIGNOUT_REASON_KEY } from "./signoutReason";
 import { AppError, toKnownCode } from "./errors";
@@ -259,6 +260,15 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
       } catch (e) {
         // After an unbind an old session must sign in again; another phone (device_locked) gets its own screen.
         if (e instanceof AppError && e.code === "login_again") return lockedOut("login_again");
+        throw e;
+      }
+    },
+
+    async getCalendar() {
+      try {
+        return await rpc<Calendar>("employee_calendar");
+      } catch (e) {
+        if (e instanceof AppError && e.code === "unknown" && /Could not find the function|employee_calendar/.test(e.message)) return null;
         throw e;
       }
     },

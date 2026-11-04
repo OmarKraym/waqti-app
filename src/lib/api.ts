@@ -1,3 +1,4 @@
+import type { Calendar } from "./calendar";
 import type {
   AttendanceState,
   Decision,
@@ -29,6 +30,8 @@ export interface WaqtiApi {
   getAttendanceState(): Promise<AttendanceState>;
   /** Binds this session to this phone (phase 16d). Throws device_locked on another phone, login_again after an unbind. */
   bindDevice(): Promise<void>;
+  /** Weekly day-off label and official holidays (phase 16e). null when the server does not have them yet. */
+  getCalendar(): Promise<Calendar | null>;
   /** My own data, only the parts my company allows (phase 16c). */
   getProfileSummary(): Promise<ProfileSummary>;
   punch(input: PunchInput): Promise<PunchResult>;

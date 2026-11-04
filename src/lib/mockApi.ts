@@ -266,6 +266,12 @@ export function createMockApi(): WaqtiApi {
       save();
       notify();
     },
+    async getCalendar() {
+      await wait(100);
+      requireNetwork();
+      // ?holiday=<name>: today is an official holiday
+      return { weekly_off_label: q.get("offlabel") ?? "عطلة رسمية", holidays: [], today_holiday: q.get("holiday") };
+    },
     async bindDevice() {
       await wait(150);
       requireNetwork();
