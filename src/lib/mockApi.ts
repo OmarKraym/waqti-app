@@ -270,7 +270,13 @@ export function createMockApi(): WaqtiApi {
       await wait(100);
       requireNetwork();
       // ?holiday=<name>: today is an official holiday
-      return { weekly_off_label: q.get("offlabel") ?? "عطلة رسمية", holidays: [], today_holiday: q.get("holiday") };
+      const d = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+      // ?holidays=1: a yearly holiday and a cancelled one on the Home card
+      const holidays = q.get("holidays") === "1"
+        ? [{ name: "عطلة ستُلغى", start_date: d(5), end_date: d(6), repeats_yearly: false, cancelled: true },
+           { name: "عيد الاستقلال", start_date: d(20), end_date: d(20), repeats_yearly: true, cancelled: false }]
+        : [];
+      return { weekly_off_label: q.get("offlabel") ?? "عطلة رسمية", holidays, today_holiday: q.get("holiday") };
     },
     async bindDevice() {
       await wait(150);

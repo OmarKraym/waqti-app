@@ -33,7 +33,7 @@ import {
 } from "../lib/offlineQueue";
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
-import { holidayBanner, loadCalendar, offLabel, saveCalendar, type Calendar } from "../lib/calendar";
+import { holidayBanner, holidayItems, loadCalendar, offLabel, saveCalendar, type Calendar } from "../lib/calendar";
 import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
@@ -429,6 +429,21 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
             ))}
           </ol>
         </section>
+
+        {holidayItems(calendar, dayKey(nowMs, tz)).length > 0 && (
+          <section className="holidays-card" aria-labelledby="holidays-title">
+            <h3 id="holidays-title" className="holidays-title">العطل الرسمية</h3>
+            <ul className="holidays-list">
+              {holidayItems(calendar, dayKey(nowMs, tz)).map((h) => (
+                <li key={`${h.name}-${h.when}`} className={h.cancelled ? "cancelled" : undefined}>
+                  <span className="holiday-name">{h.name}</span>
+                  <span className="holiday-when" dir="auto">{h.when}</span>
+                  {h.note && <span className="holiday-note">{h.note}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {setupNeeded ? (
           <DeviceSetup

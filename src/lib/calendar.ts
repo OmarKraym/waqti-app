@@ -2,7 +2,7 @@
 // A copy is kept per account so the labels are right with no connection. Nothing here throws.
 export interface Calendar {
   weekly_off_label: string | null;
-  holidays: { name: string; start_date: string; end_date: string }[];
+  holidays: { name: string; start_date: string; end_date: string; repeats_yearly?: boolean; cancelled?: boolean }[];
   today_holiday: string | null;
 }
 
@@ -14,6 +14,32 @@ export function offLabel(c: Calendar | null): string {
 /** The line on Home when today is an official holiday. */
 export function holidayBanner(c: Calendar | null): string | null {
   return c?.today_holiday ? `اليوم عطلة رسمية: ${c.today_holiday}` : null;
+}
+
+export interface HolidayItem { name: string; when: string; note: string | null; cancelled: boolean }
+
+const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+function nextDay(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Official holidays for the Home card: every one still to come (or going on today), cancelled ones included, sorted by
+ * date. `today` is the company's date (YYYY-MM-DD). A holiday disappears once its last day has passed.
+ */
+export function holidayItems(c: Calendar | null, today: string): HolidayItem[] {
+  return (c?.holidays ?? [])
+    .filter((h) => h.end_date >= today)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .map((h) => ({
+      name: h.name,
+      when: h.start_date <= today ? "اليوم" : h.start_date === nextDay(today) && h.end_date === h.start_date ? "غدًا"
+        : h.end_date === h.start_date ? dm(h.start_date) : `${dm(h.start_date)} – ${dm(h.end_date)}`,
+      note: h.cancelled ? "أُلغيت — الدوام كالمعتاد" : h.repeats_yearly ? "كل سنة" : null,
+      cancelled: !!h.cancelled,
+    }));
 }
 
 type Store = Pick<Storage, "getItem" | "setItem">;

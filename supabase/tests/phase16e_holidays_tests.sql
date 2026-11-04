@@ -134,7 +134,9 @@ begin
 
   delete from public.notifications;
   r := pg_temp.run_as(v_admin, format('select public.admin_delete_holiday(%L)', v_id));
-  perform pg_temp.ok(not exists (select 1 from public.company_holidays where id = v_id), 'admin deletes a holiday');
+  -- since phase 16f "delete" cancels: the row stays (employees see it as cancelled until its date has passed)
+  perform pg_temp.ok(private.holiday_on(v_comp, d + 1) is null and exists (select 1 from public.company_holidays where id = v_id and cancelled_at is not null),
+                     'admin cancels a holiday');
   perform pg_temp.ok((select count(*) from public.notifications where user_id = a and kind = 'holiday' and body like '%أُلغيت%') = 1, 'employees are told it was cancelled');
 
   -- ---------------------------------------------------------------- isolation
