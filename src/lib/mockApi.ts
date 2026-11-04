@@ -35,9 +35,26 @@ import type {
   PunchResult,
   RequestItem,
   RequestPreview,
+  ProfileSummary,
 } from "./types";
 
 const q = new URLSearchParams(globalThis.location?.search ?? "");
+/** ?summary=default|all|none: what "My data summary" shows (default = the company defaults: no salary, no personal data). */
+const summaryMode = q.get("summary") ?? "default";
+const SUMMARY_FULL: Required<ProfileSummary> = {
+  employee: { department: "المبيعات", job_title: "محاسب", work_location_name: "المقر الرئيسي", hire_date: "2022-03-01", birth_date: "1990-05-02", gender: "male" },
+  schedule: [0, 1, 2, 3, 4, 5, 6].map((d) => (d === 5
+    ? { weekday: d, is_workday: false, start_time: null, end_time: null }
+    : { weekday: d, is_workday: true, start_time: "08:00", end_time: d === 4 ? "13:00" : "16:00" })),
+  salary: { base_salary: 1500, components: [{ name: "بدل سكن", amount: 200 }, { name: "بدل نقل", amount: 50 }], total: 1750 },
+  leave: [{ type: "annual", days: 30, is_default: true }, { type: "sick", days: 10, is_default: false }],
+};
+function mockSummary(): ProfileSummary {
+  if (summaryMode === "all") return SUMMARY_FULL;
+  if (summaryMode === "none") return {};
+  const { birth_date: _b, gender: _g, ...job } = SUMMARY_FULL.employee;
+  return { employee: job, schedule: SUMMARY_FULL.schedule, leave: SUMMARY_FULL.leave };
+}
 // ?leaveNotice=2 = a leave must start 2 days from today; ?leaveBack=3 = it may start 3 days back (default: from today)
 const leaveNotice = Number(q.get("leaveNotice") ?? 0);
 const leaveBack = Number(q.get("leaveBack") ?? 0);
@@ -248,6 +265,13 @@ export function createMockApi(): WaqtiApi {
       if (q.get("statefail") === "1") stateFailUntil = Date.now() + 1500;
       save();
       notify();
+    },
+    async getProfileSummary() {
+      await wait(300);
+      requireNetwork();
+      if (!user) throw new AppError("not_authenticated");
+      if (q.get("summaryfail") === "1") throw new AppError("unknown");
+      return mockSummary();
     },
     async getAttendanceState() {
       await wait(400);

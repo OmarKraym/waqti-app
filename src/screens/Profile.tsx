@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SessionUser } from "../lib/api";
 import { api } from "../lib/client";
 import { loginToggle, setLoginEnabled, supportsPlatformAuthenticator } from "../lib/biometric";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { browserStorage, loadQueue, pendingOf } from "../lib/offlineQueue";
 import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, type ThemeChoice } from "../lib/theme";
-import type { AttendanceState } from "../lib/types";
+import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
+import type { AttendanceState, ProfileSummary } from "../lib/types";
 import { AppBar, Icon, Modal, Switch } from "./ui";
 
 /** What the profile shows; it comes from the today screen's data (nothing extra is fetched). */
@@ -55,6 +56,66 @@ function ThemeCard() {
           </button>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * "My data summary": only what the company allows (the server leaves the rest out). The copy saved on this phone shows
+ * at once and with no connection; it is replaced every time the profile opens online.
+ */
+function MySummary({ userId, online }: { userId: string; online: boolean }) {
+  const [saved] = useState(() => loadSummary(userId));
+  const [data, setData] = useState<ProfileSummary | null>(saved?.data ?? null);
+  const [savedAt, setSavedAt] = useState<number | null>(saved?.saved_at_ms ?? null);
+  const [state, setState] = useState<"loading" | "live" | "error">("loading");
+
+  const load = useCallback(async () => {
+    setState("loading");
+    try {
+      const fresh = await api.getProfileSummary();
+      saveSummary(userId, fresh);
+      setData(fresh);
+      setSavedAt(null);
+      setState("live");
+    } catch (e) {
+      if (e instanceof AppError && e.code === "not_authenticated") return void api.signOut();
+      setState("error");
+    }
+  }, [userId]);
+  useEffect(() => { void load(); }, [load, online]);
+
+  const groups = data ? summaryGroups(data) : [];
+  if (data && groups.length === 0 && state !== "error") return null; // nothing allowed: no section at all
+  return (
+    <section className="summary" aria-labelledby="summary-title" aria-busy={state === "loading"}>
+      <h3 id="summary-title" className="summary-title">ملخص بياناتي</h3>
+      {!data && state === "loading" && <div className="group summary-skeleton" aria-hidden="true"><div /><div /><div /></div>}
+      {!data && state === "error" && (
+        <div className="group summary-empty">
+          <p className="muted">{online ? "تعذّر عرض ملخص بياناتك الآن." : "يلزم اتصال بالإنترنت لعرض ملخص بياناتك."}</p>
+          {online && <button className="btn ghost" onClick={() => void load()}>إعادة المحاولة</button>}
+        </div>
+      )}
+      {data && state === "error" && savedAt !== null && (
+        <p className="summary-stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
+      )}
+      {groups.map((g) => (
+        <section key={g.title} className="group" aria-label={g.title}>
+          <h4 className="summary-group">{g.title}</h4>
+          <dl className="info-list">
+            {g.rows.map((r) => (
+              <div key={r.label}>
+                <dt>{r.label}</dt>
+                <dd className={r.strong ? "strong" : undefined}>
+                  <span dir={r.ltr ? "ltr" : undefined}>{r.value}</span>
+                  {r.note && <span className="summary-note">{r.note}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
     </section>
   );
 }
@@ -138,6 +199,8 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged 
             {user.email && (<div><dt>البريد</dt><dd dir="ltr">{user.email}</dd></div>)}
           </dl>
         </section>
+
+        <MySummary userId={user.id} online={online} />
 
         <ThemeCard />
 

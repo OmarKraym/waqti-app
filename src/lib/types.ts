@@ -270,3 +270,18 @@ export interface OvertimePreview {
   shift_start: string | null;
   shift_end: string | null;
 }
+
+/** "My data summary" (phase 16c). Only the parts the company allows are sent; a hidden part has no key at all. */
+export interface ProfileSummary {
+  employee?: {
+    department?: string | null;
+    job_title?: string | null;
+    work_location_name?: string | null;
+    hire_date?: string | null;
+    birth_date?: string | null;
+    gender?: string | null;
+  };
+  schedule?: { weekday: number; is_workday: boolean; start_time: string | null; end_time: string | null }[];
+  salary?: { base_salary?: number; components?: { name: string; amount: number }[]; total?: number };
+  leave?: { type: string; days: number; is_default: boolean }[];
+}

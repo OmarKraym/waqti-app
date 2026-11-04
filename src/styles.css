@@ -1173,3 +1173,17 @@ div.preview { display: grid; gap: 2px; }
 .perm-diag { font-size: var(--fs-caption); color: var(--text-2); background: var(--sunken); border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
 .setup-nudge { padding: var(--s3) var(--s4) 0; max-width: 640px; margin: 0 auto; }
 .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ---------------------------------------------------------------- my data summary (profile) */
+.summary { display: grid; gap: var(--s3); }
+.summary-title { font-size: var(--fs-body); font-weight: 700; margin: var(--s2) var(--s1) 0; }
+.summary-group { font-size: var(--fs-small); font-weight: 700; color: var(--text-2); padding: var(--s3) var(--s4) 0; margin: 0; }
+.summary .info-list dd { display: grid; justify-items: end; gap: 2px; }
+.summary .info-list dd.strong { font-weight: 800; color: var(--ink-fg); }
+.summary-note { font-size: var(--fs-caption); font-weight: 500; color: var(--text-2); }
+.summary-stale { font-size: var(--fs-caption); color: var(--text-2); margin: 0 var(--s1); }
+.summary-empty { padding: var(--s4); display: grid; justify-items: center; gap: var(--s2); text-align: center; }
+.summary-skeleton { padding: var(--s4); display: grid; gap: var(--s3); }
+.summary-skeleton div { height: 14px; border-radius: 7px; background: var(--sunken); }
+.summary-skeleton div:nth-child(2) { width: 70%; }
+.summary-skeleton div:nth-child(3) { width: 45%; }

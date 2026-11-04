@@ -14,6 +14,7 @@ import type {
   RequestItem,
   RequestPreview,
   RequestsOverview,
+  ProfileSummary,
 } from "./types";
 
 /** Everything the screens need from the server. Real and fake versions implement it. */
@@ -26,6 +27,8 @@ export interface WaqtiApi {
   signOut(): Promise<void>;
   changeTemporaryPassword(newPassword: string): Promise<void>;
   getAttendanceState(): Promise<AttendanceState>;
+  /** My own data, only the parts my company allows (phase 16c). */
+  getProfileSummary(): Promise<ProfileSummary>;
   punch(input: PunchInput): Promise<PunchResult>;
   /** Fingerprint steps (Edge Function "webauthn"): register this phone, get a ticket for one punch, or sign in. */
   webauthn(

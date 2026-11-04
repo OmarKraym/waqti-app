@@ -23,6 +23,7 @@ import type {
   RequestItem,
   RequestPreview,
   RequestsOverview,
+  ProfileSummary,
 } from "./types";
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -211,6 +212,10 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
     getAttendanceState() {
       return rpc<AttendanceState>("employee_attendance_state");
+    },
+
+    getProfileSummary() {
+      return rpc<ProfileSummary>("employee_profile_summary");
     },
 
     punch(input: PunchInput) {
