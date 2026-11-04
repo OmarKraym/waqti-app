@@ -8,7 +8,7 @@ import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, typ
 import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
 import { loadCalendar, offLabel } from "../lib/calendar";
 import type { AttendanceState, ProfileSummary } from "../lib/types";
-import { AppBar, Icon, Modal, Switch } from "./ui";
+import { AppBar, Banner, Icon, Modal, Switch } from "./ui";
 
 /** What the profile shows; it comes from the today screen's data (nothing extra is fetched). */
 export type ProfileInfo = Pick<AttendanceState, "employee" | "company" | "biometric">;
@@ -178,8 +178,10 @@ function BiometricLogin({ biometric, online, onChanged }: {
   );
 }
 
-export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged }: {
+export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged, setupMissing = false, onOpenSetup }: {
   user: SessionUser; info: ProfileInfo | null; online: boolean; onBack: () => void; onSignOut: () => void;
+  /** Location or notifications are not set up on this phone (shown at the bottom of the page, never on Home). */
+  setupMissing?: boolean; onOpenSetup?: () => void;
   /** The fingerprint sign-in switch changed on the server. */
   onLoginChanged: (enabled: boolean) => void;
 }) {
@@ -208,6 +210,15 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged 
         <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
 
         <button className="btn danger-soft block" onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</button>
+
+        {setupMissing && onOpenSetup && (
+          <div className="setup-nudge">
+            <Banner kind="warning">
+              هاتفك لم يُجهَّز بالكامل (الموقع أو الإشعارات). قد لا يصلك تذكير البصمة.{" "}
+              <button className="link-btn" onClick={onOpenSetup}>إكمال الإعداد</button>
+            </Banner>
+          </div>
+        )}
       </main>
     </div>
   );

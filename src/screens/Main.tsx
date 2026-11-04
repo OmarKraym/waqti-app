@@ -15,7 +15,7 @@ import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "./hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Banner, Modal } from "./ui";
+import { Modal } from "./ui";
 import { useRequests } from "./useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -152,18 +152,11 @@ export function Main({ user }: { user: SessionUser }) {
       {profile && (
         <Profile
           user={user} info={info} online={online} onBack={closeProfile} onSignOut={() => setConfirmOut(true)}
+          setupMissing={missing} onOpenSetup={() => setSetupOpen(true)}
           onLoginChanged={(enabled) => setInfo((i) => (i ? { ...i, biometric: { ...i.biometric, login_enabled: enabled } } : i))}
         />
       )}
       <div hidden={profile || tab !== "today"}>
-        {missing && (
-          <div className="setup-nudge">
-            <Banner kind="warning">
-              هاتفك لم يُجهَّز بالكامل (الموقع أو الإشعارات). قد لا يصلك تذكير البصمة.{" "}
-              <button className="link-btn" onClick={() => setSetupOpen(true)}>إكمال الإعداد</button>
-            </Banner>
-          </div>
-        )}
         <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} onPunched={onPunched} />
       </div>
       {visited.has("requests") && (
