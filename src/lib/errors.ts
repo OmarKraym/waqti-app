@@ -34,6 +34,10 @@ export type AppErrorCode =
   | "password_required"
   | "biometric_off"
   | "login_disabled"
+  // one phone per account (phase 16d)
+  | "device_locked"
+  | "device_not_bound"
+  | "login_again"
   // requests
   | "invalid_dates"
   | "leave_date_not_allowed"
@@ -90,6 +94,7 @@ const KNOWN = new Set<AppErrorCode>([
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
   "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
   "too_many_attempts", "password_required", "biometric_off", "login_disabled", "leave_date_not_allowed",
+  "device_locked", "device_not_bound", "login_again",
 ]);
 
 export function toKnownCode(value: unknown): AppErrorCode {
@@ -100,6 +105,9 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   network:
     "لم يصل رد من الخادم. لم نتمكن من التأكد من تسجيل العملية. اضغط «إعادة المحاولة» — لن تُسجَّل العملية مرتين.",
   not_authenticated: "انتهت الجلسة. سجّل الدخول مرة أخرى.",
+  device_locked: "لا يمكنك الدخول من هاتف آخر.",
+  device_not_bound: "هذا الهاتف غير مربوط بحسابك. سجّل الدخول مرة أخرى.",
+  login_again: "سجّل الدخول مرة أخرى بكلمة المرور.",
   invalid_credentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
   employee_inactive: "حسابك غير مفعّل. تواصل مع إدارة شركتك.",
   must_change_password: "يجب تغيير كلمة المرور المؤقتة أولًا.",

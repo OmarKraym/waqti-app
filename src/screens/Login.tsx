@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
+import { takeSignoutReason } from "../lib/signoutReason";
 import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
 import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
@@ -11,7 +12,11 @@ export function Login() {
   const [prefilled] = useState(() => readLastEmail() !== null);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Signed out by the app (another phone, or an unbind): say why, once.
+  const [error, setError] = useState<string | null>(() => {
+    const why = takeSignoutReason();
+    return why ? ERROR_TEXT[why] : null;
+  });
   // After sign-out the phone still knows its registered fingerprint: offer it (the password form stays below).
   const [bioReady, setBioReady] = useState(false);
 

@@ -266,6 +266,12 @@ export function createMockApi(): WaqtiApi {
       save();
       notify();
     },
+    async bindDevice() {
+      await wait(150);
+      requireNetwork();
+      if (!user) throw new AppError("not_authenticated");
+      if (q.get("device") === "locked") throw new AppError("device_locked"); // ?device=locked: another phone
+    },
     async getProfileSummary() {
       await wait(300);
       requireNetwork();

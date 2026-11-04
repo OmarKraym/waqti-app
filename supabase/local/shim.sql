@@ -26,7 +26,7 @@ create table auth.users (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create table auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id) on delete cascade);
+create table auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id) on delete cascade, created_at timestamptz default now());
 create table auth.refresh_tokens (id bigserial primary key, user_id text, session_id uuid, revoked boolean default false);
 
 -- Same behavior as Supabase: read the JWT claims set for the current request.

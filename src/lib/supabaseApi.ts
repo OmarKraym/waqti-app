@@ -8,6 +8,8 @@ import {
   type User,
 } from "@supabase/supabase-js";
 import type { SessionUser, WaqtiApi } from "./api";
+import { getDeviceKey } from "./deviceKey";
+import { SIGNOUT_REASON_KEY } from "./signoutReason";
 import { AppError, toKnownCode } from "./errors";
 import type {
   AttendanceState,
@@ -119,7 +121,30 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
     global: { fetch: fetchWithTimeout },
   });
 
-  async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
+  /** Binds this session to this phone. Kept here so any call that meets "device_not_bound" can bind and retry once. */
+  async function bind(): Promise<void> {
+    const key = getDeviceKey();
+    if (!key) throw new AppError("device_locked", "no_storage");
+    try {
+      await rpc<unknown>("employee_bind_device", { p_key: key, p_user_agent: navigator.userAgent.slice(0, 300) }, true);
+    } catch (e) {
+      // The server does not have the phone lock yet (app updated before the database): nothing to bind.
+      if (e instanceof AppError && e.code === "unknown" && /Could not find the function|employee_bind_device/.test(e.message)) return;
+      throw e;
+    }
+  }
+  /** The phone is not (or no longer) this account's phone: end the session and tell the sign-in screen why. */
+  async function lockedOut(code: "device_locked" | "login_again"): Promise<never> {
+    try {
+      sessionStorage.setItem(SIGNOUT_REASON_KEY, code);
+    } catch {
+      /* blocked storage: the sign-in screen just shows no reason */
+    }
+    await sb.auth.signOut().catch(() => undefined);
+    throw new AppError(code);
+  }
+
+  async function rpc<T>(fn: string, args?: Record<string, unknown>, noRebind = false): Promise<T> {
     // No connection: fail at once. Otherwise supabase-js first waits for its token refresh, which
     // retries for a long time offline, and the screen would hang instead of using the saved state.
     if (!navigator.onLine) throw new AppError("network", "offline");
@@ -135,7 +160,21 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
     } finally {
       clearTimeout(timer);
     }
-    if (result.error) throw fromPostgrest(result.error);
+    if (result.error) {
+      const err = fromPostgrest(result.error);
+      // A session that is not bound yet (e.g. right after the update, or after a token refresh into a new session):
+      // bind this phone and try the call once more. Another phone, or an unbound account, ends the session.
+      if (err.code === "device_not_bound" && !noRebind) {
+        try {
+          await bind();
+        } catch (e) {
+          if (e instanceof AppError && (e.code === "device_locked" || e.code === "login_again")) return lockedOut(e.code);
+          throw e;
+        }
+        return rpc<T>(fn, args, true);
+      }
+      throw err;
+    }
     return result.data as T;
   }
 
@@ -212,6 +251,16 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
     getAttendanceState() {
       return rpc<AttendanceState>("employee_attendance_state");
+    },
+
+    async bindDevice() {
+      try {
+        await bind();
+      } catch (e) {
+        // After an unbind an old session must sign in again; another phone (device_locked) gets its own screen.
+        if (e instanceof AppError && e.code === "login_again") return lockedOut("login_again");
+        throw e;
+      }
     },
 
     getProfileSummary() {

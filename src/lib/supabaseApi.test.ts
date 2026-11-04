@@ -99,3 +99,77 @@ describe("staying signed in when the app opens offline", () => {
     expect(storedSessionUser(null, key)).toBeNull();
   });
 });
+
+describe("one phone per account: bind, rebind once, lock out", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const store = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }; };
+
+  function fakeServer(answers: Record<string, Array<{ status: number; body: unknown }>>) {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const fn = url.split("/rpc/")[1]?.split("?")[0] ?? url;
+      calls.push(fn);
+      const next = answers[fn]?.shift() ?? { status: 200, body: {} };
+      return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("navigator", { onLine: true, userAgent: "test-phone" });
+    vi.stubGlobal("localStorage", store());
+    vi.stubGlobal("sessionStorage", store());
+    return calls;
+  }
+
+  it("maps the new server codes", () => {
+    expect(fromPostgrest({ code: "42501", message: "device_locked" }).code).toBe("device_locked");
+    expect(fromPostgrest({ code: "42501", message: "device_not_bound" }).code).toBe("device_not_bound");
+    expect(fromPostgrest({ code: "42501", message: "login_again" }).code).toBe("login_again");
+  });
+
+  it("a call that meets device_not_bound binds this phone and is retried once", async () => {
+    const calls = fakeServer({
+      employee_overtime_overview: [{ status: 403, body: { code: "42501", message: "device_not_bound" } }, { status: 200, body: { items: [] } }],
+      employee_bind_device: [{ status: 200, body: { ok: true } }],
+    });
+    const { createSupabaseApi } = await import("./supabaseApi");
+    const api = createSupabaseApi("https://x.supabase.co", "pk");
+    await expect(api.getOvertimeOverview()).resolves.toEqual({ items: [] });
+    expect(calls).toEqual(["employee_overtime_overview", "employee_bind_device", "employee_overtime_overview"]);
+  });
+
+  it("another phone: the session ends and the sign-in screen is told why", async () => {
+    const calls = fakeServer({
+      employee_overtime_overview: [{ status: 403, body: { code: "42501", message: "device_not_bound" } }],
+      employee_bind_device: [{ status: 403, body: { code: "42501", message: "device_locked" } }],
+    });
+    const { createSupabaseApi } = await import("./supabaseApi");
+    const api = createSupabaseApi("https://x.supabase.co", "pk");
+    await expect(api.getOvertimeOverview()).rejects.toMatchObject({ code: "device_locked" });
+    expect(sessionStorage.getItem("waqti-signout-reason")).toBe("device_locked");
+    expect(calls.filter((c) => c === "employee_overtime_overview")).toHaveLength(1); // no endless retry
+  });
+
+  it("bindDevice sends this phone's key (never changes between calls)", async () => {
+    const bodies: string[] = [];
+    fakeServer({});
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { bodies.push(String(init?.body)); return new Response("{}", { status: 200 }); });
+    const { createSupabaseApi } = await import("./supabaseApi");
+    const api = createSupabaseApi("https://x.supabase.co", "pk");
+    await api.bindDevice();
+    await api.bindDevice();
+    const k = (b: string) => JSON.parse(b).p_key;
+    expect(k(bodies[0])).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(k(bodies[1])).toBe(k(bodies[0]));
+  });
+});
+
+describe("app updated before the database", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("bindDevice is a no-op when the server has no phone lock yet", async () => {
+    vi.stubGlobal("navigator", { onLine: true, userAgent: "test-phone" });
+    const m = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) });
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ code: "PGRST202", message: "Could not find the function public.employee_bind_device(p_key, p_user_agent) in the schema cache" }), { status: 404 }));
+    const { createSupabaseApi } = await import("./supabaseApi");
+    await expect(createSupabaseApi("https://x.supabase.co", "pk").bindDevice()).resolves.toBeUndefined();
+  });
+});

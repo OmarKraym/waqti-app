@@ -27,6 +27,8 @@ export interface WaqtiApi {
   signOut(): Promise<void>;
   changeTemporaryPassword(newPassword: string): Promise<void>;
   getAttendanceState(): Promise<AttendanceState>;
+  /** Binds this session to this phone (phase 16d). Throws device_locked on another phone, login_again after an unbind. */
+  bindDevice(): Promise<void>;
   /** My own data, only the parts my company allows (phase 16c). */
   getProfileSummary(): Promise<ProfileSummary>;
   punch(input: PunchInput): Promise<PunchResult>;
