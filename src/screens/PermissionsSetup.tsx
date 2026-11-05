@@ -4,7 +4,7 @@ import { registerDevice, supportsPlatformAuthenticator, type BiometricState } fr
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { geoGrantedBefore, readLocation } from "../lib/location";
-import { BIO_HELP, bioReason, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, type BioEnv } from "../lib/permissions";
+import { BIO_HELP, bioReason, chromeTabUrl, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, type BioEnv, type GeoContext } from "../lib/permissions";
 import { readPushState, subscribe, type PushState } from "../lib/push";
 import type { LocationPolicy } from "../lib/types";
 import { Banner, Icon, type IconName } from "./ui";
@@ -58,20 +58,46 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
   // ---- location
   const [geo, setGeo] = useState<Status>("todo");
   const [geoText, setGeoText] = useState<string | null>(null);
-  useEffect(() => {
-    if (needLocation && geoGrantedBefore()) { setGeo("done"); return; }
-    if (needLocation) void geoPermission().then((s) => {
-      if (s === "granted") setGeo("done");
-      else if (s === "denied") { setGeo("blocked"); setGeoText(geoHelp("denied", os)); }
-    });
+  const [geoDiag, setGeoDiag] = useState<string | null>(null);
+  const isStandalone = standalone();
+  const geoCtx = (blockedBy?: GeoContext["blockedBy"]): GeoContext => ({ blockedBy, standalone: isStandalone, host: location.host });
+  // Chrome's own answer, read without asking: "denied" = blocked inside Chrome (site settings, or blocked by Chrome
+  // itself after a few dismissed prompts). Checked again when the employee comes back from the settings.
+  const recheck = useCallback(async () => {
+    if (!needLocation || geoGrantedBefore()) { if (needLocation) setGeo("done"); return; }
+    const s = await geoPermission();
+    if (s === "granted") { setGeo("done"); setGeoText(null); return; }
+    if (s === "denied") { setGeo("blocked"); setGeoText(geoHelp("denied", os, geoCtx("chrome"))); setGeoDiag("Chrome: denied"); return; }
+    // no longer blocked (changed in the settings): back to the button
+    setGeo((g) => (g === "blocked" ? "todo" : g));
+    setGeoText((t) => (t ? null : t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needLocation, os]);
+  useEffect(() => {
+    void recheck();
+    const onBack = () => document.visibilityState === "visible" && void recheck();
+    document.addEventListener("visibilitychange", onBack);
+    let status: { onchange: unknown } | null = null;
+    void (navigator.permissions?.query({ name: "geolocation" as PermissionName }).then((st) => {
+      status = st as unknown as { onchange: unknown };
+      st.onchange = () => void recheck();
+    }).catch(() => undefined));
+    return () => {
+      document.removeEventListener("visibilitychange", onBack);
+      if (status) status.onchange = null;
+    };
+  }, [recheck]);
   async function askLocation() {
     setGeo("busy");
     setGeoText(null);
     const r = await readLocation("record");
-    if (r.kind === "ok") { setGeo("done"); return; }
+    if (r.kind === "ok") { setGeo("done"); setGeoDiag(null); return; }
     setGeo("blocked");
-    setGeoText(geoHelp(r.kind, os));
+    const s = r.kind === "denied" ? await geoPermission() : "unknown";
+    // Chrome says "denied": blocked in Chrome. Chrome says granted / would ask: the phone refuses Chrome.
+    const by: GeoContext["blockedBy"] = s === "denied" ? "chrome" : s === "granted" || s === "prompt" ? "phone" : undefined;
+    setGeoText(geoHelp(r.kind, os, geoCtx(by)));
+    setGeoDiag(`Chrome: ${s} · ${r.kind}`);
   }
 
   // ---- fingerprint / Face ID
@@ -145,7 +171,11 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
           {needLocation && (
             <Step icon="pin" title="الموقع (GPS)" status={geo}>
               {geo !== "done" && <p className="hint-line">نحتاج موقعك عند تسجيل الحضور والانصراف فقط.</p>}
-              {geoText && <Banner kind="warning">{geoText}</Banner>}
+              {geoText && <Banner kind="warning" className="steps-text">{geoText}</Banner>}
+              {geo === "blocked" && os === "android" && isStandalone && (
+                <a className="btn block" href={chromeTabUrl(location.href)}>افتح وقتي في Chrome لتعديل الإذن</a>
+              )}
+              {geoDiag && <p className="hint-line diag">{geoDiag}</p>}
               {geo !== "done" && (
                 <button className="btn primary block" onClick={askLocation} disabled={geo === "busy"} aria-busy={geo === "busy"}>
                   {geo === "busy" ? "جارٍ تحديد موقعك…" : "السماح بالموقع"}

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  bioReason, BIO_HELP, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, setupGate, setupSeen, ensureSubscription,
+  bioReason, BIO_HELP, chromeTabUrl, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, setupGate, setupSeen, ensureSubscription,
 } from "./permissions";
 
 const UA = {
@@ -67,10 +67,31 @@ describe("geoPermission: the location permission without asking", () => {
 });
 
 describe("geoHelp: what to do when the phone gives no location", () => {
-  it("denied on Android names Chrome and Xiaomi/Redmi settings", () => {
-    const t = geoHelp("denied", "android");
+  it("Android, blocked inside Chrome (site settings), installed app: Chrome settings with the site name, no address-bar lock", () => {
+    const t = geoHelp("denied", "android", { blockedBy: "chrome", standalone: true, host: "omarkraym.github.io" })!;
+    expect(t).toContain("إعدادات المواقع");
+    expect(t).toContain("omarkraym.github.io");
+    expect(t).not.toContain("القفل");
+    expect(t).not.toContain("معلومات التطبيق"); // the installed app's Android page does not hold this permission
+  });
+  it("Android, blocked inside Chrome, in a Chrome tab: the lock next to the address", () => {
+    expect(geoHelp("denied", "android", { blockedBy: "chrome", standalone: false, host: "x.io" })).toContain("القفل");
+  });
+  it("Android, Chrome allows the site but the phone refuses Chrome: the phone's app permission (and Xiaomi's path)", () => {
+    const t = geoHelp("denied", "android", { blockedBy: "phone", standalone: true, host: "x.io" })!;
     expect(t).toContain("Chrome");
     expect(t).toContain("شاومي");
+    expect(t).toContain("الموقع الدقيق");
+    expect(t).not.toContain("إعدادات المواقع");
+  });
+  it("Android, cause unknown: Chrome's site settings first, then the phone", () => {
+    const t = geoHelp("denied", "android")!;
+    expect(t.indexOf("إعدادات المواقع")).toBeGreaterThan(-1);
+    expect(t.indexOf("إعدادات المواقع")).toBeLessThan(t.indexOf("شاومي"));
+  });
+  it("opens this page in a Chrome tab (Android intent) so the address bar and its lock are there", () => {
+    expect(chromeTabUrl("https://omarkraym.github.io/waqti-app/?tab=x")).toBe(
+      "intent://omarkraym.github.io/waqti-app/?tab=x#Intent;scheme=https;package=com.android.chrome;end");
   });
   it("denied on iPhone names location services", () => expect(geoHelp("denied", "ios")).toContain("خدمات الموقع"));
   it("GPS off / timeout", () => {

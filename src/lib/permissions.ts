@@ -104,18 +104,55 @@ export async function geoPermission(perms: PermQuery | undefined = globalThis.na
   }
 }
 
-/** What to do when the phone gave no position. Once a browser blocks the location it never asks again by itself. */
-export function geoHelp(kind: "ok" | "denied" | "unavailable" | "timeout" | "unsupported" | "not_requested", os: Os): string | null {
+/** Where a "no" for the location comes from on Android (Chrome's own per-site setting, or the phone refusing Chrome). */
+export interface GeoContext {
+  /** "chrome": Chrome's site setting says denied (also after 3 dismissed prompts Chrome blocks by itself for days).
+   *  "phone": Chrome would allow the site, but Android does not give Chrome the location. */
+  blockedBy?: "chrome" | "phone";
+  /** Installed on the home screen: no address bar, so no lock icon to tap. */
+  standalone?: boolean;
+  host?: string;
+}
+
+const CHROME_SITE = (host: string) =>
+  `١. افتح تطبيق Chrome ← ⋮ (أعلى الشاشة) ← الإعدادات ← إعدادات المواقع ← الموقع.\n`
+  + `٢. فعّل «الموقع» إن كان مطفأً.\n`
+  + `٣. في قائمة «غير مسموح» اضغط ${host} واختر «سماح».`;
+const PHONE_CHROME =
+  "إعدادات الهاتف ← التطبيقات ← Chrome ← الأذونات ← الموقع ← «السماح أثناء استخدام التطبيق»، وفعّل «استخدام الموقع الدقيق».\n"
+  + "في شاومي وريدمي وبوكو: الإعدادات ← التطبيقات ← إدارة التطبيقات ← Chrome ← أذونات التطبيق ← الموقع ← «السماح أثناء الاستخدام».";
+
+/**
+ * What to do when the phone gave no position. Once Chrome blocks the location it never asks again by itself.
+ * An app installed on the home screen keeps its permissions in Chrome's site settings (not in the app's Android page).
+ */
+export function geoHelp(kind: "ok" | "denied" | "unavailable" | "timeout" | "unsupported" | "not_requested", os: Os,
+                        ctx: GeoContext = {}): string | null {
   if (kind === "ok" || kind === "not_requested") return null;
   if (kind === "denied") {
-    return os === "ios"
-      ? "الموقع ممنوع لهذا التطبيق. افتح: الإعدادات ← الخصوصية والأمان ← خدمات الموقع، وشغّلها. ثم اختر Safari (أو المتصفح الذي تستخدمه) ← «أثناء استخدام التطبيق». ارجع واضغط «السماح بالموقع»."
-      : "الموقع ممنوع لهذا التطبيق، والهاتف لن يسأل مرة أخرى بنفسه. في Chrome: اضغط القفل بجانب الرابط ← الأذونات ← الموقع ← سماح. "
-        + "إن كان التطبيق مثبتًا: اضغط مطوّلًا على أيقونته ← معلومات التطبيق ← الأذونات ← الموقع ← سماح. "
-        + "في شاومي وريدمي وبوكو أيضًا: الإعدادات ← التطبيقات ← إدارة التطبيقات ← Chrome ← أذونات التطبيق ← الموقع ← «السماح أثناء الاستخدام». ثم ارجع واضغط «السماح بالموقع».";
+    if (os === "ios") {
+      return "الموقع ممنوع لهذا التطبيق. افتح: الإعدادات ← الخصوصية والأمان ← خدمات الموقع، وشغّلها. ثم اختر Safari (أو المتصفح الذي تستخدمه) ← «أثناء استخدام التطبيق». ارجع واضغط «السماح بالموقع».";
+    }
+    const host = ctx.host ?? "موقع وقتي";
+    if (ctx.blockedBy === "phone") {
+      return `Chrome يسمح لوقتي، لكن الهاتف لا يعطي Chrome الموقع:\n${PHONE_CHROME}\nثم ارجع واضغط «السماح بالموقع».`;
+    }
+    const chrome = ctx.standalone === false
+      ? `اضغط القفل (أو ⓘ) بجانب الرابط ← الأذونات ← الموقع ← سماح.\nأو:\n${CHROME_SITE(host)}`
+      : CHROME_SITE(host);
+    if (ctx.blockedBy === "chrome") {
+      return `Chrome يمنع الموقع عن وقتي (الإعداد داخل Chrome، وليس في إعدادات الهاتف):\n${chrome}\nإن كان مسموحًا هناك: ${PHONE_CHROME}\nثم ارجع هنا.`;
+    }
+    return `الموقع ممنوع لهذا التطبيق، والهاتف لن يسأل مرة أخرى بنفسه:\n${chrome}\nإن بقي ممنوعًا: ${PHONE_CHROME}\nثم ارجع واضغط «السماح بالموقع».`;
   }
   if (kind === "timeout") return "لم نصل إلى موقعك. شغّل GPS (الموقع) من الإعدادات السريعة، وانتقل إلى مكان مفتوح، ثم اضغط مرة أخرى.";
   return "شغّل GPS (الموقع) من الإعدادات السريعة في الهاتف، ثم اضغط مرة أخرى.";
+}
+
+/** This page in a normal Chrome tab (Android): it has the address bar and its lock, where the site's permissions are. */
+export function chromeTabUrl(href: string): string {
+  const u = new URL(href);
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;end`;
 }
 
 /** After sign-in: the setup screen comes first when the phone must still be registered, or the first time on this phone. */
