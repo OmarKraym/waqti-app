@@ -1001,7 +1001,8 @@ button { font: inherit; }
   font-size: var(--fs-small); line-height: 1.6;
   min-height: 1.6em; text-align: start;
 }
-.preview.ok, .preview.bad { padding: var(--s3) var(--s4); border-radius: var(--r-md); }
+.preview.ok, .preview.bad, .preview.warn { padding: var(--s3) var(--s4); border-radius: var(--r-md); }
+.preview.warn { background: var(--warn-tint); color: var(--text); border: 1px solid var(--warn-line); }
 .preview.ok { background: var(--in-wash); color: var(--in-text); }
 .preview.ok strong { font-weight: 700; }
 .preview.bad { background: var(--danger-tint); color: var(--danger-text); }

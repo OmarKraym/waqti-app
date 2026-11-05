@@ -128,6 +128,8 @@ export interface RequestItem {
   /** Exclusive end: a leave on 3-4 March ends at 5 March 00:00. */
   end_at: string;
   days: number | null;
+  /** Days HR took from the balance when it differs from `days` (phase 18a). */
+  charged_days?: number | null;
   minutes: number | null;
   reason: string | null;
   decision_note: string | null;
@@ -145,6 +147,14 @@ export interface LeaveBalance {
   used: number;
   pending: number;
   remaining: number | null;
+  // Annual leave since phase 18a: earned day by day; `remaining` is what can be taken up to `as_of`.
+  year?: number;
+  /** Days earned up to as_of (with what was carried in). */
+  earned?: number;
+  /** Days carried in from last year. */
+  carried?: number;
+  used_outside?: number;
+  as_of?: string;
 }
 
 /** How the time of a permission is entered (set per type by the company). */
@@ -191,6 +201,8 @@ export interface RequestPreview {
   minutes: number | null;
   balance: LeaveBalance | null;
   permission: PermissionUsage | null;
+  /** More than the balance (phase 18a): allowed with a reason, HR decides. */
+  over_balance?: boolean;
 }
 
 export interface InboxItem extends RequestItem {

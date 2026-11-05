@@ -51,13 +51,13 @@ describe("holiday list on Home (active and cancelled, until the date has passed)
   });
   it("says what each one is", () => {
     const [today, cancelled, yearly] = holidayItems(cal, "2026-11-04");
-    expect(today.when).toBe("اليوم");
+    expect(today.when).toBe("اليوم · 04/11/2026");
     expect(cancelled.cancelled).toBe(true);
     expect(cancelled.note).toBe("أُلغيت — الدوام كالمعتاد");
-    expect(cancelled.when).toBe("10/11 – 11/11");
+    expect(cancelled.when).toBe("10/11/2026 – 11/11/2026");
     expect(yearly.note).toBe("كل سنة");
-    expect(yearly.when).toBe("24/12");
+    expect(yearly.when).toBe("24/12/2026");
   });
-  it("tomorrow", () => expect(holidayItems(cal, "2026-12-23").find((i) => i.name === "عيد الاستقلال")?.when).toBe("غدًا"));
+  it("tomorrow", () => expect(holidayItems(cal, "2026-12-23").find((i) => i.name === "عيد الاستقلال")?.when).toBe("غدًا · 24/12/2026"));
   it("nothing -> empty", () => expect(holidayItems(null, "2026-11-04")).toEqual([]));
 });

@@ -429,12 +429,17 @@ function createMockRequests() {
     );
   }
 
-  function balance(type: LeaveType, year: string, exclude?: string): LeaveBalance {
+  function balance(type: LeaveType, year: string, exclude?: string, asOf?: string): LeaveBalance {
     const entitled = type === "annual" ? 30 : null;
     const rows = mine.filter((r) => r.type === "leave" && r.leave_type === type && r.id !== exclude && localDate(r.start_at, TZ).startsWith(year));
-    const used = rows.filter((r) => r.status === "approved").reduce((a, r) => a + (r.days ?? 0), 0);
+    const used = rows.filter((r) => r.status === "approved").reduce((a, r) => a + (r.charged_days ?? r.days ?? 0), 0);
     const pending = rows.filter((r) => r.status === "pending").reduce((a, r) => a + (r.days ?? 0), 0);
-    return { leave_type: type, entitled, used, pending, remaining: entitled === null ? null : entitled - used - pending };
+    if (type !== "annual" || entitled === null) return { leave_type: type, entitled, used, pending, remaining: null };
+    // Phase 18a: earned day by day up to as_of (rounded down to half a day).
+    const day = asOf && asOf.startsWith(year) ? asOf : year === today().slice(0, 4) ? today() : `${year}-12-31`;
+    const n = (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${year}-01-01T00:00:00Z`)) / 86_400_000 + 1;
+    const earned = Math.floor(((entitled * n) / 365) * 2) / 2;
+    return { leave_type: type, entitled, used, pending, remaining: earned - used - pending, year: Number(year), earned, carried: 0, used_outside: 0, as_of: day };
   }
   function permission(typeId: string, month: string): PermissionUsage {
     const pt = PERMISSION_TYPES.find((x) => x.id === typeId)!;
@@ -447,7 +452,7 @@ function createMockRequests() {
   function check(r: NewRequest): RequestPreview {
     const t = today();
     let start: string, end: string, days: number | null = null, minutes: number | null = null;
-    let bal: LeaveBalance | null = null, perm: PermissionUsage | null = null;
+    let bal: LeaveBalance | null = null, perm: PermissionUsage | null = null, over = false;
     if (r.type === "permission") {
       const pt = PERMISSION_TYPES.find((x) => x.id === r.permission_type_id);
       if (!pt) throw new AppError("permission_type_not_found");
@@ -481,8 +486,8 @@ function createMockRequests() {
         if (r.start_date.slice(0, 4) !== r.end_date.slice(0, 4)) throw new AppError("crosses_year");
         days = workDays(r.start_date, r.end_date);
         if (days === 0) throw new AppError("no_working_days");
-        bal = balance(r.leave_type, r.start_date.slice(0, 4));
-        if (bal.remaining !== null && bal.remaining < days) throw new AppError("insufficient_balance");
+        bal = balance(r.leave_type, r.start_date.slice(0, 4), undefined, r.start_date);
+        over = bal.remaining !== null && bal.remaining < days;
       }
       start = startOfDay(r.start_date); end = startOfDay(plusDays(r.end_date, 1));
     }
@@ -491,7 +496,7 @@ function createMockRequests() {
         && Date.parse(x.start_at) < Date.parse(end) && Date.parse(start) < Date.parse(x.end_at));
       if (overlap) throw new AppError("overlapping_request");
     }
-    return { start_at: start, end_at: end, days, minutes, balance: bal, permission: perm };
+    return { start_at: start, end_at: end, days, minutes, balance: bal, permission: perm, over_balance: over };
   }
 
   const online = async (ms: number) => {
@@ -523,6 +528,7 @@ function createMockRequests() {
       if (known) return mine.find((x) => x.id === known)!;
       if (r.type === "leave" && r.start_date < addDays(today(), leaveNotice - leaveBack)) throw new AppError("leave_date_not_allowed");
       const p = check(r);
+      if (p.over_balance && !r.reason?.trim()) throw new AppError("insufficient_balance");
       const pt = r.type === "permission" ? PERMISSION_TYPES.find((x) => x.id === r.permission_type_id) : undefined;
       const item = make({ type: r.type, leave_type: r.type === "leave" ? r.leave_type : null, start_at: p.start_at, end_at: p.end_at,
                           permission_type_id: pt?.id ?? null, permission_type: pt?.name ?? null,

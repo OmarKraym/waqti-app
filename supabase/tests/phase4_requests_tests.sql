@@ -126,7 +126,8 @@ begin
   perform pg_temp.ok(r ->> 'status' = 'approved', 'hr approves -> request approved', r::text);
   perform pg_temp.as_user(a);
   ov := public.employee_requests_overview();
-  perform pg_temp.ok((select (x ->> 'used')::numeric = v_days and (x ->> 'remaining')::numeric = 5 - v_days
+  -- phase 18a: the annual balance is earned day by day, so what is left is "earned so far - used"
+  perform pg_temp.ok((select (x ->> 'used')::numeric = v_days and (x ->> 'remaining')::numeric = (x ->> 'earned')::numeric - v_days
                       from jsonb_array_elements(ov -> 'balances') x where x ->> 'leave_type' = 'annual'),
     'approved leave is deducted from the balance', ov -> 'balances' ->> 0);
   s := pg_temp.err(format('select public.employee_cancel_request(%L)', v_req));

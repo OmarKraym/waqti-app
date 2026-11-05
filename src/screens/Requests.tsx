@@ -27,6 +27,7 @@ import {
   type Draft,
 } from "../lib/requests";
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
+import { annualCard, chargedLine, overBalanceLine } from "../lib/leaveBalance";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "./useRequests";
 import { TimeField } from "./TimeField";
@@ -241,13 +242,14 @@ function Balances({ overview }: { overview: RequestsOverview }) {
   if (!(annual && annual.remaining !== null) && others.length === 0) return null;
   const entitled = annual?.entitled ?? 0;
   const pct = (n: number) => (entitled > 0 ? Math.min(100, Math.max(0, (n / entitled) * 100)) : 0);
+  const card = annual ? annualCard(annual) : null;
   return (
     <section className="balances" aria-label="أرصدتي">
-      {annual && annual.remaining !== null && (
+      {annual && annual.remaining !== null && card && (
         <div className="balance annual">
           <span className="balance-label">الإجازة السنوية</span>
-          <span className="balance-value">{formatDays(annual.remaining)}</span>
-          <span className="balance-sub">متبقٍ من {formatDays(entitled)}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
+          <span className="balance-value">{formatDays(card.value)}</span>
+          <span className="balance-sub">{card.sub}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
           {entitled > 0 && (
             <div className="balance-bar" role="img" aria-label={`مستخدم ${formatDays(annual.used)} وقيد الموافقة ${formatDays(annual.pending)} من ${formatDays(entitled)}`}>
               <span className="used" style={{ width: `${pct(annual.used)}%` }} />
@@ -255,9 +257,7 @@ function Balances({ overview }: { overview: RequestsOverview }) {
             </div>
           )}
           <dl className="balance-stats">
-            <div><dt>مستخدمة</dt><dd>{formatDays(annual.used)}</dd></div>
-            <div><dt>قيد الموافقة</dt><dd>{formatDays(annual.pending)}</dd></div>
-            <div><dt>الرصيد الكلي</dt><dd>{formatDays(entitled)}</dd></div>
+            {card.stats.map((st) => <div key={st.label}><dt>{st.label}</dt><dd>{st.value}</dd></div>)}
           </dl>
         </div>
       )}
@@ -358,6 +358,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
         </ol>
       )}
       <p className="req-progress">{progressLine(item)}</p>
+      {chargedLine(item) && <p className="req-progress">{chargedLine(item)}</p>}
       {visibleNote(item) && <p className="req-reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
       {item.status === "pending" && (
         <button className="btn ghost small cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
@@ -430,7 +431,13 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
       : built.error
     : draft.type === "leave" && draft.start_date < earliest ? "leave_date_not_allowed"
     : previewError && previewError.sig === sig ? previewError.code : null;
-  const canSend = built.ok && current !== null && problem === null && !sending && online;
+  // More than the balance (phase 18a): allowed with a reason; the administration decides. Kept while the reason is
+  // typed (the preview runs again then), so the line and the "required" label do not flicker.
+  const datesSig = built.ok && built.request.type === "leave" ? requestSignature({ ...built.request, reason: null }) : null;
+  const lastOver = useRef<{ sig: string; line: string | null } | null>(null);
+  if (current && datesSig && draft.type === "leave") lastOver.current = { sig: datesSig, line: overBalanceLine(current) };
+  const over = datesSig && lastOver.current?.sig === datesSig ? lastOver.current.line : null;
+  const canSend = built.ok && current !== null && problem === null && !sending && online && (!over || draft.reason.trim() !== "");
 
   async function send() {
     if (!built.ok || !canSend) return;
@@ -537,13 +544,14 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
         ) : null}
 
         <label className="field">
-          <span>{draft.type === "other" ? "ما الذي تطلبه؟" : "السبب (اختياري)"}</span>
+          <span>{draft.type === "other" ? "ما الذي تطلبه؟" : over ? "السبب (مطلوب)" : "السبب (اختياري)"}</span>
           <textarea value={draft.reason} maxLength={500} rows={3} onChange={(e) => set({ reason: e.target.value })}
                     placeholder={draft.type === "other" ? "مثال: شهادة راتب، تعديل بيانات…" : undefined} />
         </label>
       </div>
 
       {problem && <ProblemLine problem={problem} draft={draft} ptype={ptype} earliest={earliest} />}
+      {!problem && over && <p className="preview warn" role="status">{over}</p>}
 
       {sendError && (
         <Banner kind="error">{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</Banner>

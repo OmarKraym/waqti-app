@@ -18,7 +18,7 @@ export function holidayBanner(c: Calendar | null): string | null {
 
 export interface HolidayItem { name: string; when: string; note: string | null; cancelled: boolean }
 
-const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 function nextDay(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
@@ -35,8 +35,8 @@ export function holidayItems(c: Calendar | null, today: string): HolidayItem[] {
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
     .map((h) => ({
       name: h.name,
-      when: h.start_date <= today ? "اليوم" : h.start_date === nextDay(today) && h.end_date === h.start_date ? "غدًا"
-        : h.end_date === h.start_date ? dm(h.start_date) : `${dm(h.start_date)} – ${dm(h.end_date)}`,
+      when: (h.start_date <= today ? "اليوم · " : h.start_date === nextDay(today) ? "غدًا · " : "")
+        + (h.end_date === h.start_date ? dmy(h.start_date) : `${dmy(h.start_date)} – ${dmy(h.end_date)}`),
       note: h.cancelled ? "أُلغيت — الدوام كالمعتاد" : h.repeats_yearly ? "كل سنة" : null,
       cancelled: !!h.cancelled,
     }));
