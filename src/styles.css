@@ -1189,8 +1189,6 @@ div.preview { display: grid; gap: 2px; }
 .summary-skeleton div:nth-child(3) { width: 45%; }
 
 /* ---------------------------------------------------------------- official holidays (Home) */
-.holidays-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-card); padding: var(--s3) var(--s4); }
-.holidays-title { font-size: var(--fs-small); font-weight: 700; color: var(--text-2); margin: 0 0 var(--s2); }
 .holidays-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
 .holidays-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s3); align-items: baseline; padding: var(--s2) 0; }
 .holidays-list li + li { border-top: 1px solid var(--line); }
@@ -1200,3 +1198,14 @@ div.preview { display: grid; gap: 2px; }
 .holidays-list li.cancelled .holiday-name { text-decoration: line-through; color: var(--text-2); }
 .holidays-list li.cancelled .holiday-when { color: var(--text-2); }
 .holidays-list li.cancelled .holiday-note { color: var(--danger-text); font-weight: 600; }
+
+/* Password with a show / hide button (the field is LTR, so the button sits on the right, after the text) */
+.password-wrap { position: relative; display: block; }
+.password-wrap input { padding-right: calc(var(--h-control) + 4px); }
+.password-eye {
+  position: absolute; top: 0; right: 0; height: 100%; width: var(--h-control);
+  display: grid; place-items: center; border: 0; background: none; color: var(--text-2); cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.password-eye:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
+.password-eye .icon { width: 22px; height: 22px; }

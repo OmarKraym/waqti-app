@@ -196,8 +196,7 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
         <button className="btn primary block" onClick={finish} disabled={mustRegister}>
           {allDone ? "ابدأ" : mustRegister ? "سجّل البصمة أولًا" : "متابعة"}
         </button>
-        {!allDone && !mustRegister && <p className="hint-line">تستطيع إكمال الباقي لاحقًا من الرئيسية.</p>}
-        <button className="btn quiet block" onClick={() => api.signOut()}>تسجيل الخروج</button>
+        {!allDone && !mustRegister && <p className="hint-line">تستطيع إكمال الباقي لاحقًا من صفحة حسابك.</p>}
       </section>
     </main>
   );

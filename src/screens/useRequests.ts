@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/client";
 import { AppError } from "../lib/errors";
+import { loadSnapshot, saveSnapshot } from "../lib/snapshot";
 import type { InboxItem, OvertimeOverview, RequestsOverview } from "../lib/types";
+
+type Saved = { overview: RequestsOverview; inbox: InboxItem[]; overtime: OvertimeOverview | null };
 
 export interface RequestsData {
   overview: RequestsOverview | null;
@@ -10,6 +13,8 @@ export interface RequestsData {
   overtime: OvertimeOverview | null;
   loading: boolean;
   error: AppError | null;
+  /** When the data on screen is the copy saved on this phone (the server could not be reached): when it was saved. */
+  savedAt: number | null;
   reload: () => Promise<void>;
 }
 
@@ -17,10 +22,13 @@ export interface RequestsData {
  * Requests and the approval inbox, loaded once for the whole app (the tab badge needs the count).
  * Reloads when the app comes back to the front or the connection returns.
  */
-export function useRequests(): RequestsData {
-  const [overview, setOverview] = useState<RequestsOverview | null>(null);
-  const [inbox, setInbox] = useState<InboxItem[]>([]);
-  const [overtime, setOvertime] = useState<OvertimeOverview | null>(null);
+export function useRequests(userId: string): RequestsData {
+  // The last copy saved on this phone shows at once (and with no connection) until the server answers.
+  const [kept] = useState(() => loadSnapshot<Saved>("requests", userId));
+  const [overview, setOverview] = useState<RequestsOverview | null>(kept?.data.overview ?? null);
+  const [inbox, setInbox] = useState<InboxItem[]>(kept?.data.inbox ?? []);
+  const [overtime, setOvertime] = useState<OvertimeOverview | null>(kept?.data.overtime ?? null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
   const run = useRef(0);
@@ -36,16 +44,19 @@ export function useRequests(): RequestsData {
       setOverview(o);
       setInbox(box);
       if (ot) setOvertime(ot);
+      saveSnapshot("requests", userId, { overview: o, inbox: box, overtime: ot ?? loadSnapshot<Saved>("requests", userId)?.data.overtime ?? null });
+      setSavedAt(null);
       setError(null);
     } catch (e) {
       if (mine !== run.current) return;
       const err = e instanceof AppError ? e : new AppError("unknown", String(e));
       if (err.code === "not_authenticated") return void api.signOut();
       setError(err);
+      if (err.code === "network") setSavedAt(loadSnapshot<Saved>("requests", userId)?.saved_at_ms ?? null);
     } finally {
       if (mine === run.current) setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     reload();
@@ -58,5 +69,5 @@ export function useRequests(): RequestsData {
     };
   }, [reload]);
 
-  return { overview, inbox, overtime, loading, error, reload };
+  return { overview, inbox, overtime, loading, error, savedAt, reload };
 }

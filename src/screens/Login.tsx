@@ -5,7 +5,7 @@ import { takeSignoutReason } from "../lib/signoutReason";
 import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
 import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
-import { Icon } from "./ui";
+import { Icon, PasswordInput } from "./ui";
 
 export function Login() {
   const [email, setEmail] = useState(() => readLastEmail() ?? "");
@@ -111,9 +111,7 @@ export function Login() {
 
         <label className="field">
           <span>كلمة المرور</span>
-          <input
-            type="password"
-            dir="ltr"
+          <PasswordInput
             autoComplete="current-password"
             name="password"
             autoFocus={prefilled && !readDeviceHint()}

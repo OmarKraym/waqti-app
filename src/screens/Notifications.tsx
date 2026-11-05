@@ -4,6 +4,9 @@ import { AppError, ERROR_TEXT } from "../lib/errors";
 import { keysOf, currentSubscription, readPushState, subscribe, unsubscribe, type PushState } from "../lib/push";
 import { keepStorage, readNotificationPrefs, saveNotificationPrefs } from "../lib/localSettings";
 import type { NotificationSettings } from "../lib/types";
+import { holidayItems, loadCalendar, saveCalendar, type Calendar } from "../lib/calendar";
+import { browserStorage, loadCachedState } from "../lib/offlineQueue";
+import { dayKey } from "../lib/timecard";
 import { AppBar, Banner, Icon, Switch } from "./ui";
 
 type Note = { kind: "success" | "warning" | "error"; text: string } | null;
@@ -33,6 +36,36 @@ function ReminderRow({ kind, id, title, selectLabel, on, value, options, atLabel
         </select>
       </label>
     </div>
+  );
+}
+
+/** Official holidays still to come (cancelled ones too, until their date has passed). Saved on the phone. */
+function HolidaysCard({ userId }: { userId: string }) {
+  const [calendar, setCalendar] = useState<Calendar | null>(() => loadCalendar(userId));
+  useEffect(() => {
+    let alive = true;
+    api.getCalendar().then((c) => { if (c && alive) { saveCalendar(userId, c); setCalendar(c); } }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [userId]);
+  const tz = loadCachedState(browserStorage(), userId)?.data.company.timezone ?? "Africa/Tripoli";
+  const items = holidayItems(calendar, dayKey(Date.now(), tz));
+  return (
+    <section className="notif-card holidays-card" aria-labelledby="holidays-title">
+      <h2 id="holidays-title" className="section-title">العطل الرسمية</h2>
+      {items.length === 0 ? (
+        <p className="muted">لا توجد عطل رسمية قادمة.</p>
+      ) : (
+        <ul className="holidays-list">
+          {items.map((h) => (
+            <li key={`${h.name}-${h.when}`} className={h.cancelled ? "cancelled" : undefined}>
+              <span className="holiday-name">{h.name}</span>
+              <span className="holiday-when" dir="auto">{h.when}</span>
+              {h.note && <span className="holiday-note">{h.note}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -145,6 +178,8 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
     <main className="container notif">
       {!online && <Banner kind="warning">الإعدادات تحتاج اتصالًا بالإنترنت.</Banner>}
       {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}
+
+      <HolidaysCard userId={userId} />
 
       <section className="notif-card" aria-labelledby="device-title">
         <h2 id="device-title" className="section-title">هذا الجهاز</h2>

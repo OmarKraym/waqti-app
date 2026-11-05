@@ -41,7 +41,7 @@ export function Requests({ data, online, compose }: {
   /** Set by the today screen's shortcuts: open the form with this type (n changes on every tap). */
   compose?: { n: number; type: RequestType; draft?: Draft } | null;
 }) {
-  const { overview, inbox, overtime, loading, error, reload } = data;
+  const { overview, inbox, overtime, loading, error, savedAt, reload } = data;
   const [composing, setComposing] = useState<{ type: RequestType; draft?: Draft } | null>(compose ? { type: compose.type, draft: compose.draft } : null);
   const [assigning, setAssigning] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
@@ -103,6 +103,9 @@ export function Requests({ data, online, compose }: {
         )
       ) : (
         <>
+          {savedAt !== null && (
+            <p className="summary-stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
+          )}
           <Balances overview={overview} />
           {inbox.length > 0 && (
             <Inbox items={inbox} timeZone={overview.timezone} online={online} onDone={(text, kind) => { setNote({ kind, text }); reload(); }} />

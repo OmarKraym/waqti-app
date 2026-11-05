@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
 import { saveLastEmail } from "../lib/localSettings";
 import { AppError, ERROR_TEXT } from "../lib/errors";
+import { PasswordInput } from "./ui";
 
 // Same rules as the change-password Edge Function (the server checks them again).
 function localCheck(p: string, confirm: string): string | null {
@@ -63,11 +64,11 @@ export function ChangePassword({ email }: { email: string | null }) {
 
         <label className="field">
           <span>كلمة المرور الجديدة</span>
-          <input type="password" dir="ltr" autoComplete="new-password" name="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput autoComplete="new-password" name="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <label className="field">
           <span>تأكيد كلمة المرور</span>
-          <input type="password" dir="ltr" autoComplete="new-password" name="confirm-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <PasswordInput autoComplete="new-password" name="confirm-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
         <p className="hint-line">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
 

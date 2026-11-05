@@ -43,7 +43,7 @@ export function Main({ user }: { user: SessionUser }) {
   const [tab, setTab] = useState<Tab>(() => tabFromUrl(window.location.href) ?? "today");
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set([tab]));
   const online = useOnline();
-  const requests = useRequests();
+  const requests = useRequests(user.id);
   const count = requests.overview?.inbox_count ?? 0;
   // "New request" from the today screen: open the requests tab on the form, with the type already chosen.
   const [compose, setCompose] = useState<{ n: number; type: RequestType; draft?: Draft } | null>(null);

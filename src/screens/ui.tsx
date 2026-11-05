@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from "react";
 
 /** Line icons, 24 px grid, stroke = currentColor. */
 const PATHS = {
@@ -18,6 +18,8 @@ const PATHS = {
   leave: <><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M15 8l4 4-4 4M19 12H9" /></>,
   contrast: <><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" /></>,
   user: <><circle cx="12" cy="8.5" r="3.6" /><path d="M4.8 20c.9-3.6 3.7-5.6 7.2-5.6s6.3 2 7.2 5.6" /></>,
+  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></>,
+  eyeOff: <><path d="M3 3l18 18" /><path d="M10.6 6A9.7 9.7 0 0 1 12 5.5C18 5.5 21.5 12 21.5 12a17 17 0 0 1-3 3.8M6.6 6.6A16.6 16.6 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.4-1.1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>,
   fingerprint: <><path d="M5 9.2a8 8 0 0 1 14 0" /><path d="M7.5 20c-.6-1.4-.9-2.9-.9-4.6a5.4 5.4 0 0 1 10.8 0c0 1.3.2 2.5.6 3.6" /><path d="M12 11.8c-2 0-3.4 1.5-3.4 3.4 0 1.8.4 3.2 1.1 4.6" /><path d="M12 11.8c2 0 3.4 1.5 3.4 3.4 0 1.2.2 2.1.5 3" /><path d="M12 15.2c0 1.7.4 3.1 1.1 4.4" /></>,
 } as const;
 
@@ -132,5 +134,24 @@ export function Modal({ title, children, onClose, busy, sheet }: {
         {children}
       </div>
     </div>
+  );
+}
+
+/** A password input with a button that shows or hides what was typed. */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "dir">) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="password-wrap">
+      <input {...props} type={shown ? "text" : "password"} dir="ltr" />
+      <button
+        type="button"
+        className="password-eye"
+        aria-label={shown ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+        aria-pressed={shown}
+        onClick={() => setShown((v) => !v)}
+      >
+        <Icon name={shown ? "eyeOff" : "eye"} />
+      </button>
+    </span>
   );
 }
