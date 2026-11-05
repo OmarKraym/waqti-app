@@ -1210,3 +1210,6 @@ div.preview { display: grid; gap: 2px; }
 }
 .password-eye:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
 .password-eye .icon { width: 22px; height: 22px; }
+.holiday-tag { display: inline-block; margin-inline-start: var(--s2); padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: var(--warn-tint); color: var(--text); border: 1px solid var(--warn-line); vertical-align: middle; }
+.holidays-list li.leave-day:not(.cancelled) .holiday-note { color: var(--text-2); }

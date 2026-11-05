@@ -57,8 +57,8 @@ function HolidaysCard({ userId }: { userId: string }) {
       ) : (
         <ul className="holidays-list">
           {items.map((h) => (
-            <li key={`${h.name}-${h.when}`} className={h.cancelled ? "cancelled" : undefined}>
-              <span className="holiday-name">{h.name}</span>
+            <li key={`${h.name}-${h.when}`} className={[h.cancelled ? "cancelled" : "", h.kind === "annual_leave" ? "leave-day" : ""].join(" ").trim() || undefined}>
+              <span className="holiday-name">{h.name}{h.kind === "annual_leave" && <span className="holiday-tag">إجازة سنوية</span>}</span>
               <span className="holiday-when" dir="auto">{h.when}</span>
               {h.note && <span className="holiday-note">{h.note}</span>}
             </li>

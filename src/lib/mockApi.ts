@@ -273,8 +273,10 @@ export function createMockApi(): WaqtiApi {
       const d = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
       // ?holidays=1: a yearly holiday and a cancelled one on the Home card
       const holidays = q.get("holidays") === "1"
-        ? [{ name: "عطلة ستُلغى", start_date: d(5), end_date: d(6), repeats_yearly: false, cancelled: true },
-           { name: "عيد الاستقلال", start_date: d(20), end_date: d(20), repeats_yearly: true, cancelled: false }]
+        ? [{ kind: "holiday" as const, name: "عطلة ستُلغى", start_date: d(5), end_date: d(6), repeats_yearly: false, cancelled: true },
+           { kind: "annual_leave" as const, name: "الخميس بين العطلتين", start_date: d(9), end_date: d(9), scope: "all" as const,
+             worked_rule: "no_deduct" as const, short_rule: "unpaid" as const, cancelled: false },
+           { kind: "holiday" as const, name: "عيد الاستقلال", start_date: d(20), end_date: d(20), repeats_yearly: true, cancelled: false }]
         : [];
       return { weekly_off_label: q.get("offlabel") ?? "عطلة رسمية", holidays, today_holiday: q.get("holiday") };
     },

@@ -2,8 +2,21 @@
 // A copy is kept per account so the labels are right with no connection. Nothing here throws.
 export interface Calendar {
   weekly_off_label: string | null;
-  holidays: { name: string; start_date: string; end_date: string; repeats_yearly?: boolean; cancelled?: boolean }[];
+  holidays: CalendarDay[];
   today_holiday: string | null;
+}
+
+/** An official holiday, or (phase 18b) days the administration made annual leave, with the rules it picked. */
+export interface CalendarDay {
+  kind?: "holiday" | "annual_leave";
+  name: string;
+  start_date: string;
+  end_date: string;
+  repeats_yearly?: boolean;
+  cancelled?: boolean;
+  scope?: "absent" | "all";
+  worked_rule?: "no_deduct" | "deduct" | "deduct_overtime";
+  short_rule?: "negative" | "unpaid";
 }
 
 /** What the app calls the weekly day off (the company's text; "عطلة" until it is known). */
@@ -16,7 +29,16 @@ export function holidayBanner(c: Calendar | null): string | null {
   return c?.today_holiday ? `اليوم عطلة رسمية: ${c.today_holiday}` : null;
 }
 
-export interface HolidayItem { name: string; when: string; note: string | null; cancelled: boolean }
+export interface HolidayItem { name: string; when: string; note: string | null; cancelled: boolean; kind: "holiday" | "annual_leave" }
+
+/** The rules of an administration leave day, in one line. */
+function leaveDayNote(h: CalendarDay): string {
+  if (h.scope !== "all") return "إجازة سنوية لمن لا يحضر ولا يبصم (تُخصم من رصيده)";
+  const worked = h.worked_rule === "deduct" ? "تُخصم حتى لمن يحضر"
+    : h.worked_rule === "deduct_overtime" ? "من يحضر يُحسب وقته عملًا إضافيًا" : "من يحضر ويبصم لا تُخصم منه";
+  return ["إجازة سنوية للجميع (تُخصم من الرصيد)", worked, h.short_rule === "unpaid" ? "إن لم يكفِ رصيدك: بدون راتب" : null]
+    .filter(Boolean).join(" · ");
+}
 
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 function nextDay(iso: string): string {
@@ -37,8 +59,9 @@ export function holidayItems(c: Calendar | null, today: string): HolidayItem[] {
       name: h.name,
       when: (h.start_date <= today ? "اليوم · " : h.start_date === nextDay(today) ? "غدًا · " : "")
         + (h.end_date === h.start_date ? dmy(h.start_date) : `${dmy(h.start_date)} – ${dmy(h.end_date)}`),
-      note: h.cancelled ? "أُلغيت — الدوام كالمعتاد" : h.repeats_yearly ? "كل سنة" : null,
+      note: h.cancelled ? "أُلغيت — الدوام كالمعتاد" : h.kind === "annual_leave" ? leaveDayNote(h) : h.repeats_yearly ? "كل سنة" : null,
       cancelled: !!h.cancelled,
+      kind: h.kind ?? "holiday",
     }));
 }
 

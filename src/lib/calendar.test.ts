@@ -59,5 +59,23 @@ describe("holiday list on Home (active and cancelled, until the date has passed)
     expect(yearly.when).toBe("24/12/2026");
   });
   it("tomorrow", () => expect(holidayItems(cal, "2026-12-23").find((i) => i.name === "عيد الاستقلال")?.when).toBe("غدًا · 24/12/2026"));
+  it("annual leave days set by the administration say their rules", () => {
+    const c = {
+      weekly_off_label: null, today_holiday: null,
+      holidays: [
+        { kind: "annual_leave" as const, name: "جسر العيد", start_date: "2026-11-12", end_date: "2026-11-12", scope: "absent" as const,
+          worked_rule: "no_deduct" as const, short_rule: "negative" as const, cancelled: false },
+        { kind: "annual_leave" as const, name: "الخميس", start_date: "2026-11-19", end_date: "2026-11-19", scope: "all" as const,
+          worked_rule: "deduct_overtime" as const, short_rule: "unpaid" as const, cancelled: false },
+        { kind: "annual_leave" as const, name: "ملغاة", start_date: "2026-11-20", end_date: "2026-11-20", scope: "all" as const,
+          worked_rule: "deduct" as const, short_rule: "negative" as const, cancelled: true },
+      ],
+    };
+    const [a, b, x] = holidayItems(c, "2026-11-05");
+    expect(a.kind).toBe("annual_leave");
+    expect(a.note).toBe("إجازة سنوية لمن لا يحضر ولا يبصم (تُخصم من رصيده)");
+    expect(b.note).toBe("إجازة سنوية للجميع (تُخصم من الرصيد) · من يحضر يُحسب وقته عملًا إضافيًا · إن لم يكفِ رصيدك: بدون راتب");
+    expect(x.note).toBe("أُلغيت — الدوام كالمعتاد");
+  });
   it("nothing -> empty", () => expect(holidayItems(null, "2026-11-04")).toEqual([]));
 });
