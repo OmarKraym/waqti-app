@@ -122,6 +122,11 @@ describe("approval progress", () => {
     expect(progressLine(r)).toBe("رفضه: خالد");
   });
 
+  it("leave recorded for a day the administration made annual leave", () => {
+    expect(progressLine({ status: "approved", steps: [], company_leave_day_id: "x" })).toBe("سجّلتها الإدارة (إجازة سنوية من الإدارة)");
+    expect(progressLine({ status: "cancelled", steps: [], company_leave_day_id: "x" })).toBe("ألغتها الإدارة");
+  });
+
   it("a cancelled request says who cancelled it: him, or the administration (a note is saved only then)", () => {
     expect(progressLine({ status: "cancelled", steps: [] })).toBe("ألغيته");
     expect(progressLine({ status: "cancelled", steps: [], decision_note: null })).toBe("ألغيته");

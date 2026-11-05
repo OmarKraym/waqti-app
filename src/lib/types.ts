@@ -130,6 +130,8 @@ export interface RequestItem {
   days: number | null;
   /** Days HR took from the balance when it differs from `days` (phase 18a). */
   charged_days?: number | null;
+  /** Recorded by the server for a day the administration made annual leave (phase 18b). */
+  company_leave_day_id?: string | null;
   minutes: number | null;
   reason: string | null;
   decision_note: string | null;

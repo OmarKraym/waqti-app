@@ -180,7 +180,8 @@ export function visibleSteps(steps: ApprovalStep[]): ApprovalStep[] {
 
 /** One line under a request: who has it now, or how it ended. */
 /** `decision_note` on a cancelled request exists only when the administration cancelled it (an employee cancels his own pending request without one). */
-export function progressLine(r: Pick<RequestItem, "status" | "steps"> & { decision_note?: string | null }): string {
+export function progressLine(r: Pick<RequestItem, "status" | "steps"> & { decision_note?: string | null; company_leave_day_id?: string | null }): string {
+  if (r.company_leave_day_id) return r.status === "cancelled" ? "ألغتها الإدارة" : "سجّلتها الإدارة (إجازة سنوية من الإدارة)";
   const steps = visibleSteps(r.steps);
   if (r.status === "pending") {
     const at = steps.find((s) => s.status === "pending");

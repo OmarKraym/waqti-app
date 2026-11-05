@@ -77,6 +77,9 @@ begin
   perform pg_temp.ok((select count(*) from public.requests where employee_id = b and company_leave_day_id = l1) = 1, 'recording again never doubles the leave');
   r := private.leave_balance(b, 'annual', y);
   perform pg_temp.ok((r ->> 'used')::numeric = 1, 'the balance counts it', r::text);
+  r := pg_temp.run_as(v_admin, format('select public.admin_list_requests(null, ''leave'', %L)', b));
+  perform pg_temp.ok((r ->> 'total')::int = 1 and r -> 'items' -> 0 ->> 'reason' like 'إجازة سنوية من الإدارة%',
+                     'the panel request list (and the report) shows the recorded leave', r::text);
   s := pg_temp.err_as(v_admin, format($q$select public.admin_save_leave_day(%L, 'جسر', %L, %L, 'all')$q$, l1, d, d));
   perform pg_temp.ok(s = 'already_applied', 'a recorded day cannot be changed (cancel it instead)', s);
 

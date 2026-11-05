@@ -119,6 +119,69 @@ end;
 $$;
 revoke all on function private.enqueue_due_reminders(timestamptz) from public, anon, authenticated;
 
+create or replace function public.admin_list_requests(p_status text DEFAULT NULL::text, p_type text DEFAULT NULL::text, p_employee_id uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_company uuid := public.require_company_admin();
+begin
+  return jsonb_build_object(
+    'total', (select count(*) from public.requests r
+              where r.company_id = v_company
+                and exists (select 1 from public.request_approvals a
+                            where a.request_id = r.id and a.approver_kind = 'hr' and a.status in ('pending', 'approved', 'rejected'))
+                and (p_status is null or r.status::text = p_status)
+                and (p_type is null or r.request_type::text = p_type)
+                and (p_employee_id is null or r.employee_id = p_employee_id)),
+    'items', coalesce((
+      select jsonb_agg(private.request_json(x.id) order by x.created_at desc)
+      from (select r.id, r.created_at from public.requests r
+            where r.company_id = v_company
+              and exists (select 1 from public.request_approvals a
+                          where a.request_id = r.id and a.approver_kind = 'hr' and a.status in ('pending', 'approved', 'rejected'))
+              and (p_status is null or r.status::text = p_status)
+              and (p_type is null or r.request_type::text = p_type)
+              and (p_employee_id is null or r.employee_id = p_employee_id)
+            order by r.created_at desc
+            limit greatest(least(coalesce(p_limit, 50), 500), 1) offset greatest(coalesce(p_offset, 0), 0)) x), '[]'::jsonb));
+end;
+$function$;
+revoke all on function public.admin_list_requests(text, text, uuid, integer, integer) from public, anon;
+grant execute on function public.admin_list_requests(text, text, uuid, integer, integer) to authenticated;
+
+create or replace function private.request_json(p_request uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', r.id, 'type', r.request_type, 'leave_type', r.leave_type, 'status', r.status,
+    'permission_type_id', r.permission_type_id, 'permission_type', pt.name,
+    'start_at', r.start_at, 'end_at', r.end_at, 'days', r.days, 'charged_days', r.charged_days, 'minutes', r.minutes,
+    'reason', r.reason, 'decision_note', r.decision_note, 'decided_at', r.decided_at,
+    'created_at', r.created_at, 'current_step', r.current_step,
+    'employee', jsonb_build_object('full_name', e.full_name, 'employee_number', e.employee_number,
+                                   'department', e.department, 'job_title', e.job_title),
+    'steps', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'step_order', a.step_order, 'kind', a.approver_kind, 'status', a.status,
+               'approver_name', ae.full_name, 'decided_at', a.decided_at, 'note', a.note)
+             order by a.step_order)
+      from public.request_approvals a
+      left join public.employees ae on ae.id = a.approver_employee_id
+      where a.request_id = r.id), '[]'::jsonb))
+  from public.requests r
+  join public.employees e on e.id = r.employee_id
+  left join public.permission_types pt on pt.id = r.permission_type_id
+  where r.id = p_request
+$$;
+revoke all on function private.request_json(uuid) from public, anon, authenticated;
+
 drop function if exists public.admin_cancel_leave_day(uuid);
 drop function if exists public.admin_save_leave_day(uuid, text, date, date, text, text, text);
 drop function if exists public.admin_list_leave_days();
