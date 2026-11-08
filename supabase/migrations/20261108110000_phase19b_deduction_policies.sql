@@ -318,3 +318,123 @@ begin
   end loop;
 end
 $grants$;
+
+-- ---------------------------------------------------------------- the deduction of one punch
+-- {"minutes": n, "state": ...} for the employee's FIRST check-in of a local day, or null (not a check-in of this employee,
+-- not the first arrival, a day off). state:
+--   none    : nothing to deduct (on time, within the grace, no policy, or the policy deducts 0 for these minutes)
+--   excused : an APPROVED late-arrival justification covers the arrival (its end >= the arrival minute: the employee
+--             enters hours and minutes, so the seconds of the punch are ignored); minutes = 0
+--   pending : a deduction applies and a justification that covers it is still waiting for a decision; minutes = provisional
+--   due     : a deduction applies and nothing excuses it
+-- A justification that stops before the real arrival, a rejected or cancelled one, another permission type, or somebody
+-- else's never excuses anything.
+create or replace function private.punch_deduction(p_employee uuid, p_event uuid, p_at timestamptz)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_company uuid;
+  v_tz text;
+  v_day date;
+  v_ch integer;
+  v_amount integer;
+begin
+  select e.company_id, c.timezone into v_company, v_tz
+  from public.attendance_events ev
+  join public.employees e on e.id = ev.employee_id
+  join public.companies c on c.id = e.company_id
+  where ev.id = p_event and ev.employee_id = p_employee and ev.event_type = 'check_in';
+  if not found then return null; end if;
+  v_ch := private.punch_lateness(p_employee, p_event, 'check_in', p_at);
+  if v_ch is null then return null; end if;
+  if v_ch = 0 then return jsonb_build_object('minutes', 0, 'state', 'none'); end if;
+  v_day := (p_at at time zone v_tz)::date;
+  if exists (select 1 from public.requests r
+             join public.permission_types pt on pt.id = r.permission_type_id and pt.mode = 'late_arrival'
+             where r.employee_id = p_employee and r.request_type = 'permission' and r.status = 'approved'
+               and (r.start_at at time zone v_tz)::date = v_day and r.end_at >= date_trunc('minute', p_at)) then
+    return jsonb_build_object('minutes', 0, 'state', 'excused');
+  end if;
+  v_amount := private.late_deduction(v_company, v_day, v_ch);
+  if v_amount = 0 then return jsonb_build_object('minutes', 0, 'state', 'none'); end if;
+  return jsonb_build_object('minutes', v_amount,
+    'state', case when exists (select 1 from public.requests r
+                               join public.permission_types pt on pt.id = r.permission_type_id and pt.mode = 'late_arrival'
+                               where r.employee_id = p_employee and r.request_type = 'permission' and r.status = 'pending'
+                                 and (r.start_at at time zone v_tz)::date = v_day and r.end_at >= date_trunc('minute', p_at))
+                  then 'pending' else 'due' end);
+end;
+$$;
+revoke all on function private.punch_deduction(uuid, uuid, timestamptz) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- attendance list: + deduction_minutes, deduction_state
+-- (phase 12 text with two more columns at the end; null for check-outs and for punches that are not a first arrival)
+do $guard2$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.proname = 'admin_list_attendance'
+                   and pg_get_function_result(p.oid) like '%late_minutes integer, early_minutes integer)') then
+    raise exception 'phase19b: admin_list_attendance is not the phase 12 version';
+  end if;
+end
+$guard2$;
+
+drop function public.admin_list_attendance(timestamp with time zone, timestamp with time zone, uuid, public.attendance_event_type, integer, integer);
+create function public.admin_list_attendance(p_from timestamp with time zone default null, p_to timestamp with time zone default null,
+  p_employee_id uuid default null, p_event_type public.attendance_event_type default null, p_limit integer default 50, p_offset integer default 0)
+returns table(event_id uuid, employee_id uuid, employee_number text, full_name text, email text, department text,
+  event_type public.attendance_event_type, occurred_at timestamp with time zone, received_at timestamp with time zone,
+  within_geofence boolean, geofence_enforced boolean, geofence_name text, distance_meters numeric, accuracy_meters numeric,
+  latitude double precision, longitude double precision, authentication_method text, device_id text, total_count bigint,
+  needs_review boolean, location_status text, source text, offline boolean, sync_delay_s integer, suspect text[],
+  biometric text, missed_checkout boolean, late_minutes integer, early_minutes integer,
+  deduction_minutes integer, deduction_state text)
+language plpgsql
+security definer
+set search_path = 'public', 'extensions'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+begin
+  return query
+  select
+    ev.id, ev.employee_id, emp.employee_number, emp.full_name, u.email::text, emp.department,
+    ev.event_type, ev.occurred_at, ev.created_at, ev.within_geofence,
+    coalesce((ev.metadata ->> 'geofence_enforced')::boolean, true),
+    gf.name, ev.distance_from_geofence_meters, ev.accuracy_meters,
+    extensions.st_y(ev.location::extensions.geometry), extensions.st_x(ev.location::extensions.geometry),
+    ev.authentication_method, ev.device_id,
+    count(*) over (),
+    coalesce(ev.needs_review, false),
+    ev.location_status,
+    ev.metadata ->> 'source',
+    coalesce((ev.metadata ->> 'offline')::boolean, false),
+    (ev.metadata ->> 'sync_delay_s')::integer,
+    coalesce(array(select jsonb_array_elements_text(ev.metadata -> 'suspect')), '{}'::text[]),
+    ev.metadata ->> 'biometric',
+    coalesce((ev.metadata ->> 'missed_checkout')::boolean, false),
+    case when ev.event_type = 'check_in' then private.punch_lateness(ev.employee_id, ev.id, 'check_in', ev.occurred_at) end,
+    case when ev.event_type = 'check_out' then private.punch_lateness(ev.employee_id, ev.id, 'check_out', ev.occurred_at) end,
+    (dd.d ->> 'minutes')::integer,
+    dd.d ->> 'state'
+  from public.attendance_events ev
+  join public.employees emp on emp.id = ev.employee_id
+  join auth.users u on u.id = ev.employee_id
+  left join public.employee_geofences gf on gf.id = ev.geofence_id
+  left join lateral (select private.punch_deduction(ev.employee_id, ev.id, ev.occurred_at) as d where ev.event_type = 'check_in') dd on true
+  where ev.company_id = v_company
+    and (p_from is null or ev.occurred_at >= p_from)
+    and (p_to is null or ev.occurred_at < p_to)
+    and (p_employee_id is null or ev.employee_id = p_employee_id)
+    and (p_event_type is null or ev.event_type = p_event_type)
+  order by ev.occurred_at desc, ev.id
+  limit greatest(least(coalesce(p_limit, 50), 1000), 1)
+  offset greatest(coalesce(p_offset, 0), 0);
+end;
+$$;
+revoke all on function public.admin_list_attendance(timestamp with time zone, timestamp with time zone, uuid, public.attendance_event_type, integer, integer) from public, anon;
+grant execute on function public.admin_list_attendance(timestamp with time zone, timestamp with time zone, uuid, public.attendance_event_type, integer, integer) to authenticated;
