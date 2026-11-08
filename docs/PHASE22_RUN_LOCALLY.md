@@ -37,3 +37,5 @@ Same setup as phase 21 (Postgres 16 + PostGIS, clock fixed at 2026-10-31 10:00 w
 
 ## 4. Rollback
 `…_ROLLBACK.sql` drops the two admin functions and `private.cancel_leave_days`, and restores `private.record_punch` and `employee_attendance_state` to their pre-22 text. Days already cancelled stay cancelled (data) and their events keep `metadata.leave_day` / `leave_decision`.
+
+**How the rollback was proven (2026-11-09):** on a database with every migration applied, the rollback ran without error; `private.record_punch` and `employee_attendance_state` came back with the pre-22 text (`md5(prosrc)` `9ed5498c8136680008b45fe1713d10f9` and `030e5a5a3ad7b910323ac7c55e251f3e`, taken from the dumps the rollback was cut from), the three new functions were gone, and applying the migration again gave the five fingerprints of §3 again.
