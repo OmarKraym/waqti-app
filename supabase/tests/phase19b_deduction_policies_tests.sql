@@ -236,6 +236,8 @@ begin
   select id into b from public.employees e where e.is_active and e.id <> v_admin and e.id <> a and e.company_id = v_comp order by employee_number limit 1;
   select id into t_late from public.permission_types where company_id = v_comp and mode = 'late_arrival' and is_active limit 1;
   select id into t_range from public.permission_types where company_id = v_comp and mode = 'range' and is_active limit 1;
+  -- the fixture below saves more justifications than the seeded type allows per month (phase 19c refuses that at the table): lift the limit for this test only
+  update public.permission_types set max_per_month = null where id = t_late;
   -- a known starting point: grace 15, the current rule, one tiers policy for every day
   update public.companies set late_grace_min = 15, early_grace_min = 10, late_rule = 'all_after_grace' where id = v_comp;
   update public.employees set late_grace_min = null, early_grace_min = null where id in (a, b);
