@@ -1,4 +1,7 @@
 -- Phase 15: a punch on an approved-leave day is saved and flagged; the admin keeps or cancels the leave.
+-- Phase 22 changed how a NEW punch behaves on a leave the employee asked for (the day is cancelled, no review: see
+-- phase22_leave_punch_tests.sql). Rows flagged before that still exist, so this file builds them directly (pg_temp.flag_ev) and tests
+-- what the admin can do with them; the "not flagged" cases below still hold.
 -- Run with: psql -v admin_email=<company admin email> -f <this file>   (supabase/local/test-db.sh runs it on a fresh copy)
 \if :{?admin_email}
 \else
@@ -91,17 +94,10 @@ begin
   perform pg_temp.ok(private.approved_leave_on(a, today + 3) is null and private.approved_leave_on(a, today - 1) is null,
                      'and not the day after it ends nor the day before it starts');
 
-  -- ---------------------------------------------------------------- the punch is saved and flagged
-  r := private.record_punch(a, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_in', 'not_requested', null, null, null, now(), '{}'::jsonb);
-  v_ev := (r ->> 'event_id')::uuid;
-  perform pg_temp.ok((r ->> 'on_approved_leave')::boolean and (r ->> 'needs_review')::boolean and r ->> 'action' = 'check_in',
-                     'a check-in on a leave day is saved, flagged, and says so', r::text);
+  -- ---------------------------------------------------------------- a flagged row (as phase 15 wrote it) carries the reason
+  v_ev := pg_temp.flag_ev(a, v_tz, today, l1);
   perform pg_temp.ok((select metadata -> 'suspect' ? 'on_approved_leave' and metadata ->> 'leave_request_id' = l1::text and needs_review
                       from public.attendance_events where id = v_ev), 'the event carries the reason and the leave it conflicts with');
-  perform pg_temp.ok((select count(*) from public.attendance_sessions where employee_id = a and status = 'open') = 1, 'the session is open as usual');
-  r := private.record_punch(a, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_out', 'not_requested', null, null, null, now() + interval '1 minute', '{}'::jsonb);
-  perform pg_temp.ok(not (r ->> 'needs_review')::boolean and (r ->> 'on_approved_leave')::boolean,
-                     'the check-out of the same day is not a second item (still tells the employee)', r::text);
 
   -- the admin queue shows the leave
   perform pg_temp.as_user(v_admin);
@@ -136,7 +132,7 @@ begin
   perform pg_temp.sched_all(b, v_comp);
   perform pg_temp.mk_leave(b, v_comp, v_tz, 'unpaid', today, today);
   r := private.record_punch(b, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_in', 'not_requested', null, null, null, now(), '{}'::jsonb);
-  perform pg_temp.ok((r ->> 'on_approved_leave')::boolean and (r ->> 'needs_review')::boolean, 'an unpaid leave counts too', r::text);
+  perform pg_temp.ok((r ->> 'on_approved_leave')::boolean and (r ->> 'leave_day_cancelled')::boolean, 'an unpaid leave counts too (phase 22: its day is cancelled)', r::text);
   perform pg_temp.clean(b);
   r := private.record_punch(b, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_out', 'not_requested', null, null, null, now(), '{}'::jsonb);
   perform pg_temp.ok((r ->> 'missing_checkin')::boolean and (r ->> 'needs_review')::boolean and not (r ->> 'on_approved_leave')::boolean
@@ -213,8 +209,7 @@ begin
   l2 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 1);
   v_used := (private.leave_balance(a, 'annual', extract(year from today)::int) ->> 'used')::numeric;
   perform pg_temp.ok(v_used = 2, 'before: the 2 leave days are counted as used', v_used::text);
-  r := private.record_punch(a, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_in', 'not_requested', null, null, null, now(), '{}'::jsonb);
-  v_ev := (r ->> 'event_id')::uuid;
+  v_ev := pg_temp.flag_ev(a, v_tz, today, l2);
   -- a second flagged event of the same leave: next day, only the leave is wrong (cleared with it)
   insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, needs_review, location_status, metadata)
   values (a, 'check_in', now() + interval '1 day', true, true, 'not_requested',
@@ -418,8 +413,7 @@ begin
   -- ---------------------------------------------------------------- the old "accept" still works on a leave row
   perform pg_temp.clean(a);
   l3 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today);
-  r := private.record_punch(a, 'none', 'flag', 100, v_tz, gen_random_uuid(), 'check_in', 'not_requested', null, null, null, now(), '{}'::jsonb);
-  v_ev := (r ->> 'event_id')::uuid;
+  v_ev := pg_temp.flag_ev(a, v_tz, today, l3);
   perform pg_temp.as_user(v_admin);
   set local role authenticated;
   r := public.admin_resolve_review(v_ev, 'accept');
