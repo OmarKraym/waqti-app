@@ -173,3 +173,46 @@ describe("app updated before the database", () => {
     await expect(createSupabaseApi("https://x.supabase.co", "pk").bindDevice()).resolves.toBeUndefined();
   });
 });
+
+describe("late status from the server (phase 19c)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const online = () => vi.stubGlobal("navigator", { onLine: true, userAgent: "test-phone" });
+  const status = { event_id: "ev1", late_min: 40, grace_min: 15, chargeable_min: 40, deduction_min: null, rule: "all_after_grace", remaining: 3, offer: true, reason: "offer", permission: null };
+
+  it("calls employee_late_status with the event id and returns the answer", async () => {
+    online();
+    const calls: Array<{ fn: string; body: unknown }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push({ fn: url.split("/rpc/")[1]?.split("?")[0] ?? url, body: init?.body ? JSON.parse(String(init.body)) : null });
+      return new Response(JSON.stringify(status), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const { createSupabaseApi } = await import("./supabaseApi");
+    const api = createSupabaseApi("https://x.supabase.co", "pk");
+    await expect(api.getLateStatus("ev1")).resolves.toEqual(status);
+    expect(calls).toEqual([{ fn: "employee_late_status", body: { p_event_id: "ev1" } }]);
+  });
+
+  it("is null when the server does not have the function yet (app updated before the database)", async () => {
+    online();
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ code: "PGRST202", message: "Could not find the function public.employee_late_status(p_event_id) in the schema cache" }), { status: 404 }));
+    const { createSupabaseApi } = await import("./supabaseApi");
+    await expect(createSupabaseApi("https://x.supabase.co", "pk").getLateStatus("ev1")).resolves.toBeNull();
+  });
+
+  it("is null offline (no call is made)", async () => {
+    vi.stubGlobal("navigator", { onLine: false, userAgent: "test-phone" });
+    let called = false;
+    vi.stubGlobal("fetch", async () => { called = true; return new Response("{}", { status: 200 }); });
+    const { createSupabaseApi } = await import("./supabaseApi");
+    await expect(createSupabaseApi("https://x.supabase.co", "pk").getLateStatus("ev1")).resolves.toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it("any other server error is still an error (the caller decides; the punch flow never sees it)", async () => {
+    online();
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ code: "22023", message: "event_not_found" }), { status: 400 }));
+    const { createSupabaseApi } = await import("./supabaseApi");
+    await expect(createSupabaseApi("https://x.supabase.co", "pk").getLateStatus("nope")).rejects.toMatchObject({ code: expect.any(String) });
+  });
+});

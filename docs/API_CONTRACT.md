@@ -157,3 +157,44 @@ The event keeps `occurred_at` = claimed time and `created_at` = receive time; `m
 
 **Residual risk (cannot be closed on the web):** someone who hand-crafts API requests can still pick a
 time between their last server contact and the sync (≤ 72 h). Normal phone-clock changes are caught.
+
+---
+
+## 5. `employee_late_status(p_event_id uuid)` → `jsonb` (phase 19c)
+
+Asked by the app right after an **online check-in** was saved (not for a duplicate, a check-out, or a punch that was saved on the
+phone and sent later). The server decides everything: whether the arrival is late, the grace period, the company's counting
+rule, whether the employee can still request a late-arrival justification. The app shows a dialog only for `offer`.
+`stable`, `security definer`, granted to `authenticated` only. Without the function (database older than the app) the app
+gets "function not found" and shows nothing (`Api.getLateStatus` returns `null`; it also returns `null` when offline).
+
+Errors: `not_authenticated`/`employee_inactive` as everywhere; `event_not_found` (22023) when the event is not the caller's.
+
+```jsonc
+{
+  "event_id": "…",
+  "late_min": 40,            // minutes after the shift start, rounded UP (08:15:30 against 08:00 = 16); 0 = on time / early
+  "grace_min": 15,           // the employee's grace period (his own, else the company's)
+  "chargeable_min": 40,      // minutes that count: rule all_after_grace = all of late_min once it is above the grace, else 0;
+                             // rule beyond_grace = late_min − grace_min (never below 0)
+  "deduction_min": null,     // minutes of pay by the dated deduction policy; null = no policy covers the day, or not a first arrival
+  "rule": "all_after_grace", // or "beyond_grace"
+  "remaining": 3,            // justifications left this month for the late-arrival type (null = no monthly limit, or type not reached)
+  "offer": true,             // = (reason = 'offer')
+  "reason": "offer",
+  "permission": { "id": "…", "name": "…", "mode": "late_arrival", "max_per_month": 3, "max_minutes": 60,
+                  "days_back": 0, "days_ahead": 0, "month": "2026-11", "used": 0, "pending": 0 }   // null when the type was not reached
+}
+```
+
+`reason`, in the order the server decides: `not_check_in` → `day_off` (no shift that day) → `not_first` (an earlier check-in the
+same day) → `not_late` (late_min = 0) → `within_grace` (chargeable_min = 0) → `no_type` (no active late-arrival type) →
+`already` (a pending/approved late-arrival request for that day) → `no_balance` (remaining = 0) → `too_long`
+(late_min > the type's max_minutes) → `outside_window` (the day is outside the type's days_back/days_ahead) → `offer`.
+
+**The app treats every reason other than `offer` as "no offer"** (also one added later). For `no_balance`, `too_long` and
+`already` it shows one dismissible line above the punch button saying why (`lateNote`); for the others nothing.
+
+The monthly limit is also enforced at the table: a `before insert` trigger on `public.requests` (pending permission requests)
+takes a per-employee advisory lock and refuses with `permission_limit` when the month's allowance is used up, so two
+simultaneous requests cannot both pass.

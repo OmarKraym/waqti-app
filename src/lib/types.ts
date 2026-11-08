@@ -99,6 +99,30 @@ export interface PunchResult {
   time_token?: string;
 }
 
+/**
+ * Phase 19c: what the server says about ONE check-in that was just saved (`employee_late_status`).
+ * `reason`: offer | not_check_in | day_off | not_first | not_late | within_grace | no_type | already | no_balance |
+ * too_long | outside_window. Only `offer` means "offer a late-arrival justification"; any other value (also one added
+ * later) means no offer. See docs/API_CONTRACT.md §5.
+ */
+export interface LateStatus {
+  event_id: string;
+  /** Minutes after the shift start, rounded up (0 = on time or early). */
+  late_min: number;
+  grace_min: number;
+  /** Minutes that count after the grace period, by the company's rule. 0 = nothing counts. */
+  chargeable_min: number;
+  /** Expected deduction in minutes of pay by the company's policy; null = no policy covers the day / not applicable. */
+  deduction_min: number | null;
+  rule: "all_after_grace" | "beyond_grace" | string;
+  /** Justifications left this month (null = no monthly limit, or the type was not reached). */
+  remaining: number | null;
+  offer: boolean;
+  reason: string;
+  /** The late-arrival permission type with this month's usage; null when the server did not get that far. */
+  permission: PermissionUsage | null;
+}
+
 // ---------------------------------------------------------------- Requests (Phase 4). See docs/API_CONTRACT.md §4.
 
 export type RequestType = "leave" | "permission" | "other";

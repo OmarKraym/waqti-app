@@ -22,6 +22,7 @@ import type {
   OvertimePreview,
   OfflinePunchInput,
   PunchInput,
+  LateStatus,
   PunchResult,
   RequestItem,
   RequestPreview,
@@ -318,6 +319,17 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
         p_monotonic_ms: input.monotonic_ms,
         p_device_now: input.device_now,
       });
+    },
+
+    async getLateStatus(eventId: string) {
+      try {
+        return await rpc<LateStatus>("employee_late_status", { p_event_id: eventId });
+      } catch (e) {
+        // Offline, or the app was updated before the database: no decision to show. Every other error is the caller's.
+        if (e instanceof AppError && e.code === "network") return null;
+        if (e instanceof AppError && e.code === "unknown" && /Could not find the function|employee_late_status/.test(e.message)) return null;
+        throw e;
+      }
     },
 
     async getRequestsOverview() {

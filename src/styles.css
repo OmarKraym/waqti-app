@@ -405,6 +405,13 @@ button { font: inherit; }
 .banner .x .icon { width: 18px; height: 18px; }
 .banner .x:hover { opacity: 1; background: var(--veil); }
 
+/* A line above the punch button and the tab bar (after a late check-in he cannot justify). Dismissible. */
+.late-note {
+  position: fixed; z-index: 5;
+  inset-inline: var(--s4); margin-inline: auto; max-width: 520px;
+  bottom: calc(var(--h-tabbar) + var(--s4) + var(--h-float) + var(--s3) + env(safe-area-inset-bottom));
+}
+
 /* ---------------------------------------------------------------- frame */
 .center-screen {
   min-height: 100dvh;

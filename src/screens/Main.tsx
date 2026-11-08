@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionUser } from "../lib/api";
-import { lateCandidate } from "../lib/lateOffer";
-import { draftToRequest, formatMinutes, formatTimes, permissionLeft, type Draft } from "../lib/requests";
+import { lateNote, lateOfferFrom, shouldAskLateStatus, type LateOffer } from "../lib/lateOffer";
+import { formatMinutes, formatTimes, type Draft } from "../lib/requests";
 import type { PunchResult, RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { readPushState } from "../lib/push";
@@ -15,7 +15,7 @@ import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "./hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Modal } from "./ui";
+import { Banner, Modal } from "./ui";
 import { useRequests } from "./useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -67,24 +67,29 @@ export function Main({ user }: { user: SessionUser }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // After a late check-in: offer a late-arrival justification, if one can still be requested.
-  const [lateOffer, setLateOffer] = useState<{ draft: Draft; minutes: number; left: number | null } | null>(null);
+  // After a check-in the SERVER says what to do about a late arrival (employee_late_status): offer a justification in a
+  // dialog, or, when he is late but cannot request one (none left, too long, already requested), say why in a line.
+  // Whatever goes wrong here (offline, an older server, an error) is silent: the punch is already saved.
+  const [lateOffer, setLateOffer] = useState<LateOffer | null>(null);
+  const [lateInfo, setLateInfo] = useState<string | null>(null);
+  const punchSeq = useRef(0);
   const onPunched = useCallback(async (result: PunchResult) => {
-    if (result.action !== "check_in" || result.duplicate) return;
+    const mine = ++punchSeq.current;     // a newer punch makes an older, slower answer obsolete
+    setLateInfo(null);
+    if (!shouldAskLateStatus(result)) return;
     try {
-      const overview = await api.getRequestsOverview();
-      const cand = lateCandidate(overview, result.server_time, overview.timezone);
-      if (!cand) return;
-      const built = draftToRequest(cand.draft, overview.timezone);
-      if (!built.ok) return;
-      // The SERVER decides whether the arrival was late (shift, days off, longest allowed delay).
-      const preview = await api.previewRequest(built.request);
-      if (!preview.minutes || preview.minutes < 1) return;
-      setLateOffer({ draft: cand.draft, minutes: preview.minutes, left: permissionLeft(cand.ptype) });
+      const status = await api.getLateStatus(result.event_id);
+      if (!status || mine !== punchSeq.current) return;
+      // The company clock decides the day and the arrival time on the form. It is in the state saved on this phone
+      // (the punch screen has just loaded it); without it no form is prepared rather than one with a guessed time.
+      const timeZone = loadCachedState(browserStorage(), user.id)?.data.company.timezone;
+      const offer = timeZone ? lateOfferFrom(status, result.server_time, timeZone) : null;
+      if (offer) setLateOffer(offer);
+      else setLateInfo(lateNote(status));
     } catch {
-      // no offer: not late, not allowed, or offline — the employee can still request it from the requests tab
+      // no decision: offline, the database is older than the app, or an error — he can still request it from the requests tab
     }
-  }, []);
+  }, [user.id]);
 
   const go = (t: Tab) => {
     setTab(t);
@@ -169,6 +174,9 @@ export function Main({ user }: { user: SessionUser }) {
           <Notifications online={online} userId={user.id} />
         </div>
       )}
+      {lateInfo && !profile && (
+        <div className="late-note"><Banner kind="warning" onClose={() => setLateInfo(null)}>{lateInfo}</Banner></div>
+      )}
       <nav className="tabbar three" aria-label="التنقل" hidden={profile}>
         <button className={`tab${tab === "today" ? " on" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M8 8.5h8M8 12.5h8M8 16.5h4" /></svg>
@@ -188,7 +196,7 @@ export function Main({ user }: { user: SessionUser }) {
       {lateOffer && (
         <Modal title="تأخرت اليوم" onClose={() => setLateOffer(null)}>
           <p className="modal-text">
-            وصلت متأخرًا {formatMinutes(lateOffer.minutes)} عن بداية دوامك. يمكنك تقديم تبرير تأخير الآن.
+            وصلت متأخرًا عن بداية دوامك، والمحسوب عليك {formatMinutes(lateOffer.minutes)}. يمكنك تقديم تبرير تأخير الآن.
             {lateOffer.left !== null && ` المتبقي لك هذا الشهر: ${formatTimes(lateOffer.left)}.`}
           </p>
           <div className="modal-actions">

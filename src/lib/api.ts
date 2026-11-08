@@ -11,6 +11,7 @@ import type {
   OvertimePreview,
   OfflinePunchInput,
   PunchInput,
+  LateStatus,
   PunchResult,
   RequestItem,
   RequestPreview,
@@ -42,6 +43,9 @@ export interface WaqtiApi {
   ): Promise<unknown>;
   /** Sends a punch that was saved on the phone without internet. */
   punchOffline(input: OfflinePunchInput): Promise<PunchResult>;
+  /** Phase 19c: the server's decision about a check-in it just saved (late? can a justification still be requested?).
+   *  null = the server does not have the function yet, or there is no connection. */
+  getLateStatus(eventId: string): Promise<LateStatus | null>;
 
   // ---- requests (Phase 4). All need a connection.
   getRequestsOverview(): Promise<RequestsOverview>;

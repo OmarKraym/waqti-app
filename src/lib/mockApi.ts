@@ -8,6 +8,10 @@
 //   inbox = 0        (no requests waiting for my approval; default: two, as a manager)
 //   requests = 1     (adds sample requests of my own: approved, pending, rejected)
 //   overtime = 1     (I manage a team of 3 and have one assignment of my own)
+//   grace = 15       (the company's grace period in minutes; the server decides what counts as late — default 15)
+//   rule = beyond_grace  (count only the minutes after the grace period; default: all minutes once the grace is passed)
+//   lateused = 3     (late-arrival justifications already used this month; 3 = none left)
+//   deduct = 1       (a deduction policy: every 15 counted minutes = 10 minutes of pay, rounded up to 5)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
 // one-sided monotonic check, 72 h limit, time order.
@@ -27,6 +31,7 @@ import type {
   InboxItem,
   LeaveBalance,
   LeaveType,
+  LateStatus,
   LocationStatus,
   NewRequest,
   OfflinePunchInput,
@@ -62,6 +67,10 @@ const policy = (q.get("policy") ?? "geofence") as AttendanceState["location_poli
 const outside = (q.get("outside") ?? "flag") as AttendanceState["outside_action"];
 const pos = q.get("pos") ?? "inside";
 const flaky = q.get("net") === "flaky";
+const graceMin = Number(q.get("grace") ?? 15);
+const lateRule: LateStatus["rule"] = q.get("rule") === "beyond_grace" ? "beyond_grace" : "all_after_grace";
+const lateUsed = Number(q.get("lateused") ?? 0);
+const deductPolicy = q.get("deduct") === "1";
 /** ?bio=1: the company asks for the fingerprint and this account has a registered phone (the profile switch can be tried). */
 const bio = q.get("bio") === "1" || q.get("bio") === "new";
 /** ?bio=new: required, but this phone is not registered yet (the registration screen can be tried). */
@@ -217,9 +226,20 @@ export function createMockApi(): WaqtiApi {
   let notif = { remind_check_in: false, check_in_before: 10, remind_check_out: false, check_out_before: 0 };
   const devices = new Set<string>();
 
+  const { _lateStatusOf, ...reqApi } = req;
   return {
-    ...req,
+    ...reqApi,
     ...ot,
+    async getLateStatus(eventId: string) {
+      await wait(250);
+      if (!navigator.onLine) return null;
+      const i = events.findIndex((e) => e.id === eventId);
+      if (i < 0) throw new AppError("unknown", "event_not_found");
+      const ev = events[i];
+      const dayOf = (iso: string) => localDate(iso, "Africa/Tripoli");
+      const earlier = events.slice(i + 1).some((e) => e.action === "check_in" && dayOf(e.server_time) === dayOf(ev.server_time));
+      return _lateStatusOf(ev.id, ev.server_time, ev.action === "check_in", earlier);
+    },
     async savePushSubscription(k) { await wait(200); requireNetwork(); devices.add(k.endpoint); },
     async deletePushSubscription(endpoint) { await wait(200); requireNetwork(); devices.delete(endpoint); },
     async getNotificationSettings() { await wait(200); requireNetwork(); return { ...notif, devices: devices.size }; },
@@ -401,6 +421,20 @@ function createMockRequests() {
                      current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -12)),
                      decision_note: "أُلغيت أيام من إجازتك (" + plusDays(t, 2) + ") بسبب تسجيل حضورك يوم " + t }));
   }
+  if (lateUsed > 0) {
+    // N approved late-arrival justifications on other days of this month (so this month's allowance is partly or fully used)
+    const t = today();
+    let n = 0;
+    for (let d = 1; d <= 28 && n < lateUsed; d += 1) {
+      const day = `${t.slice(0, 7)}-${String(d).padStart(2, "0")}`;
+      if (day === t) continue;
+      const start = new Date(Date.parse(startOfDay(day)) + 8 * 3_600_000).toISOString();
+      mine.push(make({ type: "permission", permission_type_id: "pt-late", permission_type: "تبرير تأخير", status: "approved", start_at: start,
+                       end_at: new Date(Date.parse(start) + 20 * 60_000).toISOString(), minutes: 20, current_step: null,
+                       steps: steps("خالد المبروك", "approved", "approved"), created_at: start }));
+      n += 1;
+    }
+  }
   if (q.get("requests") === "1") {
     const t = today();
     mine.push(
@@ -506,7 +540,36 @@ function createMockRequests() {
     requireNetwork();
   };
 
+  /** The server's decision about a check-in (same rules as employee_late_status). */
+  function lateStatusOf(eventId: string, punchIso: string, isCheckIn: boolean, earlierCheckInToday: boolean): LateStatus {
+    const t = today();
+    const day = localDate(punchIso, TZ);
+    const base = { event_id: eventId, late_min: 0, grace_min: graceMin, chargeable_min: 0, deduction_min: null as number | null, rule: lateRule, remaining: null as number | null, offer: false };
+    const no = (reason: string): LateStatus => ({ ...base, reason, permission: null });
+    if (!isCheckIn) return no("not_check_in");
+    if (new Date(`${day}T12:00:00Z`).getUTCDay() === 5) return no("day_off");
+    if (earlierCheckInToday) return no("not_first");
+    const raw = Math.max(Math.ceil((Date.parse(punchIso) - Date.parse(atHour(day, SHIFT_START_H))) / 60_000), 0);
+    const counted = lateRule === "beyond_grace" ? Math.max(raw - graceMin, 0) : raw > graceMin ? raw : 0;
+    const deduction = deductPolicy ? Math.ceil((counted * 10) / 15 / 5) * 5 : null;
+    const st = { ...base, late_min: raw, chargeable_min: counted, deduction_min: deduction };
+    if (raw === 0) return { ...st, reason: "not_late", permission: null };
+    if (counted === 0) return { ...st, reason: "within_grace", permission: null };
+    const pt = PERMISSION_TYPES.find((x) => x.mode === "late_arrival");
+    if (!pt) return { ...st, reason: "no_type", permission: null };
+    const perm = permission(pt.id, day.slice(0, 7));
+    const remaining = pt.max_per_month === null ? null : Math.max(pt.max_per_month - perm.used - perm.pending, 0);
+    const already = mine.some((r) => r.permission_type_id === pt.id && (r.status === "pending" || r.status === "approved") && localDate(r.start_at, TZ) === day);
+    const reason = already ? "already"
+      : remaining === 0 ? "no_balance"
+      : pt.max_minutes !== null && raw > pt.max_minutes ? "too_long"
+      : day < plusDays(t, -pt.days_back) || day > plusDays(t, pt.days_ahead) ? "outside_window"
+      : "offer";
+    return { ...st, remaining, reason, offer: reason === "offer", permission: perm };
+  }
+
   return {
+    _lateStatusOf: lateStatusOf,
     async getRequestsOverview() {
       await online(350);
       const t = today();
