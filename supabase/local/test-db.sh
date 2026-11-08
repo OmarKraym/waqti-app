@@ -25,7 +25,7 @@ PY
   for m in $(ls migrations/*.sql | grep -v ROLLBACK | grep -v phase5b); do $PSQL -d $DB -1 -f "$m"; done
 }
 total=0; failed=0
-for t in tests/*.sql; do
+for t in ${TESTS:-tests/*.sql}; do
   reset_db
   r=$(psql -X -q -d $DB -v admin_email=admin@example.com -f "$t" 2>&1 | grep -oE "RESULT passed=[0-9]+ failed=[0-9]+|FAIL [0-9]+:.*" || true)
   echo "$(basename "$t"): ${r:-NO RESULT}"
