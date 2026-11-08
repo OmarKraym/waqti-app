@@ -6,7 +6,7 @@ One migration (`supabase/migrations/20261110090000_phase22_leave_punch_cancels_d
 ```bash
 cd supabase
 bash local/test-db.sh                                                    # every file, each on a fresh database: TOTAL passed=1371 failed=0
-TESTS=tests/phase22_leave_punch_tests.sql bash local/test-db.sh          # only phase 22 (61)
+TESTS=tests/phase22_leave_punch_tests.sql bash local/test-db.sh          # only phase 22 (63)
 TESTS=tests/phase15_leave_conflict_tests.sql bash local/test-db.sh       # phase 15 (69), now builds its flagged rows directly
 ```
 Same setup as phase 21 (Postgres 16 + PostGIS, clock fixed at 2026-10-31 10:00 with libfaketime).

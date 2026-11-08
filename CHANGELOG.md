@@ -18,7 +18,7 @@ Hand-off: `docs/PHASE22_RUN_LOCALLY.md`. Contract: `docs/API_CONTRACT.md` §10.
 
 ### Tests (all local, 2026-11-09)
 
-Database **1371 / 1371** (32 files; phase 22: 61; phase 15: 69, rebuilt on direct flagged rows) · panel unit 78 / 78 · panel behaviour 404 / 404 · app 389 / 389, types clean, build OK · mutation checks: 6 on the migration, 8 on the panel module, all killed.
+Database **1373 / 1373** (32 files; phase 22: 63; phase 15: 69, rebuilt on direct flagged rows) · panel unit 78 / 78 · panel behaviour 404 / 404 · app 389 / 389, types clean, build OK · mutation checks: 6 on the migration, 8 on the panel module, all killed.
 
 ### Rulings
 
