@@ -1,7 +1,7 @@
 # Phase 20 — the admin adds a forgotten check-in or check-out: run it locally, and how to apply it later
 
 Phase 20 = two migrations (20 `admin_add_punch`, 20b the «أضافه المدير» flag for the employee), admin panel 12.17.0 and a small app change.
-**Nothing of it is applied or deployed.** Every test below ran on a throwaway local database.
+**Migration 20 was applied to production on 2026-11-08 (§3, "What was done"); 20b, the panel and the app are not.** Every test below ran on a throwaway local database.
 
 ## 1. Run the database tests (local only, never production)
 
@@ -52,6 +52,18 @@ State read-only on 2026-11-08, before any phase 20 work reached production:
 - `employee_attendance_state`: one overload, raw fingerprint `51e02778b74d5a6f53a796c59e739917` = exactly the phase 14 version in the repository
   (so 20b replaces a known function; the rollback file restores exactly this text).
 - `admin_add_punch`: does not exist.
+
+### What was done (2026-11-08)
+
+Migration 20 (`phase20_admin_manual_punch`) was applied to production after Omar's «نعم» (the message «نعم - ارفع» was read as «نعم» for the first part, migration 20,
+and «ارفع» for the push; 20b still waits for its own «نعم»). Checked right after:
+
+- `admin_add_punch`: 1 row, fingerprint `71b512a9be0cb099bdff7fecbae66620` = the local value; `security definer`; `anon` cannot execute it; `authenticated` can.
+- `employee_attendance_state`: still 1 row, `51e02778b74d5a6f53a796c59e739917` (untouched).
+- No test call was made on production (it would write attendance data). The first real use is the suggested test at the end of this file, with a test employee.
+- No backup was taken first: the migration only adds one function (no table, column or data change) and its rollback is `drop function`.
+
+The rest of this section is the procedure as written before applying (kept for 20b).
 
 1. **Back up first.** Supabase → Database → Backups: take a manual backup (or confirm today's daily backup exists). Note the time.
 2. Apply in this order, **one at a time**, running its check before the next. Plain SQL, a guard block that stops with a clear message if a previous phase

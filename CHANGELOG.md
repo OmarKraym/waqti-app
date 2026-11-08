@@ -1,9 +1,11 @@
 # Changelog
 
-## Phase 20 — the admin adds a forgotten check-in or check-out (2026-11-08) — built and tested locally; NOT applied, NOT deployed
+## Phase 20 — the admin adds a forgotten check-in or check-out (2026-11-08) — migration 20 APPLIED to production; 20b, panel and app NOT yet
 
-Two database migrations, admin panel 12.17.0 and a small app change. **Nothing of phase 20 is on production, in the panel folder in use, or in the
-deployed app.** Procedure and checks: `docs/PHASE20_RUN_LOCALLY.md`. Decisions below were approved by Omar on 2026-11-08 («نعم أ»).
+Two database migrations, admin panel 12.17.0 and a small app change. **Migration 20 (`admin_add_punch`) was applied to production on 2026-11-08 after Omar's «نعم»**
+(migration name `phase20_admin_manual_punch`; fingerprint `71b512a9be0cb099bdff7fecbae66620` matched the local value; `anon` cannot execute it, `authenticated` can;
+`employee_attendance_state` untouched, still `51e02778…`). **20b (`by_admin` for the employee), the panel zip and the app are NOT applied / installed / deployed.**
+Nothing is visible to anyone until the panel 12.17 is installed. Procedure and checks: `docs/PHASE20_RUN_LOCALLY.md`. Decisions below were approved by Omar on 2026-11-08 («نعم أ»).
 
 ### What changes for people
 
