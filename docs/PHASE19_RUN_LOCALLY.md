@@ -1,7 +1,8 @@
 # Phase 19 — run it locally, and how to apply it later
 
 Phase 19 = three migrations (19a late rule, 19b deduction policies, 19c late status + limit guard), admin panel 12.16.0 and an app change.
-**Nothing was applied to production, deployed or pushed.** Everything below ran on a throwaway local database.
+The three migrations were applied to production on 2026-11-08 (see §3, "What was done"); the app and the panel are **not** deployed.
+Every test below ran on a throwaway local database.
 
 ## 1. Run the database tests (local only, never production)
 
@@ -47,7 +48,24 @@ Mutation checks (change the code on purpose, the tests must fail, then restore):
 
 ## 3. Applying on production (ONLY after Omar says «نعم», one part at a time)
 
-Not done. When approved:
+### What was done (2026-11-08)
+
+19a, 19b and 19c were applied to production one after the other (migration names `phase19a_late_rule`, `phase19b_deduction_policies`,
+`phase19c_late_status`), each checked before the next:
+
+- The fingerprints of the three groups matched the local values exactly (4 rows `e281a0f5…`, 12 rows `1f982677…`, 2 rows `df7977f9…`).
+- Column check: the only columns production lacked were `companies.late_rule` and the `deduction_policies` table, i.e. exactly what 19a/19b add.
+- Grants: the admin functions and `employee_late_status` are executable by `authenticated` only; the private ones by nobody; `deduction_policies`
+  has RLS on and no direct grant. The security advisor shows nothing new in kind (the same two patterns as the older tables/functions).
+- Read-only checks: the 22 first arrivals on record give the same lateness as the old rule; the attendance list loads as an admin (54 rows,
+  the new columns present, all `none` because no policy exists yet); the company is on `all_after_grace`.
+- **Before applying**: production's migration list had no records for phases 18a/18b although their tables and columns exist; the older
+  functions on production differ from the repository only in comments (checked with comment-stripped hashes). So compare the NEW
+  functions by the raw fingerprint (exact) and the older ones only after stripping comments.
+
+If you need to undo: the three `_ROLLBACK.sql` files, in reverse order (below, step 6).
+
+The rest of this section is the procedure as it was written before applying (kept for the next phase).
 
 1. **Back up first.** Supabase → Database → Backups: take a manual backup (or confirm today's daily backup exists). Note the time.
 2. Apply in this order, **one at a time**, running its check before the next. The migrations are plain SQL with a guard block that

@@ -1,9 +1,10 @@
 # Changelog
 
-## Phase 19 — attendance rules (2026-11-08) — written and tested locally, NOT applied, NOT deployed
+## Phase 19 — attendance rules (2026-11-08) — database APPLIED to production; app and panel NOT deployed
 
-Three database migrations, admin panel 12.16.0 and an app change. **Nothing here has been applied to production, deployed or
-pushed.** Apply order and checks: `docs/PHASE19_RUN_LOCALLY.md`.
+Three database migrations, admin panel 12.16.0 and an app change. **The three migrations (19a, 19b, 19c) were applied to
+production on 2026-11-08, one at a time, each checked by function fingerprint** (see `docs/PHASE19_RUN_LOCALLY.md` §3). The app
+and the panel zip are **not** deployed yet. Apply order and checks: `docs/PHASE19_RUN_LOCALLY.md`.
 
 ### What changes for people
 
@@ -70,7 +71,7 @@ No historical attendance data is touched by any of the three, in either directio
 
 - No money: the deduction is minutes of pay; turning it into money belongs to payroll.
 - The Excel exports have no deduction column yet.
-- Nothing was applied to production, deployed or pushed.
+- The app and the panel are not deployed. Until they are, nobody sees the new screens; the database already answers the new calls.
 
 ### Tests (all run locally in this session)
 
