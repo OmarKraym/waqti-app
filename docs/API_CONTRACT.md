@@ -25,7 +25,7 @@ No arguments. Returns the state that drives the home screen.
   "max_accuracy_m": 100,
   "recent_events": [
     { "id": "uuid", "action": "check_in", "server_time": "2026-10-29T07:05:00Z",
-      "location_status": "inside", "needs_review": false }
+      "location_status": "inside", "needs_review": false, "by_admin": false }
   ],
   "server_time": "2026-10-29T07:10:12Z"
 }
@@ -38,7 +38,7 @@ No arguments. Returns the state that drives the home screen.
 | `location_policy` | `geofence` \| `record` \| `none` (per employee; company default when not set). |
 | `outside_action` | `flag` \| `reject`. Used only with `geofence`. |
 | `max_accuracy_m` | Readings with worse accuracy are `inaccurate`. Company setting. |
-| `recent_events` | Newest first, max 10, own events only. |
+| `recent_events` | Newest first, max 10, own events only. `by_admin` (phase 20b) is `true` when the admin added the movement (`authentication_method = 'admin'`: a forgotten punch added with `admin_add_punch`, or a correction of the review queue). An older server sends no `by_admin`; the app reads a missing key as `false`. |
 | `server_time` | `now()`. The PWA shows its clock from this, not from the phone. |
 
 Errors: `not_authenticated`, `employee_inactive`, `must_change_password`.
@@ -232,3 +232,25 @@ Table `public.deduction_policies` (RLS on, no direct access): per company, dated
 | `admin_delete_deduction_policy(p_id uuid)` | `policy_locked`, `policy_not_found`. Audited. |
 | `admin_preview_deduction(p_policy jsonb, p_late_after_start integer[])` | `[{late, chargeable, deduct}]` using the company's grace and rule; 1–50 values of 0–1440. The panel shows these numbers and never recomputes them. |
 | `admin_list_attendance(...)` | two columns added at the END: `deduction_minutes integer`, `deduction_state text` — for the employee's FIRST check-in of a local day only (otherwise null): `none` / `excused` (an approved late-arrival justification covers the arrival minute) / `pending` (a covering one still waits; minutes provisional) / `due`. |
+
+## 8. The admin adds a forgotten check-in or check-out (phase 20) — administration
+
+`admin_add_punch(p_employee_id uuid, p_type text, p_time timestamptz, p_reason text)` → `{event_id, event_type, session_id, session_status}`
+(`security definer`; the caller must be a company admin; the employee must belong to the caller's company).
+
+The movement is saved like a normal punch, so lateness, early leave and the phase 19 deduction are counted **by the time the admin writes**
+(decision «أ» of 2026-11-08): `authentication_method 'admin'`, `location_status 'not_requested'`, `location_policy 'none'`,
+`metadata {source: 'admin_manual', reason, added_by}`. Audited as `attendance.manual_add`.
+
+| Rule | Detail |
+|---|---|
+| Reason | required, 3–500 characters after trimming (`reason_required`, 22023) |
+| Time | in the past and at most 62 days back; not the exact time of another event of that employee (`invalid_time`) |
+| Employee | does not have to be active (payroll may need a former employee's last days) |
+| `check_in` | refused with `open_session` when he has an open session; with `overlaps_session` inside a closed session of his; with `unpaired_checkout` right before a check-out that has no check-in on the same day (that one belongs to the review queue: `admin_resolve_review`). The session is `open` when the time is today and nothing comes after it; otherwise `missed_checkout`, and the check-in is flagged `needs_review` with `metadata.missed_checkout = true`, like a forgotten check-out found by the system. |
+| `check_out` | closes the latest `open` / `missed_checkout` session whose check-in is before the time (`no_open_session` when there is none). `invalid_time` when more than 24 h passed since that check-in, or when another event of his lies between them. The check-in's `missed_checkout` flag is cleared, and its `needs_review` too unless something else needs a look (a `suspect` entry, or a location that was not `inside` / `recorded` / `not_requested`). |
+
+Errors: `invalid_action`, `reason_required` (22023); `invalid_time`, `not_found`, `open_session`, `overlaps_session`, `unpaired_checkout`, `no_open_session` (P0001); `forbidden` (42501) for a non-admin.
+Nothing existing is changed or deleted. Rollback: drop the function (the events it created stay as history).
+
+`admin_list_attendance` already returns `authentication_method`; the panel prints «أضافه المدير» for `admin`. Phase 20b adds `by_admin` to the employee's `recent_events` (§1).

@@ -1,5 +1,54 @@
 # Changelog
 
+## Phase 20 — the admin adds a forgotten check-in or check-out (2026-11-08) — built and tested locally; NOT applied, NOT deployed
+
+Two database migrations, admin panel 12.17.0 and a small app change. **Nothing of phase 20 is on production, in the panel folder in use, or in the
+deployed app.** Procedure and checks: `docs/PHASE20_RUN_LOCALLY.md`. Decisions below were approved by Omar on 2026-11-08 («نعم أ»).
+
+### What changes for people
+
+- **Admin panel → الحضور → «إضافة حضور أو خروج».** The admin picks the employee (the one chosen in the filter comes preselected), the kind, the day, the time on the
+  company clock, and writes a **reason (required)**. The movement is saved like a normal punch: **lateness, early leave and the phase 19 deduction are counted
+  by the time the admin writes** (option «أ»). It is marked «أضافه المدير» in the movements table and written to the audit log (`attendance.manual_add`) with the reason.
+- **Check-in:** refused when the employee has an open session, when the time is inside a closed session of his, when it equals another event's time, or right before a
+  check-out with no check-in the same day (that case belongs to the review queue). Today with nothing after it → the session stays **open** (he is still at work);
+  an earlier day, or later events exist → the session is `missed_checkout` and the check-in is flagged for review until its check-out is added.
+- **Check-out:** closes the latest open / waiting session that started before the time, if that is at most **24 h** earlier and no other event lies in between. It clears the
+  «missed check-out» flag (and the review flag, unless something else needs a look).
+- **Limits:** the time is in the past and at most **62 days** back. The employee may be deactivated (payroll can need a former employee's last days). Nothing
+  existing is changed or deleted.
+- **Employee app (20b):** a movement the admin added shows «أضافه المدير» on today's card and beside the day in «الأيام السابقة».
+
+### Tests (all local, 2026-11-08)
+
+Database 1118 / 1118 (29 files; phase 20: 69) · panel unit 55 / 55 · panel behaviour 259 / 259 (also on the unzipped `waqti_admin_12_17.zip`) ·
+panel layout 264 screens, 0 problems · app 352 / 352, types clean, build OK · mutation checks on the new code: all killed (see `docs/PHASE20_RUN_LOCALLY.md` §2).
+
+### Rulings (decided while building; each costs little to change)
+
+1. Reason is required, 3–500 characters after trimming. *If wrong:* a one-line change in the function and the dialog.
+2. 62 days back, 24 h check-in→check-out. *If wrong:* a number in the function (and `MAX_DAYS_BACK` in the panel).
+3. A check-in with later events, or on an earlier day, is `missed_checkout` and flagged — it uses the existing «missed check-out» path instead of a new status.
+4. `unpaired_checkout` is refused instead of guessed: the review queue (`admin_resolve_review`) already solves a check-out that has no check-in.
+5. The deactivated employee is allowed (payroll). The employee must still belong to the admin's company (`not_found` otherwise).
+6. `by_admin` is derived from `authentication_method = 'admin'`, so a correction made in the review queue (phase 14) also shows «أضافه المدير».
+
+### Files
+
+| Where | Files |
+|---|---|
+| Database | `supabase/migrations/20261108130000_phase20_admin_manual_punch.sql` (`admin_add_punch`), `20261108140000_phase20b_employee_state_admin_flag.sql` (`employee_attendance_state` + `by_admin`) (+ a `_ROLLBACK.sql` for each) |
+| DB tests | `supabase/tests/phase20_admin_manual_punch_tests.sql` (both migrations) |
+| Admin panel (outside this repo) | `waqti_admin_12_17.zip`: `js/manual-punch.js` (dialog), `js/lib/manual-punch.js` (pure rules), `js/attendance.js`, `index.html`, `tests/` |
+| App | `src/lib/types.ts`, `src/lib/timecard.ts`, `src/screens/Home.tsx`, `src/styles.css`, `src/lib/timecard.test.ts` |
+| Docs | `docs/API_CONTRACT.md` §1 and §8, `docs/PHASE20_RUN_LOCALLY.md`, this file |
+
+### Risks
+
+- A panel newer than the database: the dialog says «هذه الميزة غير متاحة بعد» (the call fails with "function not found"); nothing else is affected.
+- An app newer than the database (no `by_admin`): the label simply does not show. A database newer than the app: the extra key is ignored.
+- Rolling 20b back puts the phase 14 version of `employee_attendance_state` back (the label disappears). Rolling 20 back drops the function; the events it created stay as history.
+
 ## Phase 19 — attendance rules (2026-11-08) — database APPLIED to production; app and panel NOT deployed
 
 Three database migrations, admin panel 12.16.0 and an app change. **The three migrations (19a, 19b, 19c) were applied to

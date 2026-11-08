@@ -890,6 +890,7 @@ button { font: inherit; }
 .days td { font-variant-numeric: tabular-nums; white-space: nowrap; padding-inline-start: var(--s3); }
 .days td:last-child { color: var(--text-2); }
 .day-flag { display: block; margin-top: 2px; font-weight: 600; font-size: var(--fs-caption); color: var(--warn); line-height: 1.4; }
+.day-flag.by-admin { color: var(--text-2); }
 
 /* ---------------------------------------------------------------- requests */
 .requests { gap: var(--s6); }

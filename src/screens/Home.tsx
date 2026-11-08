@@ -420,6 +420,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
                       {formatTime(r.time!, tz)}
                     </span>
                     {r.kind === "pencil" && <span className="slot-note"><Icon name="phone" />لم يُرسل بعد</span>}
+                    {r.kind === "stamped" && r.byAdmin && <span className="slot-note">أضافه المدير</span>}
                     {r.kind === "stamped" && r.needsReview && (
                       <span className="slot-note review"><Icon name="alert" />{noCheckIn(rows, i) ? "بدون حضور مسجّل" : STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
                     )}
@@ -644,6 +645,7 @@ function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
               <th scope="row">
                 {formatDate(`${d.day}T12:00:00Z`, timeZone)}
                 {d.needsReview && <span className="day-flag">للمراجعة</span>}
+                {d.byAdmin && <span className="day-flag by-admin">أضافه المدير</span>}
               </th>
               <td dir="ltr">{d.firstIn ? formatTime(d.firstIn, timeZone) : "—"}</td>
               <td dir="ltr">{d.lastOut ? formatTime(d.lastOut, timeZone) : "—"}</td>

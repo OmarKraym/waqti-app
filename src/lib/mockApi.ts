@@ -5,6 +5,7 @@
 //   pos    = inside | outside | far-accuracy  net     = ok | flaky (every 2nd punch loses its reply)
 //   must_change = 1  (first login: forced password change)
 //   history = 1      (adds three earlier work days, for screenshots)
+//   admin = 1        (the history's check-out of yesterday and a check-in of two days ago were added by the admin: «أضافه المدير»; also every new punch)
 //   inbox = 0        (no requests waiting for my approval; default: two, as a manager)
 //   requests = 1     (adds sample requests of my own: approved, pending, rejected)
 //   overtime = 1     (I manage a team of 3 and have one assignment of my own)
@@ -126,6 +127,7 @@ export function createMockApi(): WaqtiApi {
   let loginEnabled = true;
   let hasDevice = !bioNew;
   const events: AttendanceEvent[] = [];
+  const asAdmin = q.get("admin") === "1";
   if (q.get("history") === "1") {
     // Three earlier days (newest first), times in Tripoli = UTC+2.
     const day = (daysAgo: number, h: number, m: number) => {
@@ -135,7 +137,10 @@ export function createMockApi(): WaqtiApi {
       return d.toISOString();
     };
     const add = (id: string, action: "check_in" | "check_out", iso: string, review = false) =>
-      events.push({ id, action, server_time: iso, location_status: review ? "outside" : "inside", needs_review: review });
+      events.push({
+        id, action, server_time: iso, location_status: review ? "outside" : "inside", needs_review: review,
+        by_admin: asAdmin && (id === "h1o" || id === "h2i"),
+      });
     add("h1o", "check_out", day(1, 16, 3)); add("h1i", "check_in", day(1, 8, 1));
     add("h2o", "check_out", day(2, 16, 10)); add("h2i", "check_in", day(2, 7, 58), true);
     add("h3o", "check_out", day(4, 15, 47)); add("h3i", "check_in", day(4, 8, 12));
@@ -216,6 +221,7 @@ export function createMockApi(): WaqtiApi {
     events.unshift({
       id: result.event_id, action: result.action, server_time: result.server_time,
       location_status: status, needs_review: review || orphan || leaveReview, recorded_offline: offline,
+      ...(asAdmin ? { by_admin: true } : {}),
     });
     return result;
   }

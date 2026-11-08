@@ -80,6 +80,32 @@ describe("earlier days", () => {
   });
 });
 
+describe("movements the admin added (phase 20)", () => {
+  it("today's card marks a stamped movement the admin added, and only that one", () => {
+    const rows = todayRows([
+      ev("b", "check_out", "2026-10-30T10:00:00Z", { by_admin: true }),
+      ev("a", "check_in", "2026-10-30T06:00:00Z", { by_admin: false }),
+    ], null, NOW, TZ);
+    expect(rows.map((r) => r.byAdmin)).toEqual([false, true]);
+  });
+
+  it("an old server that sends no flag, an empty slot and a punch waiting on the phone are never marked", () => {
+    const rows = todayRows([ev("a", "check_in", "2026-10-30T06:00:00Z"), ev("queued:x", "check_out", "2026-10-30T10:00:00Z", { by_admin: true })], null, NOW, TZ);
+    expect(rows.map((r) => r.byAdmin)).toEqual([false, false]);
+    expect(todayRows([], null, NOW, TZ).every((r) => r.byAdmin === false)).toBe(true);
+  });
+
+  it("an earlier day says so when any of its movements was added by the admin", () => {
+    const days = earlierDays([
+      ev("c", "check_out", "2026-10-29T14:03:00Z", { by_admin: true }),
+      ev("b", "check_in", "2026-10-29T06:01:00Z"),
+      ev("y", "check_in", "2026-10-28T05:58:00Z"),
+      ev("z", "check_out", "2026-10-28T14:00:00Z", { by_admin: false }),
+    ], NOW, TZ);
+    expect(days.map((d) => [d.day, d.byAdmin])).toEqual([["2026-10-29", true], ["2026-10-28", false]]);
+  });
+});
+
 describe("minutes worked today (live, shown on the today screen)", () => {
   it("nothing today: 0", () => {
     expect(workedToday(todayRows([], null, NOW, TZ), null, NOW)).toBe(0);

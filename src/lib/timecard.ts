@@ -18,6 +18,8 @@ export interface CardRow {
   /** ISO time, absent for an empty slot. */
   time?: string;
   needsReview?: boolean;
+  /** Phase 20: the admin added this movement. Never true for an empty slot or a punch still waiting on the phone. */
+  byAdmin: boolean;
   event?: AttendanceEvent;
 }
 
@@ -45,16 +47,17 @@ export function todayRows(
     kind: isQueuedEvent(e) ? "pencil" : "stamped",
     time: e.server_time,
     needsReview: e.needs_review,
+    byAdmin: e.by_admin === true && !isQueuedEvent(e),
     event: e,
   }));
 
   if (rows.length === 0) {
     return [
-      { key: "slot-in", action: "check_in", kind: "empty" },
-      { key: "slot-out", action: "check_out", kind: "empty" },
+      { key: "slot-in", action: "check_in", kind: "empty", byAdmin: false },
+      { key: "slot-out", action: "check_out", kind: "empty", byAdmin: false },
     ];
   }
-  if (rows[rows.length - 1].action === "check_in") rows.push({ key: "slot-out", action: "check_out", kind: "empty" });
+  if (rows[rows.length - 1].action === "check_in") rows.push({ key: "slot-out", action: "check_out", kind: "empty", byAdmin: false });
   return rows;
 }
 
@@ -67,6 +70,8 @@ export interface DayRow {
   /** A check-in without its check-out on that day. */
   open: boolean;
   needsReview: boolean;
+  /** Phase 20: the admin added at least one movement of that day. */
+  byAdmin: boolean;
 }
 
 /** One row per earlier day (newest first), from the events the app has. Today is excluded. */
@@ -97,6 +102,7 @@ export function earlierDays(events: AttendanceEvent[], nowMs: number, timeZone: 
       minutes,
       open: openIn !== null,
       needsReview: sorted.some((e) => e.needs_review),
+      byAdmin: sorted.some((e) => e.by_admin === true),
     });
   }
   return rows.sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, max);

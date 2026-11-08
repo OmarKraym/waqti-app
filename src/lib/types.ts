@@ -27,6 +27,8 @@ export interface AttendanceEvent {
   needs_review: boolean;
   /** true = punched on the phone without internet and sent later. */
   recorded_offline?: boolean;
+  /** Phase 20: the admin added this movement (a forgotten check-in or check-out). Absent from an older server. */
+  by_admin?: boolean;
 }
 
 export interface AttendanceState {
