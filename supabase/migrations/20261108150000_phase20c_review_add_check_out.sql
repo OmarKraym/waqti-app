@@ -1,0 +1,115 @@
+-- Phase 20c: the admin adds the forgotten CHECK-OUT from the review window.
+--   public.admin_resolve_review(event, action, time, note) accepts a third action, 'add_check_out' (the mirror of 'add_check_in'):
+--   * only for a check-in flagged "missed check-out" whose session waits (status 'missed_checkout'): anything else is invalid_action;
+--   * the time must be after the check-in, at most 24 hours after it, not in the future, with no other event of the employee in between
+--     (invalid_time); a check-in already resolved is already_resolved (as for the other actions);
+--   * it saves a check-out as a CORRECTION of the flagged check-in (authentication_method 'admin', metadata {source 'admin_correction',
+--     corrects_event, review}) and closes that very session; the check-in leaves the review queue with "missed_checkout" false;
+--   * audit: 'attendance.review_add_check_out'.
+--   The result gains one key, check_out_event_id (null for 'accept' and 'add_check_in'); every other behaviour of accept / add_check_in is
+--   unchanged. Nothing is deleted. Rollback: 20261108150000_phase20c_review_add_check_out_ROLLBACK.sql (puts the phase 14 version back).
+do $guard$
+begin
+  if to_regprocedure('public.admin_resolve_review(uuid, text, timestamp with time zone, text)') is null
+     or to_regprocedure('public.require_company_admin()') is null
+     or to_regprocedure('public.audit_write(uuid, text, text, text, jsonb)') is null
+     or to_regclass('public.attendance_sessions') is null
+     or not exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                    where t.typname = 'attendance_session_status' and e.enumlabel = 'missed_checkout') then
+    raise exception 'phase20c: the attendance phases (8a, 14) must be applied first';
+  end if;
+end
+$guard$;
+
+-- accept: the punch stays as recorded, the flag is cleared.
+-- add_check_in: only for a check-out flagged missing_checkin; adds the check-in the employee forgot (at p_time, same local day,
+--   before the check-out and after the employee's previous event) and closes a session around the pair.
+-- add_check_out (phase 20c): only for a check-in flagged "missed check-out" whose session is waiting (status 'missed_checkout'); adds the
+--   check-out the employee forgot at p_time (after the check-in, at most 24 hours later, not in the future, no other event of the employee
+--   in between), closes that very session with it, clears the flag. Same shape as add_check_in: a correction event, not a new punch.
+create or replace function public.admin_resolve_review(p_event_id uuid, p_action text, p_time timestamp with time zone default null,
+  p_note text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+  v_admin uuid := (select auth.uid());
+  v_ev public.attendance_events;
+  v_tz text;
+  v_in_id uuid;
+  v_out_id uuid;
+  v_sess uuid;
+  v_review jsonb;
+begin
+  if p_action is null or p_action not in ('accept', 'add_check_in', 'add_check_out') then
+    raise exception 'invalid_action' using errcode = '22023';
+  end if;
+  select ev.* into v_ev from public.attendance_events ev where ev.id = p_event_id and ev.company_id = v_company;
+  if not found then
+    raise exception 'not_found' using errcode = 'P0001';
+  end if;
+  -- Same lock order as record_punch (employee first), so a resolve and a punch of the same employee cannot deadlock.
+  perform 1 from public.employees e where e.id = v_ev.employee_id for update;
+  select ev.* into v_ev from public.attendance_events ev where ev.id = p_event_id for update;
+  if not v_ev.needs_review then
+    raise exception 'already_resolved' using errcode = 'P0001';
+  end if;
+  select c.timezone into v_tz from public.companies c where c.id = v_company;
+  v_review := jsonb_build_object('action', p_action, 'by', v_admin, 'at', now(), 'note', left(nullif(trim(coalesce(p_note, '')), ''), 500));
+
+  if p_action = 'add_check_in' then
+    if v_ev.event_type <> 'check_out' or not coalesce(v_ev.metadata -> 'suspect' ? 'missing_checkin', false) then
+      raise exception 'invalid_action' using errcode = '22023';
+    end if;
+    if p_time is null or p_time >= v_ev.occurred_at
+       or (p_time at time zone v_tz)::date <> (v_ev.occurred_at at time zone v_tz)::date
+       or exists (select 1 from public.attendance_events x where x.employee_id = v_ev.employee_id
+                  and x.id <> v_ev.id and x.occurred_at >= p_time and x.occurred_at <= v_ev.occurred_at) then
+      raise exception 'invalid_time' using errcode = 'P0001';
+    end if;
+    insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, authentication_method,
+                                          location_status, needs_review, location_policy, metadata)
+    values (v_ev.employee_id, 'check_in', p_time, true, 'admin', 'not_requested', false, 'none',
+            jsonb_build_object('source', 'admin_correction', 'corrects_event', v_ev.id, 'review', v_review))
+    returning id into v_in_id;
+    insert into public.attendance_sessions (employee_id, work_date, check_in_event_id, check_out_event_id, status)
+    values (v_ev.employee_id, (p_time at time zone v_tz)::date, v_in_id, v_ev.id, 'closed');
+  elsif p_action = 'add_check_out' then
+    if v_ev.event_type <> 'check_in' or not coalesce((v_ev.metadata ->> 'missed_checkout')::boolean, false) then
+      raise exception 'invalid_action' using errcode = '22023';
+    end if;
+    select s.id into v_sess from public.attendance_sessions s
+    where s.check_in_event_id = v_ev.id and s.status = 'missed_checkout' for update;
+    if not found then
+      raise exception 'invalid_action' using errcode = '22023';
+    end if;
+    if p_time is null or p_time <= v_ev.occurred_at or p_time > v_ev.occurred_at + interval '24 hours' or p_time > now()
+       or exists (select 1 from public.attendance_events x where x.employee_id = v_ev.employee_id
+                  and x.id <> v_ev.id and x.occurred_at > v_ev.occurred_at and x.occurred_at <= p_time) then
+      raise exception 'invalid_time' using errcode = 'P0001';
+    end if;
+    insert into public.attendance_events (employee_id, event_type, occurred_at, within_geofence, authentication_method,
+                                          location_status, needs_review, location_policy, metadata)
+    values (v_ev.employee_id, 'check_out', p_time, true, 'admin', 'not_requested', false, 'none',
+            jsonb_build_object('source', 'admin_correction', 'corrects_event', v_ev.id, 'review', v_review))
+    returning id into v_out_id;
+    update public.attendance_sessions set status = 'closed', check_out_event_id = v_out_id where id = v_sess;
+  end if;
+
+  update public.attendance_events
+     set needs_review = false,
+         metadata = metadata || jsonb_build_object('review', v_review)
+                    || case when p_action = 'add_check_out' then jsonb_build_object('missed_checkout', false) else '{}'::jsonb end
+   where id = v_ev.id;
+  perform public.audit_write(v_company, 'attendance.review_' || p_action, 'attendance_event', v_ev.id::text,
+    jsonb_build_object('employee_id', v_ev.employee_id, 'event_type', v_ev.event_type, 'occurred_at', v_ev.occurred_at,
+                       'added_check_in', v_in_id, 'added_check_out', v_out_id,
+                       'added_at', case when v_in_id is null and v_out_id is null then null else p_time end, 'note', v_review -> 'note'));
+  return jsonb_build_object('event_id', v_ev.id, 'action', p_action, 'check_in_event_id', v_in_id, 'check_out_event_id', v_out_id);
+end;
+$$;
+revoke all on function public.admin_resolve_review(uuid, text, timestamp with time zone, text) from public, anon;
+grant execute on function public.admin_resolve_review(uuid, text, timestamp with time zone, text) to authenticated;
