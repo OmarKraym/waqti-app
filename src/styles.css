@@ -810,6 +810,7 @@ button { font: inherit; }
   border-radius: 999px; background: var(--hero-chip);
   font-size: var(--fs-small); font-weight: 600; line-height: 1.5; color: var(--on-hero);
 }
+.status-note { margin: 0; color: var(--on-hero-2); font-size: var(--fs-small); line-height: 1.6; }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--sun); }
 .status.present .status-dot { background: var(--in-glow); box-shadow: 0 0 0 4px var(--in-ring); }
 

@@ -33,8 +33,9 @@ import {
 } from "../lib/offlineQueue";
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs, windowText } from "../lib/punchWindow";
+import { statusHeadline } from "../lib/statusHeadline";
 import { holidayBanner, loadCalendar, offLabel, saveCalendar, type Calendar } from "../lib/calendar";
-import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
+import { earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
 import { useOnline } from "./hooks";
@@ -400,6 +401,9 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
             <span className="status-dot" aria-hidden="true" />
             {statusHeadline(data, rows, nowMs, tz)}
           </h2>
+          {data.leave_today && !rows.some((r) => r.kind !== "empty") && (
+            <p className="status-note">لا يُطلب منك البصم اليوم. وإن سجّلت حضورك يُلغى هذا اليوم من إجازتك.</p>
+          )}
         </section>
 
         <section className="timecard" aria-label="بطاقة اليوم">
@@ -558,22 +562,6 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
 /** A check-out with no check-in before it (the employee forgot to check in). */
 function noCheckIn(rows: CardRow[], i: number): boolean {
   return rows[i].action === "check_out" && rows[i].kind === "stamped" && (i === 0 || rows[i - 1].action === "check_out");
-}
-
-function statusHeadline(data: AttendanceState, rows: CardRow[], nowMs: number, tz: string): string {
-  // Nothing counts until the server stamps it: a pencil entry never reads as done.
-  const last = [...rows].reverse().find((r) => r.kind !== "empty");
-  if (last?.kind === "pencil") {
-    return last.action === "check_in" ? "حضورك لم يُرسل بعد" : "انصرافك لم يُرسل بعد";
-  }
-  if (data.open_session) {
-    const start = data.open_session.started_at;
-    const sameDay = dayKey(start, tz) === dayKey(nowMs, tz);
-    return `أنت حاضر منذ ${sameDay ? "" : "أمس "}${formatTime(start, tz)}`;
-  }
-  const lastOut = [...rows].reverse().find((r) => r.action === "check_out" && r.time);
-  if (lastOut?.time) return `سجّلت انصرافك الساعة ${formatTime(lastOut.time, tz)}`;
-  return "لم تسجّل حضورك اليوم";
 }
 
 /** The server's time (phone clock + the last measured offset), not the phone's own time. */

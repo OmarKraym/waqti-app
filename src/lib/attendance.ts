@@ -153,12 +153,22 @@ const REVIEW_REASON: Partial<Record<LocationStatus, string>> = {
 export function successNotice(r: PunchResult, timeZone: string): Notice {
   const what = r.action === "check_in" ? "الحضور" : "الانصراف";
   const at = formatTime(r.server_time, timeZone);
+  if (r.leave_day_cancelled) {
+    // Phase 22: his own punch cancelled today's day of his leave. Nothing to review because of the leave; another reason still is.
+    const head = r.missing_checkin ? `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل.` : `تم تسجيل ${what} الساعة ${at}.`;
+    const why = r.missing_checkin
+      ? " وسيُراجع الانصراف من الإدارة."
+      : r.needs_review
+        ? ` مع ملاحظة للمراجعة: ${REVIEW_REASON[r.location_status] ?? "يحتاج مراجعة"}.`
+        : "";
+    return { kind: r.needs_review ? "warning" : "success", text: `${head} أُلغي هذا اليوم من إجازتك.${why}` };
+  }
   if (r.on_approved_leave) {
-    // The punch is never refused. The first one of the day is sent to the manager, who may cancel the leave: say so plainly.
+    // A leave day the company granted (flagged for the manager, who may cancel the leave) or one the manager restored (nothing to say).
     const head = r.missing_checkin ? `تم تسجيل الانصراف الساعة ${at} بدون حضور مسجّل.` : `تم تسجيل ${what} الساعة ${at}.`;
     const tail = r.needs_review
       ? "لديك إجازة معتمدة اليوم؛ سيراجع المدير هذه الحركة وقد تُلغى إجازتك أو بعض أيامها."
-      : "لديك إجازة معتمدة اليوم، والمدير يراجع حركتك.";
+      : "لديك إجازة معتمدة اليوم.";
     return { kind: "warning", text: `${head} ${tail}` };
   }
   if (r.missing_checkin) {

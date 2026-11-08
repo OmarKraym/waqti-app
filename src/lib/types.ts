@@ -40,6 +40,8 @@ export interface AttendanceState {
   /** Phase 14: the check-in window is over and only the check-out window is open: the main button is "check out". */
   forgot_check_in?: boolean;
   open_session: { started_at: string } | null;
+  /** Phase 22: an approved leave the employee asked for covers today (a punch today cancels this day of it). null / absent = none. */
+  leave_today?: { request_id: string; leave_type: string; end_date: string } | null;
   location_policy: LocationPolicy;
   outside_action: OutsideAction;
   /** Readings with accuracy worse than this (meters) count as "inaccurate". */
@@ -93,8 +95,10 @@ export interface PunchResult {
   recorded_offline?: boolean;
   /** Phase 13: a check-out saved without a check-in (flagged for review). */
   missing_checkin?: boolean;
-  /** Phase 15: an approved leave covers today. The punch is saved; the manager decides about the leave. */
+  /** An approved leave covers today. The punch is saved (phase 15: a company-granted leave day is flagged for the manager). */
   on_approved_leave?: boolean;
+  /** Phase 22: this punch cancelled today's day of his own leave (nothing to review; the manager may restore the day). */
+  leave_day_cancelled?: boolean;
   /** true = the server had already processed this request_id (safe retry). */
   duplicate: boolean;
   /** Fresh signed server-time token. */

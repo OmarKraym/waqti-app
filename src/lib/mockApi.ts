@@ -79,7 +79,7 @@ const bio = q.get("bio") === "1" || q.get("bio") === "new";
 const bioNew = q.get("bio") === "new";
 /** ?forgot=1: no check-in yet, the check-in window is over and the check-out window is open (the button is "check out"). */
 const forgotMode = q.get("forgot") === "1";
-/** ?onleave=1: an approved leave covers today (the first punch is saved, flagged; the request list has a leave the manager cancelled). */
+/** ?onleave=1: an approved leave covers today (the first punch cancels today's day of it, no review; the request list has cancelled/cut leaves). */
 const onLeaveMode = q.get("onleave") === "1";
 let leaveFlagged = false;
 /** ?install=1: what Chrome does on Android: an install prompt arrives soon after the page starts (its dialog is a fake one that accepts). */
@@ -169,6 +169,7 @@ export function createMockApi(): WaqtiApi {
       can_check_out_without_in: !open && last?.action !== "check_out",
       forgot_check_in: forgot,
       open_session: open ? { started_at: last.server_time } : null,
+      leave_today: onLeaveMode && !leaveFlagged ? { request_id: "mock-leave", leave_type: "annual", end_date: new Date(serverNow() + 2 * 86_400_000).toISOString().slice(0, 10) } : null,
       location_policy: policy,
       outside_action: outside,
       max_accuracy_m: 100,
@@ -197,9 +198,9 @@ export function createMockApi(): WaqtiApi {
     const r = input.reading;
     let status: LocationStatus;
     let review = false;
-    // Phase 15: a punch on an approved-leave day is saved; only the first one of the day goes to the manager.
-    const leaveReview = onLeaveMode && !leaveFlagged;
-    if (leaveReview) leaveFlagged = true;
+    // Phase 22: the first punch on an own-leave day cancels that day of the leave (no review); later punches that day are plain.
+    const leaveCancel = onLeaveMode && !leaveFlagged;
+    if (leaveCancel) leaveFlagged = true;
     if (s.location_policy === "none") status = "not_requested";
     else if (r.kind !== "ok") status = "unavailable";
     else if (pos === "far-accuracy" || r.accuracy_m > s.max_accuracy_m) status = "inaccurate";
@@ -220,9 +221,10 @@ export function createMockApi(): WaqtiApi {
       action: orphan ? "check_out" : s.next_action,
       server_time: new Date(timeMs).toISOString(),
       location_status: status,
-      needs_review: review || orphan || leaveReview,
+      needs_review: review || orphan,
       missing_checkin: orphan,
-      on_approved_leave: onLeaveMode || undefined,
+      on_approved_leave: leaveCancel || undefined,
+      leave_day_cancelled: leaveCancel || undefined,
       recorded_offline: offline,
       duplicate: false,
       time_token: tokenAt(serverNow()),
@@ -230,7 +232,7 @@ export function createMockApi(): WaqtiApi {
     byRequest.set(input.request_id, result);
     events.unshift({
       id: result.event_id, action: result.action, server_time: result.server_time,
-      location_status: status, needs_review: review || orphan || leaveReview, recorded_offline: offline,
+      location_status: status, needs_review: review || orphan, recorded_offline: offline,
       ...(asAdmin ? { by_admin: true } : {}),
     });
     return result;

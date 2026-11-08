@@ -129,6 +129,36 @@ describe("attendance state machine", () => {
     expect(n.text).not.toContain("قد تُلغى إجازتك");
   });
 
+  it("#70: a punch that cancelled his leave day says so plainly, and it is not a warning", () => {
+    const n = successNotice({ ...ok, on_approved_leave: true, leave_day_cancelled: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("success");
+    expect(n.text).toContain("تم تسجيل الحضور الساعة 9:05 ص");
+    expect(n.text).toContain("أُلغي هذا اليوم من إجازتك");
+    expect(n.text).not.toContain("مراجعة");
+    expect(n.text).not.toContain("قد تُلغى");
+  });
+
+  it("#70: if that punch is also flagged for another reason, both are told", () => {
+    const n = successNotice({ ...ok, location_status: "outside", needs_review: true, on_approved_leave: true, leave_day_cancelled: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("warning");
+    expect(n.text).toContain("أُلغي هذا اليوم من إجازتك");
+    expect(n.text).toContain("خارج نطاق");
+  });
+
+  it("#70: a check-out with no check-in that cancelled his leave day says both and that the manager reviews the check-out", () => {
+    const n = successNotice({ ...ok, action: "check_out", needs_review: true, missing_checkin: true, on_approved_leave: true, leave_day_cancelled: true }, "Africa/Tripoli");
+    expect(n.kind).toBe("warning");
+    expect(n.text).toContain("بدون حضور");
+    expect(n.text).toContain("أُلغي هذا اليوم من إجازتك");
+    expect(n.text).toContain("يُراجع");
+  });
+
+  it("#70: a later punch on a leave day the manager restored does not claim the manager is reviewing it", () => {
+    const n = successNotice({ ...ok, action: "check_out", needs_review: false, on_approved_leave: true }, "Africa/Tripoli");
+    expect(n.text).toContain("إجازة معتمدة");
+    expect(n.text).not.toContain("يراجع");
+  });
+
   it("a check-out without a check-in on a leave day says both", () => {
     const n = successNotice({ ...ok, action: "check_out", needs_review: true, missing_checkin: true, on_approved_leave: true }, "Africa/Tripoli");
     expect(n.text).toContain("بدون حضور");
