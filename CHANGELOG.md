@@ -1,5 +1,33 @@
 # Changelog
 
+## Phase 22 — a punch on an approved-leave day cancels that day (no review); the admin may restore it; «you are on leave today» and «you checked in» on Home (2026-11-09) — migration 22 NOT applied to production; panel 12.19 and app not delivered
+
+One database migration (**22**), admin panel **12.19.0** and app changes. Omar's requests: the Home pill said «لم تسجّل حضورك اليوم» with a check-in on the card (#69), and an employee on an approved leave must not be asked to punch,
+must not be put in review when he does, and his leave for that day goes when he punches (#70). His answers: the day is cancelled **from the first punch**, the admin can decide «leave or normal day», the employee and the audit log are told.
+Hand-off: `docs/PHASE22_RUN_LOCALLY.md`. Contract: `docs/API_CONTRACT.md` §10.
+
+### What changes for people
+
+- **Employee app, Home:** with a check-in and no check-out the pill says «حضرت الساعة 9:06 ص ولم تسجّل الانصراف» (the latest stamped movement decides) instead of «لم تسجّل حضورك اليوم». On an own approved leave with no punch yet it says
+  «أنت في إجازة معتمدة اليوم» and a line that punching cancels that day. The punch button is **not** closed because of the leave (only the shift window closes it, as before). After the punch: «تم تسجيل الحضور… أُلغي هذا اليوم من إجازتك.»
+- **Database:** the first punch of a local day that falls on a leave the employee asked for is saved **without review**; that day is cancelled from the leave (whole leave if it was one day; a day at the start or end shortens it; a day in the
+  middle splits it, same rule as phase 15), the balance comes back by itself, the employee gets «أُلغي يوم من إجازتك» (or «أُلغيت إجازتك»), audit `leave.cancelled_by_punch`. Other review reasons (outside the zone, no fingerprint…) still apply.
+  A leave **the company granted** (holidays, `company_leave_day_id`) keeps phase 15: flagged for the admin, nothing cancelled.
+- **Admin panel 12.19, الحضور:** a new card «أيام إجازة أُلغيت لأن الموظف بصم فيها» with **يوم عمل عادي** / **إرجاعه إجازة** (a one-day approved request again, balance counted again, employee told; audit `leave.day_restored` / `leave.day_normal`).
+  A later punch the same day does not cancel a restored day again.
+
+### Tests (all local, 2026-11-09)
+
+Database **1371 / 1371** (32 files; phase 22: 61; phase 15: 69, rebuilt on direct flagged rows) · panel unit 78 / 78 · panel behaviour 404 / 404 · app 389 / 389, types clean, build OK · mutation checks: 6 on the migration, 8 on the panel module, all killed.
+
+### Rulings
+
+- R1. Omar's typed answer («تلغى من أول الحضور») and his pick «تبقى الإجازة» for a check-in with no check-out contradict each other: the typed answer wins (cancel at the first punch); «the leave stays» is covered by the admin's «إرجاعه إجازة».
+- R2. The admin's decision has its own list and RPC (the old review queue is `needs_review`-based, and the employee must not be «in review»).
+- R3. Company-granted leave days keep phase 15 (an employee working a holiday must not be told his leave was cancelled).
+- R4. `private.cancel_leave_days` copies the split loop of `admin_resolve_leave_conflict` (left untouched: 1313 tests stand on it).
+- Found on the way: two panel checks («manual punch: no reason / reason too short») failed after midnight because «08:15 today» was in the future; they now use yesterday (they are not related to this phase and also failed on the delivered 12.18).
+
 ## Phase 21 (+ 20b, 20c) — delete a work place or an employee, the forgotten check-out from the review window, the install line (2026-11-08) — migrations 20b, 20c and 21 APPLIED to production; panel 12.18 not installed, app not deployed
 
 Two database migrations (**20c**, **21**), admin panel **12.18.0** (it also carries the 12.17 panel: `waqti_admin_12_18.zip` supersedes `waqti_admin_12_17.zip`) and an app change.

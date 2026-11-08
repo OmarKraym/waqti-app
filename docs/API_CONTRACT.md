@@ -305,3 +305,24 @@ His attendance, requests and audit rows are not touched. **His employee number a
 - `admin_add_work_location`: re-created only because the conflict target of the name index now needs its `WHERE`.
 
 Rollback: `20261109100000_phase21_workplaces_delete_employee_ROLLBACK.sql` restores the four functions exactly, drops the two delete functions and the trigger, and brings the old unique name index back. It **keeps** the two `deleted_at` columns and the check constraint (the record of what was deleted); a place deleted earlier gets a suffix «(محذوف <date> <id>)» in its name, so after a rollback it shows in the lists again, marked as deleted; a deleted employee stays inactive.
+
+## 10. A punch on an approved-leave day (phase 22)
+
+### `private.record_punch(...)` (called by `employee_punch` / `employee_punch_offline`) — result gains `leave_day_cancelled`
+- A leave the employee asked for covers the local day of the punch and no earlier event of that day carries `metadata.suspect 'on_approved_leave'` or `metadata.leave_day`: the punch is saved with `needs_review` untouched by the leave,
+  `metadata.leave_day = {request_id, leave_type, day}`, and **that day is cancelled** (`private.cancel_leave_days`: whole request cancelled, or shortened, or split). The employee is notified (`request_decided`) and `leave.cancelled_by_punch` is written.
+  Result: `on_approved_leave: true`, `leave_day_cancelled: true`.
+- A leave the company granted (`requests.company_leave_day_id` not null): phase 15 as before (`suspect 'on_approved_leave'`, `needs_review`, `metadata.leave_request_id`), `leave_day_cancelled: false`.
+- A later punch the same day: `leave_day_cancelled: false` (`on_approved_leave` is true only while the day is still covered by an approved leave, e.g. after the admin restored it).
+
+### `employee_attendance_state()` — new key `leave_today`
+`{request_id, leave_type, end_date}` when an own approved leave covers today (company leave days excluded), else `null`. The punch window is unchanged: a leave never closes the button.
+
+### `admin_list_leave_day_cancellations(p_limit int default 100)` → rows `{event_id, employee_id, employee_number, full_name, occurred_at, day, leave_type, request_id}`
+The days a punch cancelled that nobody has decided (`metadata ? 'leave_day'` and no `metadata.leave_decision`), newest first, own company only. Admins only.
+
+### `admin_decide_leave_day(p_event_id uuid, p_decision text, p_note text default null)` → `{event_id, decision, day, request_id}`
+- `normal_day`: the cancellation stands; the event gets `metadata.leave_decision`; audit `leave.day_normal`.
+- `restore_leave`: a new approved one-day request (same type, finished approvals copied, `decided_by` the admin); employee notified («أُعيد يوم إلى إجازتك»); audit `leave.day_restored`.
+- Errors: `invalid_action`, `not_found` (also another company's event), `not_leave_day_cancelled`, `already_resolved`, `leave_gone`, `already_on_leave`, `not_a_workday`.
+
