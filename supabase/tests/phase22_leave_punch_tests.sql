@@ -288,6 +288,20 @@ begin
                      'a later punch the same day does not cancel the restored day again', r::text);
   perform pg_temp.ok((select count(*) from public.audit_log where action = 'leave.cancelled_by_punch' and details ->> 'event_id' = ev2::text) = 1, 'one cancellation only');
 
+  -- restore a day of a ONE-day leave that was cancelled as a whole request
+  perform pg_temp.clean(a);
+  l7 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today);
+  r := pg_temp.punch(a, v_tz, 'check_in', now());
+  ev2 := (r ->> 'event_id')::uuid;
+  perform pg_temp.ok((select status = 'cancelled' from public.requests where id = l7) and pg_temp.used(a, yr) = 0, 'a one-day leave: cancelled, nothing used', pg_temp.used(a, yr)::text);
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  r := public.admin_decide_leave_day(ev2, 'restore_leave');
+  reset role;
+  x := (r ->> 'request_id')::uuid;
+  perform pg_temp.ok(private.approved_leave_on(a, today) = x and pg_temp.used(a, yr) = 1 and (select status = 'cancelled' from public.requests where id = l7),
+                     'restoring it makes a new approved one-day request; the old cancelled one stays as history', pg_temp.used(a, yr)::text);
+
   -- restore refused when something else already covers the day
   perform pg_temp.clean(a);
   l7 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', today, today + 1);
