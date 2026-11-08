@@ -198,3 +198,37 @@ same day) → `not_late` (late_min = 0) → `within_grace` (chargeable_min = 0) 
 The monthly limit is also enforced at the table: a `before insert` trigger on `public.requests` (pending permission requests)
 takes a per-employee advisory lock and refuses with `permission_limit` when the month's allowance is used up, so two
 simultaneous requests cannot both pass.
+
+---
+
+## 6. Company late rule (phase 19a) — administration
+
+`companies.late_rule` = `all_after_grace` (default; the phase 12 behaviour: inside the grace nothing counts, beyond it ALL minutes since the shift
+start count) or `beyond_grace` (inside the grace nothing counts, beyond it only the minutes after the grace). One rule for late arrival and early
+leave. `private.punch_lateness(employee, event, type, at)` keeps its signature and reads the rule through `private.chargeable_minutes(raw, grace, rule)`.
+
+| Function | Notes |
+|---|---|
+| `admin_get_grace_settings()` → `{late_grace_min, early_grace_min, late_rule}` | `late_rule` is new. A panel older than the database ignores it; a panel newer than the database gets no `late_rule` and hides the choice. |
+| `admin_set_late_rule(p_rule text)` → same object | `invalid_settings` (22023) for anything but the two values. Audited as `company.late_rule`. Lateness is computed when read, so the change also changes how old days read. |
+
+## 7. Late deduction policies (phase 19b) — administration
+
+Table `public.deduction_policies` (RLS on, no direct access): per company, dated (`effective_from`), `kind` = `proportional` or `tiers`.
+**The deduction is in minutes of pay**, never money. Policy of a day = the one with the greatest `effective_from` on or before it; before the first one: nothing.
+`editable` = `effective_from >= the company's today`; an older policy is history (`policy_locked`).
+
+```jsonc
+{ "kind": "proportional", "params": { "per_minutes": 15, "deduct_minutes": 10, "round_to": 5, "rounding": "up" } }
+// per_minutes 1–240, deduct_minutes 0–1440, round_to ∈ {1,5,10,15,30,60}, rounding ∈ up | down | nearest
+{ "kind": "tiers", "params": { "tiers": [ { "from": 1, "to": 15, "deduct": 0 }, { "from": 16, "to": 30, "deduct": 30 }, { "from": 31, "to": null, "deduct": 60 } ] } }
+// 1–50 tiers, from ≥ 1, deduct 0–1440, no gap and no overlap, only the last tier may be open (to = null)
+```
+
+| Function | Returns / errors |
+|---|---|
+| `admin_list_deduction_policies()` | `[{id, effective_from, kind, params, editable, created_at}]`, newest first |
+| `admin_save_deduction_policy(p_id uuid, p_effective_from date, p_kind text, p_params jsonb)` | the saved policy (same shape). `p_id` null = new. `invalid_settings`, `policy_locked` (start date in the past, or the policy already started), `policy_date_taken`, `policy_not_found`. Audited. |
+| `admin_delete_deduction_policy(p_id uuid)` | `policy_locked`, `policy_not_found`. Audited. |
+| `admin_preview_deduction(p_policy jsonb, p_late_after_start integer[])` | `[{late, chargeable, deduct}]` using the company's grace and rule; 1–50 values of 0–1440. The panel shows these numbers and never recomputes them. |
+| `admin_list_attendance(...)` | two columns added at the END: `deduction_minutes integer`, `deduction_state text` — for the employee's FIRST check-in of a local day only (otherwise null): `none` / `excused` (an approved late-arrival justification covers the arrival minute) / `pending` (a covering one still waits; minutes provisional) / `due`. |
