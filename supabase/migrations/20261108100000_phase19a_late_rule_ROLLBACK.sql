@@ -63,4 +63,5 @@ begin
 end;
 $$;
 
+drop function if exists private.chargeable_minutes(integer, integer, text);
 alter table public.companies drop column late_rule;

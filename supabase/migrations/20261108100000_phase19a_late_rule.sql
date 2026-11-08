@@ -21,6 +21,21 @@ $guard$;
 alter table public.companies
   add column late_rule text not null default 'all_after_grace' check (late_rule in ('all_after_grace', 'beyond_grace'));
 
+-- The one place where a rule is applied to raw minutes (late arrival / early leave): within the grace = 0, beyond it
+-- all the minutes ('all_after_grace') or only the excess ('beyond_grace'). Used by punch_lateness and, in phase 19b/19c,
+-- by the deduction preview and the employee's late status, so they can never disagree.
+create or replace function private.chargeable_minutes(p_raw integer, p_grace integer, p_rule text)
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$
+  select case when p_raw <= p_grace then 0
+              when p_rule = 'beyond_grace' then p_raw - p_grace
+              else p_raw end
+$$;
+revoke all on function private.chargeable_minutes(integer, integer, text) from public, anon, authenticated;
+
 -- Minutes late (check-in) or early (check-out) of one punch, or null when it does not apply. Counted by the company rule.
 create or replace function private.punch_lateness(p_employee uuid, p_event uuid, p_type text, p_at timestamptz)
 returns integer
@@ -65,9 +80,7 @@ begin
     end if;
     v_min := greatest(ceil(extract(epoch from (v_end - p_at)) / 60)::integer, 0);
   end if;
-  return case when v_min <= v_grace then 0
-              when v_rule = 'beyond_grace' then v_min - v_grace
-              else v_min end;
+  return private.chargeable_minutes(v_min, v_grace, v_rule);
 end;
 $$;
 revoke all on function private.punch_lateness(uuid, uuid, text, timestamptz) from public, anon, authenticated;

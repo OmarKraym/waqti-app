@@ -114,6 +114,13 @@ begin
   perform pg_temp.ok(private.punch_lateness(a, e_in_off, 'check_in', ((doff + time '09:30') at time zone v_tz)) is null, 'a day off has no lateness (beyond_grace)');
   perform pg_temp.ok(private.punch_lateness(a, e_in_2nd, 'check_in', ((d1 + time '13:00') at time zone v_tz)) is null, 'a second check-in is not an arrival (beyond_grace)');
 
+  -- the one function that applies a rule to raw minutes (punch_lateness, the deduction preview and the late status use it)
+  perform pg_temp.ok(private.chargeable_minutes(0, 15, 'all_after_grace') = 0 and private.chargeable_minutes(15, 15, 'all_after_grace') = 0, 'chargeable_minutes: within the grace is 0 (all_after_grace)');
+  perform pg_temp.ok(private.chargeable_minutes(16, 15, 'all_after_grace') = 16, 'chargeable_minutes: all_after_grace counts all 16');
+  perform pg_temp.ok(private.chargeable_minutes(16, 15, 'beyond_grace') = 1 and private.chargeable_minutes(15, 15, 'beyond_grace') = 0, 'chargeable_minutes: beyond_grace counts only the excess');
+  perform pg_temp.ok(private.chargeable_minutes(5, 0, 'beyond_grace') = 5 and private.chargeable_minutes(5, 0, 'all_after_grace') = 5, 'chargeable_minutes: grace 0 is the same under both rules');
+  perform pg_temp.ok(not has_function_privilege('authenticated', 'private.chargeable_minutes(integer, integer, text)', 'execute'), 'chargeable_minutes is not callable by users');
+
   -- validation, permissions, isolation, audit
   perform pg_temp.as_user(v_admin);
   set local role authenticated;
