@@ -1,5 +1,46 @@
 # Changelog
 
+## Phase 21 (+ 20c) — delete a work place or an employee, the forgotten check-out from the review window, the install line (2026-11-08) — NOT applied to production, panel not installed, app not deployed
+
+Two database migrations (**20c**, **21**), admin panel **12.18.0** (it also carries the 12.17 panel: `waqti_admin_12_18.zip` supersedes `waqti_admin_12_17.zip`) and an app change.
+Nothing is visible to anyone until the migrations are applied and the panel is installed. Procedure, fingerprints and the read-only state of production on this date: `docs/PHASE21_RUN_LOCALLY.md`.
+Contract: `docs/API_CONTRACT.md` §8b and §9.
+
+### What changes for people
+
+- **Admin panel → الإعدادات → أماكن العمل والنطاقات → «حذف».** A place with **active** employees is deleted only after the admin picks another place to move them to (they follow its geofence, except those with an
+  individual one); with only inactive employees on it, it is deleted and they stay on it as history; an empty one goes after a confirmation. The name can be used again. The employee form lists only existing places;
+  an employee whose place was deleted must be given a new one before the form saves.
+- **Admin panel → الموظفون → ⋯ → «حذف الموظف»** (not on your own row). The admin types the employee's name to confirm. He leaves the lists, his account stops at once, his phone is unbound and his push subscriptions are
+  removed; his attendance, requests and audit rows stay in the reports under his name. **His number and e-mail stay reserved.** The server refuses, and the dialog says why in words, when he is an admin, has an open
+  session, has pending requests, is the direct manager of others, or is a named approver in an approval chain. Audit: `employee.delete`, `work_location.delete`.
+- **Admin panel → حركات تحتاج مراجعة → «إضافة الانصراف»** (20c): the forgotten check-out is added from the review window, exactly like «إضافة الحضور» for a missing check-in: it corrects the flagged movement,
+  closes that very session and takes it out of the queue (after the check-in, at most 24 h later, not in the future, nothing in between). The general dialog «إضافة حضور أو خروج» is now **«إضافة حضور»** only.
+- **Employee app:** the «install the app» button moved out of Home to the **login screen** (Omar's decision): Chrome / Android shows «تثبيت»; iPhone shows «كيف؟» with the existing Share → Add to Home Screen sentence.
+  Nothing inside the app, and nothing when it is opened as the installed app. Closing it hides it for the session. The browser's install event is captured at start-up (it comes once, early).
+
+### Tests (all local, 2026-11-08)
+
+Database **1313 / 1313** (31 files; phase 20c: 48, phase 21: 147) · panel unit 78 / 78 · panel behaviour 381 / 381 (also on the unzipped zip) · panel layout 300 screens (on the unzipped zip), 0 with problems, 0 script errors ·
+app 376 / 376, types clean, build OK · mutation checks on all the new code: all killed (details in `docs/PHASE21_RUN_LOCALLY.md` §2). Two real bugs were found by the new tests on the way and fixed test-first
+(Enter pressed twice in the employee-delete dialog sent two requests; after a refusal that redrew the places list, a later success in the same dialog left the old list on screen).
+
+### Rulings (decided while building; each costs little to change)
+
+- R1. The employee number and e-mail stay reserved after deletion (unique constraints and the auth user remain): reusing them would mean editing history. The dialog says so.
+- R2. Deleting an employee is refused, not worked around, when he has an open session, pending requests, reports to him as direct manager, or is a named approver; the admin resolves those first.
+- R3. An admin cannot be deleted (remove the admin role first) and nobody can delete himself.
+- R4. Deleting a place with active employees requires choosing another place; the move copies the new place's geofence the same way `admin_save_employee_profile` does (an individual geofence stays).
+- R5. (Omar) The check-out is recorded only from the review window; `admin_add_punch` stays in the database unchanged. **Open point:** a check-out forgotten on a session that is still «open» with the punch windows off is never flagged, so it has no path in the panel.
+- R6. The review check-out is a correction (`source: admin_correction`, `corrects_event`), audited as `attendance.review_add_check_out`, with the phase 20 time limits.
+- The install line lives on the login screen only (Omar, 2026-11-08), replacing the plan's «top of Home».
+- Rolling back 21 keeps the `deleted_at` columns (the record of what was deleted); deleted places get a name suffix so the old unique index can come back.
+
+### Deferred minors
+
+- An inactive employee whose place was deleted still shows the old place name in the employees list (his history keeps it by design).
+- `js/settings/admins.js` has the same "spent reload after a stale refusal" pattern the places pane had; not touched.
+
 ## Phase 20 — the admin adds a forgotten check-in or check-out (2026-11-08) — migration 20 APPLIED to production; 20b, panel and app NOT yet
 
 Two database migrations, admin panel 12.17.0 and a small app change. **Migration 20 (`admin_add_punch`) was applied to production on 2026-11-08 after Omar's «نعم»**

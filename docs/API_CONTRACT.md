@@ -254,3 +254,54 @@ Errors: `invalid_action`, `reason_required` (22023); `invalid_time`, `not_found`
 Nothing existing is changed or deleted. Rollback: drop the function (the events it created stay as history).
 
 `admin_list_attendance` already returns `authentication_method`; the panel prints «أضافه المدير» for `admin`. Phase 20b adds `by_admin` to the employee's `recent_events` (§1).
+
+### 8b. The admin adds the forgotten check-out from the review window (phase 20c)
+
+`admin_resolve_review(p_event_id uuid, p_action text, p_time timestamptz default null, p_note text default null)` accepts a third action, `'add_check_out'`
+(the mirror of `'add_check_in'`); `'accept'` and `'add_check_in'` behave as before. The result gains one key, `check_out_event_id` (null for the other two actions).
+
+| Rule | Detail |
+|---|---|
+| Which event | a check-in flagged «missed check-out» whose session waits (`missed_checkout`); anything else is `invalid_action`. An already resolved check-in is `already_resolved`. |
+| Time | after the check-in, at most **24 h** after it, not in the future, with no other event of the employee in between (`invalid_time`) |
+| What is saved | a check-out as a **correction** of the flagged check-in (`authentication_method 'admin'`, `metadata {source 'admin_correction', corrects_event, review}`); that very session is closed; the check-in leaves the review queue with `missed_checkout` false |
+| Audit | `attendance.review_add_check_out` |
+
+Nothing is deleted. Rollback: `20261108150000_phase20c_review_add_check_out_ROLLBACK.sql` puts the phase 14 function back (fingerprint `9689e17d…`).
+
+## 9. Delete a work place, delete an employee (phase 21) — administration
+
+"Delete" hides: nothing is erased. `work_locations.deleted_at` and `employees.deleted_at` (null = live); a deleted employee is also inactive (check constraint).
+Both functions are `security definer`, for a company admin only (`forbidden` 42501 otherwise), `anon` cannot execute them.
+
+### `admin_delete_work_location(p_location_id uuid, p_move_to uuid default null)` → `{deleted: true, moved: n}`
+
+| Case | Result |
+|---|---|
+| The place has **active** employees and no `p_move_to` | `has_employees` |
+| `p_move_to` is the place itself, deleted, in another company, or unknown | `invalid_target` |
+| Unknown place / other company / already deleted | `not_found` |
+| Active employees | moved to `p_move_to` and given its geofence (the same copy `admin_save_employee_profile` makes); an employee with his own geofence keeps it |
+| Inactive employees | stay on the old place (history); to activate one later the admin picks a live place for him |
+
+Audited as `work_location.delete` (name, how many were moved, where to). Both place rows are locked (in id order) first, so a move into a place being deleted at the same moment is seen. The place name can be added again afterwards
+(the unique name index covers live places only). A trigger keeps people off a deleted place: nobody is moved into it, and nobody whose place was deleted
+becomes active before he gets a live place.
+
+### `admin_delete_employee(p_employee_id uuid, p_confirm_name text)` → `{deleted: true}`
+
+Refusals, checked in this order (all `P0001`, message = code): `not_found`, `self_delete`, `is_admin`, `name_mismatch`, `open_session`, `pending_requests`, `has_reports`
+(he is the direct manager of others), `is_approver` (he is a named approver in a step of an approval chain).
+The typed name must equal his name after trimming, collapsing runs of spaces (the non-breaking one too) and Unicode normalisation (NFC).
+
+On success: `deleted_at` and `is_active = false`; his phone binding is removed (`admin_remove_device`) and his push subscriptions are deleted; audited as `employee.delete`.
+His attendance, requests and audit rows are not touched. **His employee number and e-mail stay reserved** (the unique constraints and the auth user remain).
+
+### Changed lists
+
+- `admin_list_work_locations`: hides deleted places; `employees_count` counts people who are not deleted; **new key `active_count`** (how many of them are active).
+- `admin_list_employees`: hides deleted employees; same columns.
+- `platform_list_companies`: counts people who are not deleted.
+- `admin_add_work_location`: re-created only because the conflict target of the name index now needs its `WHERE`.
+
+Rollback: `20261109100000_phase21_workplaces_delete_employee_ROLLBACK.sql` restores the four functions exactly, drops the two delete functions and the trigger, and brings the old unique name index back. It **keeps** the two `deleted_at` columns and the check constraint (the record of what was deleted); a place deleted earlier gets a suffix «(محذوف <date> <id>)» in its name, so after a rollback it shows in the lists again, marked as deleted; a deleted employee stays inactive.
