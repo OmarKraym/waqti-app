@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { installStore, installView, readInstallEnv, type InstallState } from "../lib/install";
 
 export function useOnline(): boolean {
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -15,28 +16,12 @@ export function useOnline(): boolean {
   return online;
 }
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-}
-
-/** Returns a function that shows the browser's install dialog, or null when install is not offered. */
-export function useInstallPrompt(): (() => void) | null {
-  const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  useEffect(() => {
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setEvent(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => setEvent(null);
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
-  if (!event) return null;
-  return () => {
-    event.prompt().finally(() => setEvent(null));
+/** The install line of the login screen: what to show, and the two buttons. The browser's event is captured at start-up (see install.ts). */
+export function useInstall(): { view: InstallState; install: () => void; close: () => void } {
+  const snap = useSyncExternalStore(installStore.subscribe, installStore.snapshot);
+  return {
+    view: installView(snap, readInstallEnv()),
+    install: () => { void installStore.prompt(); },
+    close: () => installStore.dismiss(),
   };
 }

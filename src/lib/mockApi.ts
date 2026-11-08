@@ -12,6 +12,7 @@
 //   grace = 15       (the company's grace period in minutes; the server decides what counts as late — default 15)
 //   rule = beyond_grace  (count only the minutes after the grace period; default: all minutes once the grace is passed)
 //   lateused = 3     (late-arrival justifications already used this month; 3 = none left)
+//   install = 1      (the browser offers installing: a fake «beforeinstallprompt» arrives 0.4 s after start, like in Chrome on Android)
 //   deduct = 1       (a deduction policy: every 15 counted minutes = 10 minutes of pay, rounded up to 5)
 // With no connection (navigator.onLine === false) every call fails like a real network error.
 // Offline punches are checked like the real server: signed-time token, clock consistency (+-120 s),
@@ -81,6 +82,15 @@ const forgotMode = q.get("forgot") === "1";
 /** ?onleave=1: an approved leave covers today (the first punch is saved, flagged; the request list has a leave the manager cancelled). */
 const onLeaveMode = q.get("onleave") === "1";
 let leaveFlagged = false;
+/** ?install=1: what Chrome does on Android: an install prompt arrives soon after the page starts (its dialog is a fake one that accepts). */
+if (q.get("install") === "1" && typeof window !== "undefined") {
+  setTimeout(() => {
+    const ev = new Event("beforeinstallprompt", { cancelable: true }) as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+    ev.prompt = async () => { setTimeout(() => window.dispatchEvent(new Event("appinstalled")), 300); };
+    ev.userChoice = Promise.resolve({ outcome: "accepted" });
+    window.dispatchEvent(ev);
+  }, 400);
+}
 /** ?statefail=1: for 1.5 s after the new password is saved, reading the attendance state fails (the gate must stay closed). */
 let stateFailUntil = 0;
 const MAX_OFFLINE_MS = 72 * 3_600_000;

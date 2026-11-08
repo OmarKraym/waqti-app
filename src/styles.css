@@ -405,6 +405,31 @@ button { font: inherit; }
 .banner .x .icon { width: 18px; height: 18px; }
 .banner .x:hover { opacity: 1; background: var(--veil); }
 
+/* "Install the app" line under the login form: calm, one row; the help for iPhone opens under the text */
+.install-line {
+  width: 100%;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s1) var(--s2) var(--s3);
+  padding-inline: var(--s3) var(--s1);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-small); line-height: 1.6;
+}
+.install-icon { flex: none; width: 20px; height: 20px; color: var(--text-2); }
+.install-body { flex: 1; min-width: 0; }
+.install-text, .install-help { margin: 0; overflow-wrap: anywhere; }
+.install-help { flex: 1 1 100%; margin: 0 0 var(--s2); padding-inline-end: var(--s3); color: var(--text-2); }
+.install-line .btn { flex: none; }
+.install-line .x {
+  flex: none; display: grid; place-items: center;
+  width: 32px; height: 32px;
+  border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; opacity: .8;
+}
+.install-line .x .icon { width: 18px; height: 18px; }
+.install-line .x:hover { opacity: 1; background: var(--veil); }
+
 /* A line above the punch button and the tab bar (after a late check-in he cannot justify). Dismissible. */
 .late-note {
   position: fixed; z-index: 5;

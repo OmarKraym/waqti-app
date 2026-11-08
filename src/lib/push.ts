@@ -34,14 +34,23 @@ export function fromB64u(s: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
-function env(): Omit<Env, "subscribed"> {
+/** An iPhone or iPad (an iPad that asks for the desktop site included). */
+export function isIosDevice(): boolean {
   const ua = navigator.userAgent;
-  const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
-  const standalone =
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+}
+
+/** Opened from the home-screen icon (the installed app), not in a browser tab. */
+export function isStandalone(): boolean {
+  return Boolean(
     window.matchMedia?.("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    (navigator as Navigator & { standalone?: boolean }).standalone === true,
+  );
+}
+
+function env(): Omit<Env, "subscribed"> {
   const hasPush = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-  return { hasPush, isIos, standalone, permission: "Notification" in window ? Notification.permission : "unsupported" };
+  return { hasPush, isIos: isIosDevice(), standalone: isStandalone(), permission: "Notification" in window ? Notification.permission : "unsupported" };
 }
 
 async function registration(): Promise<ServiceWorkerRegistration | null> {

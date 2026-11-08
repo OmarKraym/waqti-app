@@ -3,6 +3,7 @@ import type { SessionUser } from "../lib/api";
 import { api } from "../lib/client";
 import { AppError } from "../lib/errors";
 import { gateWhenUnreachable } from "../lib/firstRun";
+import { IOS_INSTALL_TEXT } from "../lib/install";
 import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { mustInstallFirst } from "../lib/deviceKey";
 import { setupGate, setupSeen } from "../lib/permissions";
@@ -77,7 +78,7 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
           <Icon name="phone" className="pad-icon" />
           <h2 className="pad-title">ثبّت التطبيق أولًا</h2>
           <p className="muted">
-            في الآيفون يعمل وقتي من أيقونته فقط: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية»، وافتح وقتي من الأيقونة.
+            في الآيفون يعمل وقتي من أيقونته فقط: {IOS_INSTALL_TEXT}
           </p>
           <button className="btn ghost block" onClick={() => api.signOut()}>تسجيل الخروج</button>
         </div>

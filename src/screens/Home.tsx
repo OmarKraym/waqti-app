@@ -37,7 +37,7 @@ import { holidayBanner, loadCalendar, offLabel, saveCalendar, type Calendar } fr
 import { dayKey, earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
-import { useInstallPrompt, useOnline } from "./hooks";
+import { useOnline } from "./hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
 import { Banner, Icon, Modal } from "./ui";
@@ -58,7 +58,6 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const [state, dispatch] = useReducer(reduce, initialState);
   const busy = useRef(false); // blocks a second tap while one is being processed
   const online = useOnline();
-  const install = useInstallPrompt();
 
   // ---- offline support
   const storage = useMemo(() => browserStorage(), []);
@@ -551,9 +550,6 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
 
         <EarlierDays days={days} timeZone={tz} />
 
-        {install && (
-          <button className="btn ghost block" onClick={install}>تثبيت التطبيق على الجهاز</button>
-        )}
       </main>
     </div>
   );

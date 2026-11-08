@@ -5,6 +5,8 @@ import { takeSignoutReason } from "../lib/signoutReason";
 import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
 import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
+import { useInstall } from "./hooks";
+import { InstallLine } from "./InstallLine";
 import { Icon, PasswordInput } from "./ui";
 
 export function Login() {
@@ -19,6 +21,8 @@ export function Login() {
   });
   // After sign-out the phone still knows its registered fingerprint: offer it (the password form stays below).
   const [bioReady, setBioReady] = useState(false);
+  // Installing the app is offered here, before sign-in (the browser's prompt is captured at start-up, see lib/install.ts).
+  const install = useInstall();
 
   useEffect(() => {
     let alive = true;
@@ -127,6 +131,7 @@ export function Login() {
           {busy ? "جارٍ الدخول…" : "تسجيل الدخول"}
         </button>
         <p className="auth-foot">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
+        {install.view !== "hidden" && <InstallLine kind={install.view} onInstall={install.install} onClose={install.close} />}
       </form>
     </main>
   );
