@@ -1,9 +1,9 @@
 # Changelog
 
-## Phase 21 (+ 20c) — delete a work place or an employee, the forgotten check-out from the review window, the install line (2026-11-08) — NOT applied to production, panel not installed, app not deployed
+## Phase 21 (+ 20b, 20c) — delete a work place or an employee, the forgotten check-out from the review window, the install line (2026-11-08) — migrations 20b, 20c and 21 APPLIED to production; panel 12.18 not installed, app not deployed
 
 Two database migrations (**20c**, **21**), admin panel **12.18.0** (it also carries the 12.17 panel: `waqti_admin_12_18.zip` supersedes `waqti_admin_12_17.zip`) and an app change.
-Nothing is visible to anyone until the migrations are applied and the panel is installed. Procedure, fingerprints and the read-only state of production on this date: `docs/PHASE21_RUN_LOCALLY.md`.
+**20b, 20c and 21 were applied to production on 2026-11-08 after Omar's «طبق أي شيء جاهز»** (each checked against the local fingerprint; one function was written again because a backslash escape had arrived as a raw character: see `docs/PHASE21_RUN_LOCALLY.md` §3). Nothing is visible to anyone until the panel 12.18 is installed and, for the install line, the app is deployed. Procedure and fingerprints: `docs/PHASE21_RUN_LOCALLY.md`.
 Contract: `docs/API_CONTRACT.md` §8b and §9.
 
 ### What changes for people

@@ -2,7 +2,7 @@
 
 This round = two migrations (**20c** `admin_resolve_review` gets the action `add_check_out`; **21** soft delete of work places and employees), admin panel **12.18.0**
 (it also carries the 12.17 panel, so `waqti_admin_12_18.zip` supersedes `waqti_admin_12_17.zip`) and app changes (the «install the app» line on the login screen; 20b's «أضافه المدير» mark from phase 20).
-**Nothing of this round is applied to production, installed or deployed** (state read-only on 2026-11-08, §3). Every test below ran on a throwaway local database or the fake server.
+**The three migrations (20b, 20c, 21) were applied to production on 2026-11-08 after Omar's «طبق أي شيء جاهز» (§3, "What was done"). The panel 12.18 is not installed and the app is not deployed.** Every test below ran on a throwaway local database or the fake server.
 
 ## 1. Run the database tests (local only, never production)
 
@@ -45,7 +45,25 @@ app: the three placement guards were each mutated and killed.
 
 ## 3. Applying on production (ONLY after Omar says «نعم», one part at a time)
 
-State read **on 2026-11-08 with SELECT only** (nothing was changed on production by this round):
+### What was done (2026-11-08)
+
+Omar answered the question «أي جزء تسمح لي بتطبيقه على الإنتاج الآن؟» with «طبق أي شيء جاهز»; the three migrations were applied one at a time with the Supabase tool (`apply_migration`), each checked against the local fingerprint before the next.
+The panel zip is installed by the administrator and the app deploy needs its own «نعم» (§3 step 5): **neither was done**.
+
+| Order | Migration name on production | Check after applying |
+|---|---|---|
+| 1 | `phase20b_employee_state_admin_flag` | `employee_attendance_state`: 1 row, `755f640ddfdfa54e26719f228211da48` (was `51e02778…`); anon no, authenticated yes |
+| 2 | `phase20c_review_add_check_out` | `admin_resolve_review`: 1 row, `80c2d3d554b10f2ffd90a5a6dd6ae652` (was `9689e17d…`); anon no, authenticated yes |
+| 3 | `phase21_workplaces_delete_employee` | the four replaced functions: `fc001e0c168a118a6b0b8ade818b262a` (was `42dc4dc2…`); `deleted_at` on both tables; the guard trigger; grants f/f/t/t; the name index covers live places only; **nothing deleted** (7 places, 68 employees, 0 deleted of each, the same counts as before) |
+| 4 | `phase21_admin_delete_employee_nbsp_escape` | see the note below: the three new functions `29f80512d7d5c396eae8ece6527f60a8` |
+
+**Note on step 4 (a transcription slip, found by the fingerprint check).** The migration text is sent to the tool as a parameter, and the escape `\u00a0` inside `admin_delete_employee` arrived as a raw non-breaking space (the function text was 10 characters shorter: `bc4e6122…` instead of `0269ef85…`).
+Behaviour was the same (the regex matches the same character either way), but the text no longer equalled the repository file, so the function was written again with the escape rebuilt from `chr(92) || 'u00a0'`; its text is now identical to the file (`0269ef85e536741f0637c485546f823d`, length 2628).
+Production's migration history therefore has this fourth entry, which has no file in the repository (it carries the same function as phase 21). **Lesson for the next migration: compare the fingerprint of every new function, not only the aggregate, and avoid backslash escapes in text sent through the tool.**
+No backup was taken: Supabase's backup button is not reachable from the tool; the three migrations are one transaction each, add no data and have rollbacks that delete nothing (the migration only adds two nullable columns and rebuilds the place-name index on 7 rows).
+No test call was made on production (it would write data); the suggested real-use test at the end of this section is the first real use.
+
+State read **before applying, on 2026-11-08 with SELECT only**:
 
 | Function / object | Production now | = |
 |---|---|---|
