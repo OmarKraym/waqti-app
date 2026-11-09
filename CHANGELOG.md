@@ -1,6 +1,15 @@
 # Changelog
 
-## Phase 23 — what the employee forgot shows up in «حركات تحتاج مراجعة»: a forgotten check-out and a check-in nobody made (2026-11-09) — migration 23 NOT applied; panel 12.20 not delivered/installed; nothing deployed or pushed
+## Phase 23b — a movement the admin already reviewed says «تمت مراجعتها», not «للمراجعة» (2026-11-09) — panel 12.21 only; no database change; delivered as a zip (not installed)
+
+Reported by Omar with a screenshot (2026-11-09): the check-out of employee 1021007 on 2026-11-08 16:02 showed «للمراجعة · انصراف بدون حضور مسجّل» in the attendance table but was not in «حركات تحتاج مراجعة».
+Production (read only) showed the queue was right: the admin had already added the missing check-in on 2026-11-08 (`needs_review = false`, `metadata.review.action = add_check_in`). The table was wrong: `reviewLabel` (`export.js`) printed the `suspect` reasons even after the review.
+
+- **Attendance table and Excel column «المراجعة»:** a movement that carries a flag which forces a review (a `suspect` entry, or no fingerprint support) and is no longer waiting (`needs_review = false`) now shows a grey **«تمت مراجعتها»** and no reason. A movement that still waits is unchanged. «دون اتصال» alone never counted as a review.
+- **Production check:** all 11 flagged events there are reviewed ones (`needs_review = false` and a `review` entry), so the rule matches the real data; the queue itself is untouched.
+- **Tests:** panel unit 79 / 79, behaviour 442 / 442, layout audit 318 screens, 0 problems; 7 mutants (4 of the label rule, 2 of the table, 1 of unknown flags), all killed. `waqti_admin_12_21.zip` carries 12.20 too (supersedes `waqti_admin_12_20.zip`).
+
+## Phase 23 — what the employee forgot shows up in «حركات تحتاج مراجعة»: a forgotten check-out and a check-in nobody made (2026-11-09) — migration 23 NOT applied; panel 12.20 delivered as a zip and superseded by 12.21 (not installed); nothing deployed or pushed
 
 One database migration (**23**) and admin panel **12.20.0**. Omar's request (#71): a forgotten check-out in a session that is still open appears in the review list with a button to add the check-out by hand, and a forgotten check-in appears there too with a button to add the check-in by hand.
 His answers: the open-session rule for «employees without fixed hours», the missing check-in «after the grace period has passed», and a «غائب / تجاهل» button that hides the row.
