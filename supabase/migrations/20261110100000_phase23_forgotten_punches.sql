@@ -7,6 +7,8 @@
 --   * A check-in nobody made: a working day (his schedule, not a holiday, not an approved leave) of the last 7 days on which the
 --     employee has no movement at all and the grace period after his shift start has passed. admin_list_missing_checkins lists them;
 --     the admin adds the check-in (admin_add_punch, phase 20) or says "absent" (admin_dismiss_missing_checkin), which hides the row.
+--   * A review row on a day the employee has an approved leave for (his own request, not a company holiday) carries that leave in the
+--     existing `leave` column of admin_review_queue, so the panel can say "عليه إجازة معتمدة". Nothing is hidden or written: the admin decides.
 -- Nothing is deleted. Rollback: *_ROLLBACK.sql (sessions already closed as missed stay missed: that is data, not structure).
 
 -- ---------------------------------------------------------------- the admin's decision "absent" for a day
@@ -85,8 +87,10 @@ set search_path = 'public'
 as $$
 declare
   v_company uuid := public.require_company_admin();
+  v_tz text;
 begin
   perform private.close_forgotten_sessions(v_company);
+  select c.timezone into v_tz from public.companies c where c.id = v_company;
   return query
   select ev.id, ev.employee_id, emp.employee_number, emp.full_name, ev.event_type, ev.occurred_at, ev.location_status,
          coalesce(array(select jsonb_array_elements_text(ev.metadata -> 'suspect')), '{}'::text[]),
@@ -96,7 +100,7 @@ begin
          (ev.metadata ->> 'sync_delay_s')::integer,
          ev.needs_review,
          count(*) over (),
-         case when ev.metadata ? 'leave_request_id' then
+         case when ev.metadata ? 'leave_request_id' or cov.id is not null then
            (select jsonb_build_object('request_id', r.id, 'leave_type', r.leave_type, 'status', r.status, 'days', r.days,
                                       'start_date', (r.start_at at time zone c.timezone)::date,
                                       'end_date', ((r.end_at - interval '1 second') at time zone c.timezone)::date,
@@ -107,10 +111,14 @@ begin
                                                              ((r.end_at - interval '1 second') at time zone c.timezone)::date, interval '1 day') as g
                                         where r.status = 'approved' and private.leave_days(r.employee_id, g::date, g::date) > 0), '[]'::jsonb))
             from public.requests r join public.companies c on c.id = r.company_id
-            where r.id = (ev.metadata ->> 'leave_request_id')::uuid and r.company_id = v_company)
+            where r.id = coalesce((ev.metadata ->> 'leave_request_id')::uuid, cov.id) and r.company_id = v_company)
          end
   from public.attendance_events ev
   join public.employees emp on emp.id = ev.employee_id
+  -- the employee's own approved leave that covers the local day of the movement (a company holiday is not "his leave"): shown as a note on the row
+  left join lateral (select r2.id from public.requests r2
+                     where r2.id = private.approved_leave_on(ev.employee_id, (ev.occurred_at at time zone v_tz)::date)
+                       and r2.company_leave_day_id is null) cov on true
   where ev.company_id = v_company and ev.needs_review
   order by ev.occurred_at desc, ev.id
   limit greatest(least(coalesce(p_limit, 200), 1000), 1);

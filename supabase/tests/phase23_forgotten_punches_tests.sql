@@ -82,7 +82,7 @@ create function pg_temp.days(p_today date, p_from int, p_to int) returns text la
 do $tests$
 declare
   v_admin uuid; a uuid; b uuid; v_comp uuid; v_tz text; r jsonb; s text; today date; st jsonb; n int;
-  ev1 uuid; ev2 uuid; ev3 uuid; ev4 uuid; ev5 uuid; v_comp2 uuid; e2 uuid; ev6 uuid; l1 uuid;
+  ev1 uuid; ev2 uuid; ev3 uuid; ev4 uuid; ev5 uuid; v_comp2 uuid; e2 uuid; ev6 uuid; l1 uuid; ev7 uuid; ev8 uuid; l2 uuid; xl uuid; lj jsonb; d7 date;
 begin
   select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
   select company_id into v_comp from public.employees where id = v_admin;
@@ -288,6 +288,63 @@ begin
                      and not has_table_privilege('anon', 'public.attendance_day_decisions', 'select')
                      and (select relrowsecurity from pg_class where oid = 'public.attendance_day_decisions'::regclass),
                      'the decisions table is closed (RLS on, no grants)');
+
+  -- ================================================================ 5. a review row on a day covered by the employee's own approved leave says so
+  perform pg_temp.clean(a);
+  perform pg_temp.clean(b);
+  update public.companies set punch_windows_enabled = false where id = v_comp;
+  ev7 := pg_temp.open_sess(a, now() - interval '30 hours');
+  d7 := ((now() - interval '30 hours') at time zone v_tz)::date;
+  l1 := pg_temp.mk_leave(a, v_comp, v_tz, 'annual', d7, d7);
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select count(*), max(q.leave::text)::jsonb into n, lj from public.admin_review_queue() q where q.event_id = ev7 and q.missed_checkout and q.needs_review;
+  reset role;
+  perform pg_temp.ok(n = 1, 'the forgotten check-out of a day he has an approved leave for stays in the review queue', n::text);
+  perform pg_temp.ok(lj ->> 'request_id' = l1::text and lj ->> 'leave_type' = 'annual' and lj ->> 'status' = 'approved'
+                     and lj ->> 'start_date' = d7::text and lj ->> 'end_date' = d7::text,
+                     'the row carries that leave (request, type, status, first and last day)', lj::text);
+  perform pg_temp.ok(pg_temp.sess(ev7) = 'missed_checkout' and (select needs_review from public.attendance_events where id = ev7),
+                     'nothing is written on the movement: the session and the flag are as they were', pg_temp.sess(ev7));
+  -- the leave goes: the note goes with it
+  update public.requests set status = 'cancelled' where id = l1;
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select count(*), max(q.leave::text) into n, s from public.admin_review_queue() q where q.event_id = ev7;
+  reset role;
+  perform pg_temp.ok(n = 1 and s is null, 'a cancelled leave: the row stays and has no leave note', coalesce(s, 'null'));
+  update public.requests set status = 'pending' where id = l1;
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select max(q.leave::text) into s from public.admin_review_queue() q where q.event_id = ev7;
+  reset role;
+  perform pg_temp.ok(s is null, 'a leave still waiting for approval is not a note', coalesce(s, 'null'));
+  update public.requests set status = 'approved' where id = l1;
+  -- a leave on another day: no note
+  update public.requests set start_at = (d7 - 3)::timestamp at time zone v_tz, end_at = (d7 - 1)::timestamp at time zone v_tz where id = l1;
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select max(q.leave::text) into s from public.admin_review_queue() q where q.event_id = ev7;
+  reset role;
+  perform pg_temp.ok(s is null, 'a leave that ends the day before: no note', coalesce(s, 'null'));
+  -- a leave the company granted (a holiday) is not "his leave": no note
+  update public.requests set start_at = d7::timestamp at time zone v_tz, end_at = (d7 + 1)::timestamp at time zone v_tz where id = l1;
+  insert into public.company_leave_days (company_id, name, start_date, end_date, scope) values (v_comp, 'عطلة اختبار 23', d7, d7, 'all') returning id into xl;
+  update public.requests set company_leave_day_id = xl where id = l1;
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select max(q.leave::text) into s from public.admin_review_queue() q where q.event_id = ev7;
+  reset role;
+  perform pg_temp.ok(s is null, 'a company leave day (holiday) is not shown as his leave', coalesce(s, 'null'));
+  update public.requests set company_leave_day_id = null where id = l1;
+  delete from public.company_leave_days where id = xl;
+  -- another employee's leave is not his
+  ev8 := pg_temp.open_sess(b, now() - interval '30 hours');
+  perform pg_temp.as_user(v_admin);
+  set local role authenticated;
+  select count(*), max(q.leave::text) into n, s from public.admin_review_queue() q where q.event_id = ev8;
+  reset role;
+  perform pg_temp.ok(n = 1 and s is null, 'an employee without a leave: no note (a leave of someone else does not count)', coalesce(s, 'null'));
 
   perform pg_temp.clean(a);
   perform pg_temp.clean(b);
