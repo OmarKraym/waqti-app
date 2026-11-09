@@ -326,3 +326,31 @@ The days a punch cancelled that nobody has decided (`metadata ? 'leave_day'` and
 - `restore_leave`: a new approved one-day request (same type, finished approvals copied, `decided_by` the admin); employee notified («أُعيد يوم إلى إجازتك»); audit `leave.day_restored`.
 - Errors: `invalid_action`, `not_found` (also another company's event), `not_leave_day_cancelled`, `already_resolved`, `leave_gone`, `already_on_leave`, `not_a_workday`.
 
+## 11. What the employee forgot (phase 23) — administration
+
+### `admin_review_queue(p_limit integer default 200)` — same columns as phase 15, now **volatile** (no longer `stable`)
+It begins with `private.close_forgotten_sessions(<caller's company>)`: every `open` session of the company is judged once. `private.close_missed_checkout` (the window rule) runs first;
+when it does not close the session **and** the company has no punch windows or the employee has no work schedule, a session whose check-in is at least **24 h** old becomes `missed_checkout`, and its check-in event gets
+`needs_review = true` and `metadata.missed_checkout = true`. The row then appears with `missed_checkout: true` and the button of phase 20c (`admin_resolve_review … 'add_check_out'`). An employee who is punching at that moment is skipped (the next look catches him). Other companies are never touched.
+
+### `admin_list_missing_checkins(p_limit int default 200)` → rows `{employee_id, employee_number, full_name, day, shift_start, grace_min, missing_total}`
+A working day with **no check-in at all**, newest day first (then `shift_start`, `full_name`), own company only. Admins only (`forbidden` otherwise). A day is listed when **all** of these hold:
+
+| Rule | Detail |
+|---|---|
+| Window | the last 7 local days, today included |
+| Employee | `is_active` and not deleted; the day is not before the day he was created |
+| Shift | his schedule has a workday that day (`private.shift_bounds`), and the shift does not cross midnight |
+| Grace | `now() > shift_start + coalesce(employees.late_grace_min, companies.late_grace_min)` |
+| No movement | no `attendance_events` row of his on that local day (any type) |
+| Not excused | no approved leave (`private.approved_leave_on`), not a holiday (`private.holiday_on`), no row in `attendance_day_decisions` |
+
+`missing_total` is the number of rows before `p_limit` is applied.
+
+### `admin_dismiss_missing_checkin(p_employee_id uuid, p_day date, p_note text default null)` → `{employee_id, day, decision: 'absent'}`
+Stores the decision (table `public.attendance_day_decisions`, unique `(employee_id, day)`, RLS on, no grant for `anon` / `authenticated`) and audits `attendance.day_absent` (entity `employee`). The row leaves the list.
+**No payroll or deduction effect.** Errors: `invalid_action`, `not_found` (employee not in the caller's company, or the day is not in the list), `already_resolved` (second call), `forbidden` (42501) for a non-admin.
+The check-in itself is added with `admin_add_punch(..., 'check_in', ...)` (§8); a movement that day removes the row from the list.
+
+Rollback: `20261110100000_phase23_forgotten_punches_ROLLBACK.sql` (puts the phase 15 queue text back, fingerprint `5068880f…`, and drops the two public and two private functions and the table).
+

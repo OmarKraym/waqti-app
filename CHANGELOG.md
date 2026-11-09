@@ -1,5 +1,29 @@
 # Changelog
 
+## Phase 23 — what the employee forgot shows up in «حركات تحتاج مراجعة»: a forgotten check-out and a check-in nobody made (2026-11-09) — migration 23 NOT applied; panel 12.20 not delivered/installed; nothing deployed or pushed
+
+One database migration (**23**) and admin panel **12.20.0**. Omar's request (#71): a forgotten check-out in a session that is still open appears in the review list with a button to add the check-out by hand, and a forgotten check-in appears there too with a button to add the check-in by hand.
+His answers: the open-session rule for «employees without fixed hours», the missing check-in «after the grace period has passed», and a «غائب / تجاهل» button that hides the row.
+**Nothing of this phase is applied to production, deployed or pushed.** Applying migration 23 needs Omar's fresh «نعم»; hand-off with the fingerprints: `docs/PHASE23_RUN_LOCALLY.md`. Contract: `docs/API_CONTRACT.md` §11.
+
+### What changes for people
+
+- **Open session nobody closed.** When the admin opens الحضور, every open session of his company is judged. A window-rule employee (punch windows on and a schedule) is judged by his own check-out time, as before; an employee without windows or schedule is judged by one fixed line: **24 hours after the check-in**.
+  A lapsed session becomes «missed check-out», flagged for review, and the row has the existing **إضافة الانصراف** button (phase 20c).
+- **Check-in nobody made.** A working day of the last **7 days** with no movement at all, after the grace period of the shift start, not a holiday, not an approved leave, not before the employee was created: a row «لا حركة» in the same card with **إضافة الحضور**
+  (the phase 20 manual-punch window opens with the employee and the day filled in) and **غائب / تجاهل** (hides the row; the decision is stored with who and why, and audited `attendance.day_absent`; **no payroll effect**).
+- The card count and the title now include these rows. On a database without migration 23, panel 12.20 behaves exactly like 12.19.
+
+### Tests (all local, 2026-11-09)
+
+Database **1409 / 1409** (33 files; phase 23: 36) · panel unit 78 / 78 · panel behaviour 436 / 436 · layout audit 312 screens, 0 with problems, 0 issues, 0 script errors · mutation checks: 16 on the migration (all killed), 12 on the panel (all killed; P12 «card hidden when only missing rows» survived first, got its own test, and is killed now) · app untouched (389 / 389 as in phase 22).
+
+### Rulings
+
+- R1. The open-session rule is **lazy and wider than Omar's literal answer**: it runs when the admin opens the queue and also catches scheduled employees' lapsed sessions (their own window rule). Cost if wrong: narrow one `elsif`.
+- R2. No-show window = last 7 local days, today included. R3. A shift crossing midnight is not listed (as phase 12 lateness). R4. No schedule → no no-show row.
+- R5. «غائب / تجاهل» records only the decision: no payroll or deduction effect. R6. «إضافة الحضور» reuses the phase 20 manual-punch window.
+
 ## Phase 22 — a punch on an approved-leave day cancels that day (no review); the admin may restore it; «you are on leave today» and «you checked in» on Home (2026-11-09) — migration 22 applied to production 2026-11-09; app not deployed; panel 12.19 delivered as a zip (not installed)
 
 One database migration (**22**), admin panel **12.19.0** and app changes. Omar's requests: the Home pill said «لم تسجّل حضورك اليوم» with a check-in on the card (#69), and an employee on an approved leave must not be asked to punch,
