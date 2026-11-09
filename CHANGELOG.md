@@ -1,9 +1,10 @@
 # Changelog
 
-## Phase 22 — a punch on an approved-leave day cancels that day (no review); the admin may restore it; «you are on leave today» and «you checked in» on Home (2026-11-09) — migration 22 NOT applied to production; panel 12.19 and app not delivered
+## Phase 22 — a punch on an approved-leave day cancels that day (no review); the admin may restore it; «you are on leave today» and «you checked in» on Home (2026-11-09) — migration 22 applied to production 2026-11-09; app not deployed; panel 12.19 delivered as a zip (not installed)
 
 One database migration (**22**), admin panel **12.19.0** and app changes. Omar's requests: the Home pill said «لم تسجّل حضورك اليوم» with a check-in on the card (#69), and an employee on an approved leave must not be asked to punch,
 must not be put in review when he does, and his leave for that day goes when he punches (#70). His answers: the day is cancelled **from the first punch**, the admin can decide «leave or normal day», the employee and the audit log are told.
+**Migration 22 was applied to production on 2026-11-09 after Omar's «نعم»** (Supabase version `20261109050730`, name `phase22_leave_punch_cancels_day`): before it, `record_punch` and `employee_attendance_state` had the pre-22 text and the three new functions did not exist; after it, all five fingerprints and the group fingerprint matched the local text, the two admin functions are executable by `authenticated` only (not `anon`, not `public`), `private.cancel_leave_days` by nobody. The security advisor shows only the usual «authenticated SECURITY DEFINER executable» warning for the two new admin RPCs, like every other admin RPC (each calls `require_company_admin()`). Not yet done: deploy of the app, install of panel 12.19, the real-use test of §3.4.
 Hand-off: `docs/PHASE22_RUN_LOCALLY.md`. Contract: `docs/API_CONTRACT.md` §10.
 
 ### What changes for people

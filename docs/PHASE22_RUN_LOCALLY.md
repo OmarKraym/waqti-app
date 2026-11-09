@@ -1,6 +1,6 @@
 # Phase 22 — a punch on an approved-leave day cancels that day: run it locally, and how to apply it later
 
-One migration (`supabase/migrations/20261110090000_phase22_leave_punch_cancels_day.sql`, rollback `…_ROLLBACK.sql`), admin panel **12.19.0**, app changes (Home headline, punch notice). **Nothing here is applied to production or deployed.**
+One migration (`supabase/migrations/20261110090000_phase22_leave_punch_cancels_day.sql`, rollback `…_ROLLBACK.sql`), admin panel **12.19.0**, app changes (Home headline, punch notice). **Migration 22 is applied to production (2026-11-09, version `20261109050730`, five fingerprints matched); the app is not deployed and panel 12.19 is not installed yet.**
 
 ## 1. Run the database tests (local only)
 ```bash
@@ -19,7 +19,7 @@ Same setup as phase 21 (Postgres 16 + PostGIS, clock fixed at 2026-10-31 10:00 w
 | App | `npx vitest run`, `npx tsc -b`, `npm run build` | 389 / 389, clean, builds |
 | App in the browser | `VITE_MOCK=1 npx vite --port 5179`, open `/?onleave=1` | pill «أنت في إجازة معتمدة اليوم» + note + open button; after the punch: «أُلغي هذا اليوم من إجازتك» |
 
-## 3. How to apply it later (needs Omar's explicit «نعم»)
+## 3. How it was applied (Omar's «نعم», 2026-11-09) — steps 3 and 4 are still to do
 1. Apply the migration with `apply_migration` (one call). **Avoid backslash escapes in the text sent through the tool** (phase 21 learned this: an escape arrives as a raw character and changes the function text); this migration has none.
 2. Compare each function with the local text (`select n.nspname||'.'||p.proname, md5(p.prosrc) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where …`):
 
