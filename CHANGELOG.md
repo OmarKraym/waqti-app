@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 23c — a review row on a day with an approved leave says «عليه إجازة معتمدة» (2026-11-09) — migration 23 amended (not applied); panel 12.22 delivered as a zip (not installed)
+
+Reported by Omar with screenshots (2026-11-09): employee 1021057 (عمر امحمد كريم) still sat in «حركات تحتاج مراجعة» as «دخول 09:06 · بدون خروج» although his one-day annual leave for 2026-11-08 was approved.
+Production (read only): he punched in on 2026-11-08 09:06 and never out; at 16:15 he asked for a leave for that same day and it was approved at 16:40; his session was closed as «نسي الانصراف» in the afternoon. Approving a leave never looked at the review row, so the row stayed. Of the 4 rows in the queue this was the only one covered by a leave.
+Omar's pick among three: **«يبقى ظاهراً مع ملاحظة»**.
+
+- **Database (inside migration 23, which is not applied yet, so there is no second migration):** `admin_review_queue` fills its existing `leave` column with the employee's own approved leave that covers the local day of the row (not a company holiday). Nothing is hidden or written.
+- **Admin panel 12.22:** the row keeps its reason («بدون خروج») and its buttons («إضافة الانصراف» and «قبول»), and gets a line «عليه إجازة سنوية، يوم واحد (معتمدة): 2026-11-08». A punch that landed on a leave keeps its own buttons (phase 15/22).
+- **Needs:** migration 23 applied for the line to appear (on the current database the panel looks as before). New fingerprint of `admin_review_queue`: `488c93af…`; group `a3af6a6b…` (`docs/PHASE23_RUN_LOCALLY.md` §3).
+- **Tests:** database **1417 / 1417** (phase 23: 44, 8 new) · panel unit 80 / 80 · behaviour 452 / 452 · layout audit 324 screens, 0 problems · mutants: 3 on the migration part and 6 on the panel, all killed · rollback proven again. `waqti_admin_12_22.zip` carries 12.20, 12.21 and 12.22.
+- **Ruling R7:** a company holiday is not «his leave» (no note); the movement and its session are not touched.
+
 ## Phase 23b — a movement the admin already reviewed says «تمت مراجعتها», not «للمراجعة» (2026-11-09) — panel 12.21 only; no database change; delivered as a zip (not installed)
 
 Reported by Omar with a screenshot (2026-11-09): the check-out of employee 1021007 on 2026-11-08 16:02 showed «للمراجعة · انصراف بدون حضور مسجّل» in the attendance table but was not in «حركات تحتاج مراجعة».
@@ -25,7 +37,7 @@ His answers: the open-session rule for «employees without fixed hours», the mi
 
 ### Tests (all local, 2026-11-09)
 
-Database **1409 / 1409** (33 files; phase 23: 36) · panel unit 78 / 78 · panel behaviour 436 / 436 · layout audit 312 screens, 0 with problems, 0 issues, 0 script errors · mutation checks: 16 on the migration (all killed), 12 on the panel (all killed; P12 «card hidden when only missing rows» survived first, got its own test, and is killed now) · app untouched (389 / 389 as in phase 22).
+Database **1417 / 1417** (33 files; phase 23: 44) · panel unit 78 / 78 · panel behaviour 436 / 436 · layout audit 312 screens, 0 with problems, 0 issues, 0 script errors · mutation checks: 16 on the migration (all killed), 12 on the panel (all killed; P12 «card hidden when only missing rows» survived first, got its own test, and is killed now) · app untouched (389 / 389 as in phase 22).
 
 ### Rulings
 

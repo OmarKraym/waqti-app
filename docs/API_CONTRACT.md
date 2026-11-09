@@ -333,6 +333,9 @@ It begins with `private.close_forgotten_sessions(<caller's company>)`: every `op
 when it does not close the session **and** the company has no punch windows or the employee has no work schedule, a session whose check-in is at least **24 h** old becomes `missed_checkout`, and its check-in event gets
 `needs_review = true` and `metadata.missed_checkout = true`. The row then appears with `missed_checkout: true` and the button of phase 20c (`admin_resolve_review … 'add_check_out'`). An employee who is punching at that moment is skipped (the next look catches him). Other companies are never touched.
 
+**Phase 23c — the `leave` column.** Besides the leave a punch landed on (`metadata.leave_request_id`, phase 15), the column now also carries the employee's **own approved leave that covers the local day of the movement** (`private.approved_leave_on`, and `requests.company_leave_day_id is null`: a company holiday is not his leave). Same keys as before: `{request_id, leave_type, status, days, start_date, end_date, working_days}`.
+Nothing is hidden and nothing is written: the row stays in the queue and the panel prints «عليه إجازة … (معتمدة)». A row with the `on_approved_leave` flag and its leave is still the phase 15 conflict (cancel / keep the leave).
+
 ### `admin_list_missing_checkins(p_limit int default 200)` → rows `{employee_id, employee_number, full_name, day, shift_start, grace_min, missing_total}`
 A working day with **no check-in at all**, newest day first (then `shift_start`, `full_name`), own company only. Admins only (`forbidden` otherwise). A day is listed when **all** of these hold:
 
