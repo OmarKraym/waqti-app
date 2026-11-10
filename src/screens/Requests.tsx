@@ -311,7 +311,7 @@ function MyRequests({ items, timeZone, online, onChanged }: {
     <section aria-labelledby="mine-title">
       <h2 id="mine-title" className="section-title">طلباتي</h2>
       {items.length === 0 ? (
-        <p className="muted empty">لا توجد طلبات بعد.</p>
+        <p className="muted empty">لا توجد طلبات بعد</p>
       ) : (
         <ul className="req-list">
           {items.map((r) => (

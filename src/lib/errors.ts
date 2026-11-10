@@ -137,7 +137,7 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   permission_limit: "استنفدت عدد المرات المسموح بها لهذا الإذن هذا الشهر (الطلبات المعلّقة محسوبة).",
   overlapping_request: "لديك طلب آخر في نفس الفترة.",
   reason_required: "اكتب سبب الطلب.",
-  maternity_female_only: "إجازة الأمومة غير متاحة لهذا الحساب.",
+  maternity_female_only: "إجازة الوضع غير متاحة لهذا الحساب.",
   custom_kind_not_found: "هذا النوع لم يعد متاحاً.",
   custom_kind_disabled: "هذا النوع متوقف حالياً.",
   kind_gender_mismatch: "هذا النوع غير متاح لهذا الحساب.",

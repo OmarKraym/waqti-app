@@ -28,9 +28,9 @@ export const TYPE_LABEL: Record<RequestType, string> = {
 export const LEAVE_LABEL: Record<LeaveType, string> = {
   annual: "سنوية",
   sick: "مرضية",
-  emergency: "طارئة",
+  emergency: "اضطرارية",
   marriage: "زواج",
-  maternity: "أمومة",
+  maternity: "وضع",
   unpaid: "بدون راتب",
   custom: "خاصة",
 };

@@ -106,7 +106,7 @@ export function TeamOvertime({ data, online, onDone, onAssign }: { data: Overtim
         <button className="btn small" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</button>
       </div>
       {items.length === 0 ? (
-        <p className="muted empty">لم تكلّف أحدًا بعد.</p>
+        <p className="muted empty">لم تكلّف أحدًا بعد</p>
       ) : (
         <ul className="req-list">
           {items.map((o) => <li key={o.id}><TeamOvertimeCard item={o} tz={data.timezone} online={online} onDone={onDone} /></li>)}
