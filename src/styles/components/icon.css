@@ -1,0 +1,8 @@
+/* components/icon: the stroke icons of ui.tsx */
+@layer components {
+  .icon {
+    width: 20px; height: 20px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .inline-icon { width: 18px; height: 18px; vertical-align: -4px; margin-inline-end: var(--space-1-5); }
+}

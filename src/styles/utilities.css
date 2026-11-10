@@ -1,0 +1,19 @@
+/* utilities */
+@layer utilities {
+  .muted { color: var(--color-text-muted); }
+  .small { font-size: var(--font-size-sm); }
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .min-w-0 { min-width: 0; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  /* Reduced motion wins over every component (this layer comes last) */
+  @media (prefers-reduced-motion: reduce) {
+    .modal-backdrop, .modal, .modal-backdrop.sheet .modal { animation: none; }
+    .switch, .switch-knob { transition: none; }
+    *, *::before, *::after { transition: none; }
+    .stamp.fresh, .spinner, .punch[aria-busy="true"] .punch-icon { animation: none; }
+  }
+  /* hidden wins over every display rule: this layer comes last, no !important needed */
+  [hidden] { display: none; }
+}

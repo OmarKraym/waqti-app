@@ -1,0 +1,96 @@
+/* layout */
+@layer layout {
+  .row { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
+  /* Two equal buttons (decline / confirm) */
+  .actions {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2);
+  }
+  /* ---------------------------------------------------------------- frame */
+  .center-screen {
+    min-height: 100dvh;
+    display: grid; place-content: center; justify-items: center; gap: var(--space-3);
+    padding: var(--layout-gutter);
+  }
+  .app { min-height: 100dvh; background: var(--color-bg); }
+  /* One quiet header for every screen, on the page colour */
+  .appbar {
+    position: sticky; top: 0; z-index: var(--z-sticky);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+    min-height: var(--size-appbar);
+    padding: 0 var(--layout-gutter);
+    padding-top: env(safe-area-inset-top);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .appbar-lead { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+  .appbar-title {
+    font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 700; color: var(--color-text);
+  }
+  .brand-mark { border-radius: var(--radius-sm); flex: none; }
+  .appbar > .btn { flex: none; }
+  .brand-bar .appbar-title { font-size: var(--font-size-lg); }
+  /* Home header: logo (opens the profile) at the start, company name in the middle */
+  .topbar {
+    position: sticky; top: 0; z-index: var(--z-sticky);
+    display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: var(--space-2);
+    min-height: var(--size-appbar);
+    padding: 0 var(--layout-gutter);
+    padding-top: env(safe-area-inset-top);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .topbar-title {
+    text-align: center;
+    font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 700; color: var(--color-text);
+  }
+  .container {
+    max-width: var(--layout-max); margin: 0 auto;
+    padding: var(--space-4) var(--layout-gutter) max(var(--space-8), env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
+  }
+  .with-tabs .container { padding-bottom: calc(var(--size-tabbar) + var(--space-8) + env(safe-area-inset-bottom)); }
+  /* Room under the last block so the floating button never hides it */
+  .with-tabs .container.has-punch,
+.with-tabs .container.has-fab {
+    padding-bottom: calc(var(--size-tabbar) + var(--size-float) + var(--space-8) + var(--space-4) + env(safe-area-inset-bottom));
+  }
+  .section-title {
+    display: flex; align-items: center; gap: var(--space-2);
+    font-size: var(--font-size-lg); font-weight: 700;
+    margin: 0 0 var(--space-3);
+  }
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3);
+  }
+  .section-head .section-title { margin: 0; }
+  /* ---------------------------------------------------------------- tab bar */
+  .tabbar {
+    position: fixed; inset-inline: 0; bottom: 0; z-index: var(--z-nav);
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 max(var(--space-2), calc((100vw - var(--layout-max)) / 2)) env(safe-area-inset-bottom);
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+  .tab {
+    position: relative;
+    min-height: var(--size-tabbar);
+    display: grid; justify-items: center; align-content: center; gap: var(--space-0-5);
+    border: 0; background: none; cursor: pointer;
+    color: var(--color-text-muted); font-size: var(--font-size-xs); font-weight: 500;
+  }
+  .tab svg {
+    width: 56px; height: 32px; padding: var(--space-1) var(--space-4); border-radius: var(--radius-pill);
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    transition: background-color var(--motion-base);
+  }
+  .tab.on { color: var(--color-accent-text); font-weight: 700; }
+  .tab.on svg { background: var(--color-accent-tint); stroke-width: 2; }
+  .tab:focus-visible {
+    outline: 2px solid var(--color-focus); outline-offset: -6px; border-radius: var(--radius-md);
+  }
+  /* ---------------------------------------------------------------- requests: more colour and hierarchy */
+  /* A small rust marker before every section title */
+  .section-title::before {
+    content: ""; flex: none; width: 4px; height: 18px; border-radius: var(--radius-xs); background: var(--color-warning);
+  }
+}

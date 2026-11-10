@@ -6,7 +6,7 @@ import { THEME_COLOR } from "./theme";
 // themes, the main colour pairs are readable (WCAG) in light and dark, and the browser-bar colours match the page colour.
 
 const css = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
-const rules = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const rules = readFileSync(new URL("../styles/components/switch.css", import.meta.url), "utf8");
 
 function blockAt(start: number): string {
   const open = css.indexOf("{", start);
@@ -80,7 +80,7 @@ describe("design tokens", () => {
   });
 
   it("no second .switch rule (two of them once broke the notification switches)", () => {
-    expect(rules.match(/^\.switch \{/gm)?.length).toBe(1);
+    expect(rules.match(/^  \.switch \{/gm)?.length).toBe(1);
   });
 
   it("the browser-bar colours are the page colour", () => {

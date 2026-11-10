@@ -1,0 +1,30 @@
+/* components/modal */
+@layer components {
+  /* Confirmation dialog */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: var(--z-modal);
+    display: grid; place-items: center; padding: var(--layout-gutter);
+    background: var(--color-scrim);
+    animation: fade-in var(--motion-fast) var(--ease-out);
+  }
+  .modal {
+    width: min(100%, 380px);
+    display: grid; gap: var(--space-3);
+    padding: var(--space-6);
+    background: var(--color-surface); border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+    animation: pop-in var(--motion-base) var(--ease-out);
+  }
+  .modal-title {
+    font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 700; color: var(--color-text);
+  }
+  .modal-text { color: var(--color-text-muted); line-height: 1.7; font-size: var(--font-size-md); }
+  .modal-actions { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+  .modal-backdrop.sheet { place-items: end center; padding: 0; }
+  .modal-backdrop.sheet .modal {
+    width: min(100%, 480px);
+    border-end-start-radius: 0; border-end-end-radius: 0;
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+    animation: sheet-up var(--motion-base) var(--ease-out);
+  }
+    }

@@ -1,0 +1,35 @@
+/* screens/setup */
+@layer components {
+  /* Fingerprint gate right after the first password */
+  .gate-stack { display: grid; gap: var(--space-3); width: min(100%, 420px); }
+  /* ---------------------------------------------------------------- first-run setup (location, fingerprint, notifications) */
+  .perm-card {
+    width: min(100%, 460px); display: grid; gap: var(--space-3); padding: var(--space-6) var(--space-5);
+  }
+  .perm-card .pad-title { text-align: center; }
+  .perm-card > .hint-line { text-align: center; }
+  .perm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+  .perm-step {
+    border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-3);
+  }
+  .perm-step.done { background: var(--color-success-tint); border-color: transparent; }
+  .perm-head { display: flex; align-items: center; gap: var(--space-3); }
+  .perm-ico {
+    flex: none; width: 36px; height: 36px; padding: var(--space-2); border-radius: var(--radius-round); background: var(--color-accent-tint); color: var(--color-accent-text);
+  }
+  .perm-ico .icon { width: 20px; height: 20px; }
+  .perm-step.done .perm-ico { background: var(--color-surface); color: var(--color-success-text); }
+  .perm-step.blocked .perm-ico { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  .perm-title { flex: 1; font-weight: 700; }
+  .perm-chip {
+    flex: none; height: 24px; padding: 0 var(--space-2-5); border-radius: var(--radius-pill); display: inline-flex; align-items: center;
+    font-size: var(--font-size-xs); font-weight: 700; background: var(--color-surface-sunken); color: var(--color-text-muted);
+  }
+  .perm-chip.done { background: var(--color-surface); color: var(--color-success-text); }
+  .perm-chip.blocked { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  .perm-body { display: grid; gap: var(--space-2); }
+  .perm-diag {
+    font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-sm); padding: var(--space-1-5) var(--space-2-5); overflow-wrap: anywhere;
+  }
+  .setup-nudge { padding: 0; }
+}

@@ -9,7 +9,7 @@ import "@fontsource/readex-pro/arabic-500.css";
 import "@fontsource/readex-pro/arabic-700.css";
 import "@fontsource/readex-pro/latin-500.css";
 import "@fontsource/readex-pro/latin-700.css";
-import "./styles.css";
+import "./styles/index.css";
 import { startInstallCapture } from "./lib/install";
 import { keepStorage } from "./lib/localSettings";
 import { initTheme } from "./lib/theme";

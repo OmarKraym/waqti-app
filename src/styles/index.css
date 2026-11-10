@@ -1,0 +1,23 @@
+/* Waqti app styles. Cascade layers, lowest first: a later layer always wins, whatever the specificity.
+   Tokens: tokens.css. Naming and file rules: CONVENTIONS.md at the repository root. */
+@layer reset, tokens, base, layout, components, utilities;
+@import "./tokens.css";
+@import "./reset.css";
+@import "./base.css";
+@import "./components/icon.css";
+@import "./components/card.css";
+@import "./components/button.css";
+@import "./components/field.css";
+@import "./components/banner.css";
+@import "./components/modal.css";
+@import "./components/switch.css";
+@import "./components/chip.css";
+@import "./layout.css";
+@import "./components/fab.css";
+@import "./screens/auth.css";
+@import "./screens/today.css";
+@import "./screens/requests.css";
+@import "./screens/profile.css";
+@import "./screens/notifications.css";
+@import "./screens/setup.css";
+@import "./utilities.css";
