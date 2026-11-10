@@ -37,6 +37,18 @@ begin
 exception when others then return sqlerrm;
 end $f$;
 
+-- a raw custom-leave row of any status; returns its id (days = whole days from p_start, charged_days may be null)
+create function pg_temp.raw_leave(p_emp uuid, p_kind uuid, p_status text, p_days numeric, p_charged numeric, p_start timestamptz)
+  returns uuid language plpgsql as $f$
+declare v uuid;
+begin
+  insert into public.requests (employee_id, request_type, leave_type, custom_kind_id, status, start_at, end_at, reason, days, charged_days, company_id)
+  values (p_emp, 'leave', 'custom', p_kind, p_status::public.request_status, p_start, p_start + (ceil(p_days) || ' days')::interval, 'T24RAW', p_days, p_charged,
+          (select company_id from public.employees where id = p_emp))
+  returning id into v;
+  return v;
+end $f$;
+
 -- a clean slate between blocks: requests made under kinds, kinds (and so their chains and overrides), the plain other chain
 create function pg_temp.reset_kinds(p_company uuid) returns void language plpgsql as $f$
 begin
@@ -323,6 +335,133 @@ begin
     and not has_function_privilege('anon', 'public.admin_list_custom_kinds()', 'execute')
     and not has_function_privilege('anon', 'public.admin_save_custom_kind(uuid,text,text,boolean,numeric,text,boolean,text,integer)', 'execute')
     and not has_function_privilege('anon', 'public.admin_delete_custom_kind(uuid)', 'execute'), 'authenticated may execute the three functions, anon may not');
+end
+$tests$;
+
+-- ================================================================ Task 3: balance and per-employee days
+do $tests$
+declare
+  v_admin uuid; a uuid; b uuid; v_comp uuid; v_comp2 uuid; v_emp2 uuid;
+  kd uuid; ku uuid; kz uuid; ko uuid; kx2 uuid;
+  v_s26 timestamptz := '2026-11-12 08:00+02'; v_s27 timestamptz := '2027-02-10 08:00+02';
+  r jsonb; s text; rid uuid; n_before int;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into b from public.employees e where e.is_active and e.id not in (v_admin, a) and e.company_id = v_comp order by employee_number limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  perform pg_temp.reset_kinds(v_comp);
+  perform pg_temp.ok(to_regprocedure('private.custom_leave_balance(uuid,uuid,integer,uuid)') is not null
+    and to_regprocedure('public.admin_set_employee_kind_days(uuid,jsonb)') is not null
+    and to_regprocedure('public.admin_get_employee_kind_days(uuid)') is not null, 'the balance function and the two day RPCs exist');
+  if to_regprocedure('private.custom_leave_balance(uuid,uuid,integer,uuid)') is null
+     or to_regprocedure('public.admin_set_employee_kind_days(uuid,jsonb)') is null then return; end if;
+
+  v_emp2 := gen_random_uuid();
+  insert into auth.users (id, email) values (v_emp2, 't24-comp2@example.com');
+  insert into public.employees (id, employee_number, full_name, company_id) values (v_emp2, 'T24-2', 'موظف الشركة الثانية', v_comp2);
+  insert into public.custom_request_kinds (company_id, family, name) values (v_comp2, 'leave', 'Other Co Kind 3') returning id into kx2;
+
+  perform pg_temp.as_user(v_admin);
+  kd := public.admin_save_custom_kind(null, 'leave', 'رصيد عشرة', true, 10, 'all', false, null, 0);
+  ku := public.admin_save_custom_kind(null, 'leave', 'غير محدود', true, null, 'all', false, null, 0);
+  kz := public.admin_save_custom_kind(null, 'leave', 'صفر أيام', true, 0, 'all', false, null, 0);
+  ko := public.admin_save_custom_kind(null, 'other', 'نوع آخر', true, null, 'all', false, 'single', 0);
+
+  -- the balance of a fresh kind
+  r := private.custom_leave_balance(a, kd, 2026);
+  perform pg_temp.ok((r ->> 'entitled')::numeric = 10 and (r ->> 'used')::numeric = 0 and (r ->> 'pending')::numeric = 0
+    and (r ->> 'remaining')::numeric = 10 and r ->> 'leave_type' = 'custom' and r ->> 'custom_kind_id' = kd::text, 'a fresh kind: 10 entitled, 10 remaining', r::text);
+  r := private.custom_leave_balance(a, ku, 2026);
+  perform pg_temp.ok(r -> 'entitled' = 'null'::jsonb and r -> 'remaining' = 'null'::jsonb, 'an unlimited kind: entitled and remaining are null', r::text);
+  r := private.custom_leave_balance(a, kz, 2026);
+  perform pg_temp.ok((r ->> 'entitled')::numeric = 0 and (r ->> 'remaining')::numeric = 0, 'a kind with 0 days: remaining is 0, not null', r::text);
+
+  -- per-employee override
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, 5));
+  r := private.custom_leave_balance(a, kd, 2026);
+  perform pg_temp.ok((r ->> 'entitled')::numeric = 5 and (r ->> 'remaining')::numeric = 5, 'an override of 5 beats the default of 10', r::text);
+  perform pg_temp.ok((private.custom_leave_balance(b, kd, 2026) ->> 'entitled')::numeric = 10, 'the override of one employee does not touch another');
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, 0));
+  r := private.custom_leave_balance(a, kd, 2026);
+  perform pg_temp.ok((r ->> 'entitled')::numeric = 0 and (r ->> 'remaining')::numeric = 0, 'an override of 0 is 0 days, not the default', r::text);
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, null));
+  perform pg_temp.ok((private.custom_leave_balance(a, kd, 2026) ->> 'entitled')::numeric = 10, 'a null value removes the override (back to the default)');
+
+  -- what is counted
+  perform pg_temp.raw_leave(a, kd, 'approved', 2, null, v_s26);
+  perform pg_temp.raw_leave(a, kd, 'approved', 3, 1.5, v_s26 + interval '10 days');
+  rid := pg_temp.raw_leave(a, kd, 'pending', 2, null, v_s26 + interval '20 days');
+  perform pg_temp.raw_leave(a, kd, 'cancelled', 4, null, v_s26 + interval '30 days');
+  perform pg_temp.raw_leave(a, kd, 'rejected', 4, null, v_s26 + interval '40 days');
+  perform pg_temp.raw_leave(a, kd, 'approved', 3, null, v_s27);
+  perform pg_temp.raw_leave(b, kd, 'approved', 5, null, v_s26);
+  r := private.custom_leave_balance(a, kd, 2026);
+  perform pg_temp.ok((r ->> 'used')::numeric = 3.5, 'used = approved days, with charged_days where HR set it (2 + 1.5)', r::text);
+  perform pg_temp.ok((r ->> 'pending')::numeric = 2, 'pending counts the pending request only', r::text);
+  perform pg_temp.ok((r ->> 'remaining')::numeric = 4.5, 'remaining = 10 - 3.5 - 2', r::text);
+  perform pg_temp.ok((private.custom_leave_balance(a, kd, 2027) ->> 'used')::numeric = 3, 'another year counts for its own year');
+  perform pg_temp.ok((private.custom_leave_balance(a, kd, 2026, rid) ->> 'pending')::numeric = 0, 'p_exclude_request leaves that request out');
+  perform pg_temp.ok((private.custom_leave_balance(b, kd, 2026) ->> 'used')::numeric = 5, 'another employee has his own count');
+  perform pg_temp.ok((private.custom_leave_balance(a, ku, 2026) ->> 'used')::numeric = 0, 'requests of another kind are not counted');
+  s := pg_temp.err(format('select private.custom_leave_balance(%L, %L, 2026)', a, gen_random_uuid()));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'an unknown kind is an error, not an unlimited balance', s);
+  delete from public.requests where reason = 'T24RAW';
+
+  -- admin RPCs: get, partial maps
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, 3, kz::text, 2));
+  r := public.admin_get_employee_kind_days(a);
+  perform pg_temp.ok((r ->> kd::text)::numeric = 3 and (r ->> kz::text)::numeric = 2 and not r ? ku::text, 'get returns the overrides only', r::text);
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kz::text, null));
+  r := public.admin_get_employee_kind_days(a);
+  perform pg_temp.ok((r ->> kd::text)::numeric = 3 and not r ? kz::text, 'only the given keys change', r::text);
+  perform pg_temp.ok(public.admin_get_employee_kind_days(b) = '{}'::jsonb, 'an employee without overrides gets an empty object');
+
+  -- audit
+  select count(*) into n_before from public.audit_log where action = 'custom_kind.days_set' and target_id = a::text;
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, 4));
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'custom_kind.days_set' and target_id = a::text) = n_before + 1, 'setting days writes one audit row');
+
+  -- refusals
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kx2::text, 3)));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'a kind of another company is not found', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', v_emp2, jsonb_build_object(kd::text, 3)));
+  perform pg_temp.ok(s = 'employee_not_found', 'an employee of another company is not found', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', gen_random_uuid(), jsonb_build_object(kd::text, 3)));
+  perform pg_temp.ok(s = 'employee_not_found', 'an unknown employee is not found', s);
+  s := pg_temp.err(format('select public.admin_get_employee_kind_days(%L)', v_emp2));
+  perform pg_temp.ok(s = 'employee_not_found', 'overrides of an employee of another company cannot be read', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, 367)));
+  perform pg_temp.ok(s = 'invalid_input', '367 days is refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, -1)));
+  perform pg_temp.ok(s = 'invalid_input', 'negative days are refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, 2.25)));
+  perform pg_temp.ok(s = 'invalid_input', 'days that do not fit one decimal are refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, 'abc')));
+  perform pg_temp.ok(s = 'invalid_input', 'a text value is refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(ko::text, 3)));
+  perform pg_temp.ok(s = 'invalid_input', 'a kind of the other family is refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object('not-a-uuid', 3)));
+  perform pg_temp.ok(s = 'invalid_input', 'a key that is not a uuid is refused', s);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, '[1]'));
+  perform pg_temp.ok(s = 'invalid_input', 'an array instead of an object is refused', s);
+  perform public.admin_set_employee_kind_days(a, jsonb_build_object(kd::text, 4));
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, 9, ko::text, 3)));
+  perform pg_temp.ok(s = 'invalid_input' and (public.admin_get_employee_kind_days(a) ->> kd::text)::numeric = 4, 'a refused map changes nothing', s);
+
+  -- who may call
+  perform pg_temp.as_user(a);
+  s := pg_temp.err(format('select public.admin_set_employee_kind_days(%L, %L::jsonb)', a, jsonb_build_object(kd::text, 30)));
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot set days', s);
+  s := pg_temp.err(format('select public.admin_get_employee_kind_days(%L)', a));
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot read overrides', s);
+  perform pg_temp.ok(has_function_privilege('authenticated', 'public.admin_set_employee_kind_days(uuid,jsonb)', 'execute')
+    and has_function_privilege('authenticated', 'public.admin_get_employee_kind_days(uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.admin_set_employee_kind_days(uuid,jsonb)', 'execute')
+    and not has_function_privilege('anon', 'public.admin_get_employee_kind_days(uuid)', 'execute')
+    and not has_function_privilege('authenticated', 'private.custom_leave_balance(uuid,uuid,integer,uuid)', 'execute')
+    and not has_function_privilege('anon', 'private.custom_leave_balance(uuid,uuid,integer,uuid)', 'execute'), 'grants: admin RPCs for authenticated only, the balance for nobody');
 end
 $tests$;
 

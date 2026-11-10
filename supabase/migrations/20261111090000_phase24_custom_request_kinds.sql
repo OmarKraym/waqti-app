@@ -206,3 +206,124 @@ revoke all on function public.admin_delete_custom_kind(uuid) from public, anon;
 grant execute on function public.admin_list_custom_kinds() to authenticated;
 grant execute on function public.admin_save_custom_kind(uuid, text, text, boolean, numeric, text, boolean, text, integer) to authenticated;
 grant execute on function public.admin_delete_custom_kind(uuid) to authenticated;
+
+-- ---------------------------------------------------------------- C. the balance of a custom leave, and days per employee
+-- Same shape as private.leave_balance (non-annual branch). entitled = the employee's own days if he has a row, else the kind's
+-- default_days (NULL = unlimited, remaining NULL). 0 is 0 days, never unlimited. An unknown kind is an error, not "unlimited".
+create or replace function private.custom_leave_balance(p_employee uuid, p_kind uuid, p_year integer, p_exclude_request uuid default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_tz text;
+  v_entitled numeric;
+  v_found boolean;
+  v_used numeric;
+  v_pending numeric;
+begin
+  select c.timezone into v_tz
+  from public.employees e join public.companies c on c.id = e.company_id
+  where e.id = p_employee;
+  select true, coalesce(l.days, k.default_days) into v_found, v_entitled
+  from public.custom_request_kinds k
+  left join public.custom_kind_entitlements l on l.kind_id = k.id and l.employee_id = p_employee
+  where k.id = p_kind;
+  if v_found is not true then
+    raise exception 'custom_kind_not_found' using errcode = '22023';
+  end if;
+  select coalesce(sum(coalesce(r.charged_days, r.days)) filter (where r.status = 'approved'), 0),
+         coalesce(sum(r.days) filter (where r.status = 'pending'), 0)
+    into v_used, v_pending
+  from public.requests r
+  where r.employee_id = p_employee and r.request_type = 'leave' and r.custom_kind_id = p_kind
+    and extract(year from (r.start_at at time zone v_tz)) = p_year
+    and (p_exclude_request is null or r.id <> p_exclude_request);
+  return jsonb_build_object(
+    'leave_type', 'custom',
+    'custom_kind_id', p_kind,
+    'entitled', v_entitled,
+    'used', v_used,
+    'pending', v_pending,
+    'remaining', case when v_entitled is null then null else v_entitled - v_used - v_pending end);
+end;
+$$;
+revoke all on function private.custom_leave_balance(uuid, uuid, integer, uuid) from public, anon, authenticated;
+
+-- The employee's own days per leave kind: {"<kind id>": days}. Only overrides are listed.
+create or replace function public.admin_get_employee_kind_days(p_employee_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+begin
+  if not exists (select 1 from public.employees where id = p_employee_id and company_id = v_company) then
+    raise exception 'employee_not_found' using errcode = '22023';
+  end if;
+  return coalesce((select jsonb_object_agg(l.kind_id::text, l.days)
+                   from public.custom_kind_entitlements l
+                   where l.employee_id = p_employee_id and l.company_id = v_company), '{}'::jsonb);
+end;
+$$;
+
+-- p_days: {"<kind id>": number | null}. Only the given keys change; null removes the employee's own days (back to the default).
+-- All or nothing: one refused key changes nothing.
+create or replace function public.admin_set_employee_kind_days(p_employee_id uuid, p_days jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+  v_key text;
+  v_val jsonb;
+  v_kind uuid;
+  v_num numeric;
+begin
+  if p_days is null or jsonb_typeof(p_days) is distinct from 'object' then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.employees where id = p_employee_id and company_id = v_company) then
+    raise exception 'employee_not_found' using errcode = '22023';
+  end if;
+  for v_key, v_val in select * from jsonb_each(p_days) loop
+    begin
+      v_kind := v_key::uuid;
+    exception when invalid_text_representation then
+      raise exception 'invalid_input' using errcode = '22023';
+    end;
+    if not exists (select 1 from public.custom_request_kinds where id = v_kind and company_id = v_company) then
+      raise exception 'custom_kind_not_found' using errcode = '22023';
+    end if;
+    if not exists (select 1 from public.custom_request_kinds where id = v_kind and family = 'leave') then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+    if jsonb_typeof(v_val) = 'null' then
+      delete from public.custom_kind_entitlements where kind_id = v_kind and employee_id = p_employee_id;
+    elsif jsonb_typeof(v_val) = 'number' then
+      v_num := (v_val #>> '{}')::numeric;
+      if v_num < 0 or v_num > 366 or round(v_num, 1) <> v_num then
+        raise exception 'invalid_input' using errcode = '22023';
+      end if;
+      insert into public.custom_kind_entitlements (company_id, kind_id, employee_id, days)
+      values (v_company, v_kind, p_employee_id, v_num)
+      on conflict (kind_id, employee_id) do update set days = excluded.days;
+    else
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+  end loop;
+  perform public.audit_write(v_company, 'custom_kind.days_set', 'employee', p_employee_id::text,
+    jsonb_build_object('days', p_days));
+end;
+$$;
+revoke all on function public.admin_get_employee_kind_days(uuid) from public, anon;
+revoke all on function public.admin_set_employee_kind_days(uuid, jsonb) from public, anon;
+grant execute on function public.admin_get_employee_kind_days(uuid) to authenticated;
+grant execute on function public.admin_set_employee_kind_days(uuid, jsonb) to authenticated;

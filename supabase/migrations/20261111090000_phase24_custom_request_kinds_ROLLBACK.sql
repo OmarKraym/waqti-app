@@ -7,6 +7,11 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------- C. balance and days per employee
+drop function public.admin_set_employee_kind_days(uuid, jsonb);
+drop function public.admin_get_employee_kind_days(uuid);
+drop function private.custom_leave_balance(uuid, uuid, integer, uuid);
+
 -- ---------------------------------------------------------------- B. admin: the kinds
 drop function public.admin_delete_custom_kind(uuid);
 drop function public.admin_save_custom_kind(uuid, text, text, boolean, numeric, text, boolean, text, integer);
