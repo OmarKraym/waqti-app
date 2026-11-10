@@ -789,6 +789,163 @@ exception when others then
 end
 $tests$;
 
+-- ================================================================ Task 6: submit a custom "other" request, frozen chain, decision flow
+create function pg_temp.sub_other(p_emp uuid, p_kind uuid, p_from date, p_to date, p_reason text default 'سبب', p_dry boolean default false, p_key uuid default null)
+  returns jsonb language sql as
+  $$ select pg_temp.sub_leave(p_emp, p_kind, p_from, p_to, p_reason, p_dry, p_key, null, 'other') $$;
+-- the approval rows of a request as [{k, s}] in step order
+create function pg_temp.rows_of(p_req uuid) returns jsonb language sql as $$
+  select coalesce(jsonb_agg(jsonb_build_object('k', approver_kind, 's', status) order by step_order), '[]'::jsonb)
+  from public.request_approvals where request_id = p_req $$;
+
+do $tests$
+declare
+  v_admin uuid; a uuid; c uuid; d uuid; v_comp uuid; v_comp2 uuid; v_tz text := 'Africa/Tripoli';
+  ks uuid; kg uuid; kn uuid; kc uuid; koff uuid; kl uuid; kxo uuid;
+  r jsonb; r2 jsonb; s text; v_ap uuid; v_id uuid; bal_before jsonb; bal_after jsonb; v_key uuid := gen_random_uuid(); n int;
+  d1 date := date '2026-11-20';
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into c from public.employees e where e.is_active and e.id not in (v_admin, a) and e.company_id = v_comp order by employee_number offset 1 limit 1;
+  select id into d from public.employees e where e.is_active and e.id not in (v_admin, a, c) and e.company_id = v_comp order by employee_number offset 1 limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  select id into kxo from public.custom_request_kinds where company_id = v_comp2 and family = 'other' limit 1;
+  perform pg_temp.reset_kinds(v_comp);
+  update public.employees set manager_id = null where id = c;
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_employee_manager(a, d);
+  ks := public.admin_save_custom_kind(null, 'other', 'خطاب ليوم', true, null, 'all', false, 'single', 0);
+  kg := public.admin_save_custom_kind(null, 'other', 'طلب لفترة', true, null, 'all', false, 'range', 0);
+  kn := public.admin_save_custom_kind(null, 'other', 'بلا تاريخ', true, null, 'all', false, 'none', 0);
+  kc := public.admin_save_custom_kind(null, 'other', 'له مسار', true, null, 'all', false, 'single', 0);
+  koff := public.admin_save_custom_kind(null, 'other', 'سيُعطَّل 6', true, null, 'all', false, 'single', 0);
+  kl := public.admin_save_custom_kind(null, 'leave', 'إجازة للتجربة 6', true, 5, 'all', false, null, 0);
+  perform public.admin_save_custom_kind(koff, 'other', 'سيُعطَّل 6', false, null, 'all', false, 'single', 0);
+  perform pg_temp.ok(kxo is not null, 'the other company has an other-family kind to try');
+
+  -- the period by date mode
+  r := pg_temp.sub_other(a, ks, d1, d1 + 5);
+  perform pg_temp.ok(r ->> 'error' is null and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.request_type = 'other'
+      and q.custom_kind_id = ks and q.leave_type is null and q.days is null
+      and (q.start_at at time zone v_tz)::date = d1 and q.end_at - q.start_at = interval '1 day'),
+    'single: an end date that is given is ignored; the period is one day', r::text);
+  r := pg_temp.sub_other(a, kg, d1, d1 + 2);
+  perform pg_temp.ok(r ->> 'error' is null and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.custom_kind_id = kg
+      and (q.start_at at time zone v_tz)::date = d1 and q.end_at - q.start_at = interval '3 days'), 'range: the period is the dates given', r::text);
+  r := pg_temp.sub_other(a, kg, d1 + 2, d1);
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'range: end before start -> invalid_dates', r::text);
+  r := pg_temp.sub_other(a, kg, d1, null);
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'range: no end date -> invalid_dates', r::text);
+  r := pg_temp.sub_other(a, ks, null, null);
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'single: no date -> invalid_dates', r::text);
+  r := pg_temp.sub_other(a, kn, null, null);
+  perform pg_temp.ok(r ->> 'error' is null and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.custom_kind_id = kn
+      and (q.start_at at time zone v_tz)::date = date '2026-10-31' and q.end_at - q.start_at = interval '1 day'), 'none: no dates needed; the period is today', r::text);
+  r := pg_temp.sub_other(a, kn, d1, d1 + 3);
+  perform pg_temp.ok(r ->> 'error' is null and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid
+      and (q.start_at at time zone v_tz)::date = date '2026-10-31'), 'none: dates that are given are ignored', r::text);
+
+  -- the reason is always required
+  r := pg_temp.sub_other(a, ks, d1, d1, null);
+  r2 := pg_temp.sub_other(a, kg, d1, d1, '   ');
+  s := (pg_temp.sub_other(a, kn, null, null, null)) ->> 'error';
+  perform pg_temp.ok(r ->> 'error' = 'reason_required' and r2 ->> 'error' = 'reason_required' and s = 'reason_required', 'all three modes need a reason', r::text || r2::text || s);
+
+  -- the window of dates
+  r := pg_temp.sub_other(a, ks, date '2026-09-30', date '2026-09-30');
+  r2 := pg_temp.sub_other(a, kg, date '2027-11-02', date '2027-11-03');
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates' and r2 ->> 'error' = 'invalid_dates', 'range: a start more than 30 days back or more than a year ahead -> invalid_dates', r::text || r2::text);
+  r := pg_temp.sub_other(a, ks, date '2027-11-02', date '2027-11-02');
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'single: more than a year ahead -> invalid_dates', r::text);
+
+  -- the kind itself
+  r := pg_temp.sub_other(a, koff, d1, d1);
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_disabled', 'a disabled kind is refused', r::text);
+  r := pg_temp.sub_other(a, kxo, d1, d1);
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_not_found', 'a kind of another company is refused', r::text);
+  r := pg_temp.sub_other(a, kl, d1, d1);
+  perform pg_temp.ok(r ->> 'error' = 'invalid_input', 'a leave-family kind with type other is refused', r::text);
+
+  -- paths: a kind with its own path, a kind without one, the plain "other"
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_approval_chain('other', '[{"kind":"hr"}]', null, kc);
+  r := pg_temp.sub_other(a, kc, d1, d1);
+  perform pg_temp.ok(r ->> 'error' is null and pg_temp.rows_of((r ->> 'id')::uuid) = '[{"k":"hr","s":"pending"}]'::jsonb, 'a kind with the path [hr]: one approval row, hr, pending', pg_temp.rows_of((r ->> 'id')::uuid)::text);
+  v_id := (r ->> 'id')::uuid;
+  r := pg_temp.sub_other(a, ks, d1, d1);
+  perform pg_temp.ok(pg_temp.rows_of((r ->> 'id')::uuid) = '[{"k":"direct_manager","s":"pending"},{"k":"hr","s":"waiting"}]'::jsonb,
+    'a kind without a path: the manager, then hr', pg_temp.rows_of((r ->> 'id')::uuid)::text);
+  r := pg_temp.sub_other(c, ks, d1, d1);
+  perform pg_temp.ok(pg_temp.rows_of((r ->> 'id')::uuid) = '[{"k":"direct_manager","s":"skipped"},{"k":"hr","s":"pending"}]'::jsonb,
+    'an employee without a manager: the manager step is skipped, hr decides', pg_temp.rows_of((r ->> 'id')::uuid)::text);
+
+  -- the plain "other" and the kinds do not share paths
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_approval_chain('other', '[{"kind":"direct_manager"}]');
+  r := pg_temp.sub_other(a, null, d1, d1);
+  perform pg_temp.ok(pg_temp.rows_of((r ->> 'id')::uuid) = '[{"k":"direct_manager","s":"pending"}]'::jsonb, 'the plain other uses the plain path', pg_temp.rows_of((r ->> 'id')::uuid)::text);
+  perform pg_temp.ok(exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.custom_kind_id is null), '...and carries no kind');
+  r := pg_temp.sub_other(a, ks, d1, d1);
+  r2 := pg_temp.sub_other(a, kc, d1, d1);
+  perform pg_temp.ok(jsonb_array_length(pg_temp.rows_of((r ->> 'id')::uuid)) = 2 and pg_temp.rows_of((r2 ->> 'id')::uuid) = '[{"k":"hr","s":"pending"}]'::jsonb,
+    'a kind keeps its own path while the plain path is customised', pg_temp.rows_of((r ->> 'id')::uuid)::text || pg_temp.rows_of((r2 ->> 'id')::uuid)::text);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_approval_chain('other', '[]');
+
+  -- the path is frozen at submit
+  perform public.admin_set_approval_chain('other', '[{"kind":"direct_manager"},{"kind":"hr"}]', null, kc);
+  perform pg_temp.ok(pg_temp.rows_of(v_id) = '[{"k":"hr","s":"pending"}]'::jsonb, 'editing the kind path later leaves a saved request unchanged', pg_temp.rows_of(v_id)::text);
+  perform public.admin_set_approval_chain('other', '[]', null, kc);
+
+  -- the decision flow
+  bal_before := jsonb_build_object('annual', private.leave_balance(a, 'annual', 2026, null, d1), 'unpaid', private.leave_balance(a, 'unpaid', 2026, null, d1));
+  r := pg_temp.sub_other(a, ks, d1, d1);
+  v_id := (r ->> 'id')::uuid;
+  perform pg_temp.as_user(v_admin);
+  s := pg_temp.err(format($q$select public.admin_decide_request(%L, 'approve')$q$, v_id));
+  perform pg_temp.ok(s = 'request_not_found', 'hr cannot decide while the request is at the manager', s);
+  perform pg_temp.as_user(d);
+  v_ap := (select (x ->> 'approval_id')::uuid from jsonb_array_elements(public.approver_inbox()) x where x ->> 'id' = v_id::text);
+  perform pg_temp.ok(v_ap is not null, 'the manager sees it in the inbox');
+  perform public.approver_decide(v_ap, 'approve');
+  perform pg_temp.ok(pg_temp.rows_of(v_id) = '[{"k":"direct_manager","s":"approved"},{"k":"hr","s":"pending"}]'::jsonb
+    and (select status from public.requests where id = v_id) = 'pending', 'the manager approves -> hr is next', pg_temp.rows_of(v_id)::text);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_decide_request(v_id, 'approve');
+  perform pg_temp.ok((select status::text from public.requests where id = v_id) = 'approved' and (select current_step from public.requests where id = v_id) is null,
+    'hr approves -> approved, no current step');
+  bal_after := jsonb_build_object('annual', private.leave_balance(a, 'annual', 2026, null, d1), 'unpaid', private.leave_balance(a, 'unpaid', 2026, null, d1));
+  perform pg_temp.ok(bal_before = bal_after, 'a custom other request never changes a leave balance', bal_before::text || bal_after::text);
+
+  r := pg_temp.sub_other(a, ks, d1 + 1, d1 + 1);
+  v_id := (r ->> 'id')::uuid;
+  perform pg_temp.as_user(d);
+  v_ap := (select (x ->> 'approval_id')::uuid from jsonb_array_elements(public.approver_inbox()) x where x ->> 'id' = v_id::text);
+  perform public.approver_decide(v_ap, 'approve');
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_decide_request(v_id, 'reject', 'غير مناسب');
+  perform pg_temp.ok((select status::text from public.requests where id = v_id) = 'rejected', 'hr rejects -> rejected');
+
+  r := pg_temp.sub_other(a, ks, d1 + 2, d1 + 2);
+  v_id := (r ->> 'id')::uuid;
+  perform pg_temp.as_user(a);
+  perform public.employee_cancel_request(v_id);
+  perform pg_temp.ok((select status::text from public.requests where id = v_id) = 'cancelled', 'the employee cancels a pending custom request');
+
+  -- the same key twice
+  r := pg_temp.sub_other(a, ks, d1, d1, 'سبب', false, v_key);
+  r2 := pg_temp.sub_other(a, ks, d1, d1, 'سبب', false, v_key);
+  select count(*) into n from public.requests where employee_id = a and request_key = v_key;
+  perform pg_temp.ok(r ->> 'error' is null and not (r ->> 'duplicate')::boolean and (r2 ->> 'duplicate')::boolean and r ->> 'id' = r2 ->> 'id' and n = 1,
+    'the same key twice saves one custom request', r2::text);
+  perform pg_temp.as_user(v_admin);
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
+end
+$tests$;
+
 do $report$
 declare v text;
 begin

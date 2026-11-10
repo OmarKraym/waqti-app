@@ -477,7 +477,7 @@ revoke all on function public.admin_get_approval_chains() from public, anon;
 grant execute on function public.admin_set_approval_chain(text, jsonb, uuid, uuid) to authenticated;
 grant execute on function public.admin_get_approval_chains() to authenticated;
 
--- ================================================================ E. employee: submit (phase 24: a custom leave)
+-- ================================================================ E. employee: submit (phase 24: a custom leave, a custom "other" request)
 -- The phase 18a function with one more parameter. Only the lines for the custom kind are new; the old 10-argument
 -- calls still resolve to this function (the new parameter has a default).
 drop function public.employee_submit_request(uuid, text, text, date, date, timestamptz, timestamptz, text, boolean, uuid);
@@ -667,12 +667,21 @@ begin
     if v_reason is null then
       raise exception 'reason_required' using errcode = '22023';
     end if;
-    if p_start_date is null or p_end_date is null or p_end_date < p_start_date
-       or p_end_date - p_start_date > 365 or p_start_date < v_today - 30 or p_start_date > v_today + 365 then
-      raise exception 'invalid_dates' using errcode = '22023';
+    if v_kind.id is not null and v_kind.date_mode = 'none' then
+      -- a kind without dates: the request is for today (company time zone), whatever dates were sent
+      v_start := v_today::timestamp at time zone me.timezone;
+      v_end := (v_today + 1)::timestamp at time zone me.timezone;
+    else
+      if v_kind.id is not null and v_kind.date_mode = 'single' then
+        p_end_date := p_start_date;  -- one day: an end date that was sent is ignored
+      end if;
+      if p_start_date is null or p_end_date is null or p_end_date < p_start_date
+         or p_end_date - p_start_date > 365 or p_start_date < v_today - 30 or p_start_date > v_today + 365 then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_start := p_start_date::timestamp at time zone me.timezone;
+      v_end := (p_end_date + 1)::timestamp at time zone me.timezone;
     end if;
-    v_start := p_start_date::timestamp at time zone me.timezone;
-    v_end := (p_end_date + 1)::timestamp at time zone me.timezone;
   end if;
 
   -- No overlap with my own pending/approved leave or permission.
@@ -697,7 +706,7 @@ begin
   returning id into v_id;
 
   -- Resolve and freeze the approvers.
-  for v_step in select * from private.request_chain(me.company_id, v_type, v_pt.id) loop
+  for v_step in select * from private.request_chain(me.company_id, v_type, v_pt.id, case when v_type = 'other' then v_kind.id end) loop
     v_approver := case v_step.approver_kind
       when 'direct_manager' then v_emp.manager_id
       when 'second_manager' then (select m.manager_id from public.employees m where m.id = v_emp.manager_id)
