@@ -37,6 +37,14 @@ begin
 exception when others then return sqlerrm;
 end $f$;
 
+-- a clean slate between blocks: requests made under kinds, kinds (and so their chains and overrides), the plain other chain
+create function pg_temp.reset_kinds(p_company uuid) returns void language plpgsql as $f$
+begin
+  delete from public.requests where company_id = p_company and custom_kind_id is not null;
+  delete from public.custom_request_kinds where company_id = p_company;
+  delete from public.approval_steps where company_id = p_company and request_type = 'other';
+end $f$;
+
 -- ================================================================ Task 1: schema
 do $tests$
 declare
@@ -179,6 +187,142 @@ begin
   delete from public.custom_request_kinds where id = k_leave;
   select count(*) into n from public.custom_kind_entitlements where kind_id = k_leave;
   perform pg_temp.ok(n = 0, 'deleting a kind deletes its employee overrides', n::text);
+end
+$tests$;
+
+-- ================================================================ Task 2: admin RPCs for kinds
+do $tests$
+declare
+  v_admin uuid; a uuid; v_comp uuid; v_comp2 uuid;
+  k1 uuid; k2 uuid; k_x2 uuid; k_del uuid;
+  r jsonb; e jsonb; s text; n int;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  perform pg_temp.reset_kinds(v_comp);
+  perform set_config('waqti.t24_emp', a::text, true);
+  perform set_config('waqti.t24_start', (now() + interval '10 days')::text, true);
+  insert into public.custom_request_kinds (company_id, family, name) values (v_comp2, 'leave', 'Other Co Kind') returning id into k_x2;
+
+  perform pg_temp.as_user(v_admin);
+  s := pg_temp.err('select public.admin_list_custom_kinds()');
+  perform pg_temp.ok(s not like '%does not exist%', 'admin_list_custom_kinds exists', s);
+  if s like '%does not exist%' then return; end if;
+  r := public.admin_list_custom_kinds();
+  perform pg_temp.ok(r = '[]'::jsonb, 'the list starts empty', r::text);
+
+  -- create and update
+  k1 := public.admin_save_custom_kind(null, 'leave', 'إجازة دراسية', true, 15, 'all', false, null, 1);
+  perform pg_temp.ok(k1 is not null, 'a leave kind is created and its id returned');
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'custom_kind.create' and target_id = k1::text) = 1, 'create writes one audit row');
+  r := public.admin_list_custom_kinds();
+  e := r -> 0;
+  perform pg_temp.ok(e ->> 'name' = 'إجازة دراسية' and e ->> 'family' = 'leave' and (e ->> 'default_days')::numeric = 15
+    and e ->> 'gender' = 'all' and (e ->> 'reason_required')::boolean = false and (e ->> 'enabled')::boolean
+    and (e ->> 'requests_count')::int = 0 and (e ->> 'pending_count')::int = 0, 'the list shows the kind with its settings and zero requests', e::text);
+  perform public.admin_save_custom_kind(k1, 'leave', 'إجازة دراسية طويلة', true, 20, 'female', true, null, 2);
+  e := (public.admin_list_custom_kinds()) -> 0;
+  perform pg_temp.ok(e ->> 'name' = 'إجازة دراسية طويلة' and (e ->> 'default_days')::numeric = 20 and e ->> 'gender' = 'female'
+    and (e ->> 'reason_required')::boolean and (e ->> 'sort_order')::int = 2, 'update changes the settings', e::text);
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'custom_kind.update' and target_id = k1::text) = 1, 'update writes one audit row');
+
+  -- 0 days is not unlimited
+  k2 := public.admin_save_custom_kind(null, 'leave', 'صفر', true, 0, 'all', false, null, 0);
+  perform pg_temp.ok((select (x ->> 'default_days')::numeric from jsonb_array_elements(public.admin_list_custom_kinds()) x where x ->> 'id' = k2::text) = 0
+    and (select x -> 'default_days' <> 'null'::jsonb from jsonb_array_elements(public.admin_list_custom_kinds()) x where x ->> 'id' = k2::text), '0 default days is stored as 0');
+  perform public.admin_save_custom_kind(k2, 'leave', 'صفر', true, null, 'all', false, null, 0);
+  perform pg_temp.ok((select x -> 'default_days' = 'null'::jsonb from jsonb_array_elements(public.admin_list_custom_kinds()) x where x ->> 'id' = k2::text), 'no default days is stored as NULL (unlimited)');
+
+  -- refused input
+  s := pg_temp.err(format($q$select public.admin_save_custom_kind(%L, 'other', 'x', true, null, 'all', false, 'single', 0)$q$, k1));
+  perform pg_temp.ok(s = 'invalid_input', 'the family of a kind cannot change', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ك1', true, 5, 'all', false, 'single', 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'a leave kind with a date mode is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'ك2', true, 5, 'all', false, 'single', 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an other kind with days is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'ك3', true, null, 'female', false, 'single', 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an other kind with a gender is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'ك4', true, null, 'all', true, 'single', 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an other kind with reason_required is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'ك5', true, null, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an other kind without a date mode is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ك6', true, 5, 'x', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an unknown gender is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ك7', true, 367, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', '367 days is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ك8', true, -1, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'negative days are refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'x', 'ك9', true, null, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an unknown family is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ك10', true, 5, 'all', false, null, 1001)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'a sort order above 1000 is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'ك11', true, null, 'all', false, 'x', 0)$q$);
+  perform pg_temp.ok(s = 'invalid_input', 'an unknown date mode is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', '   ', true, 5, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'invalid_name', 'a blank name is refused', s);
+  s := pg_temp.err(format($q$select public.admin_save_custom_kind(null, 'leave', %L, true, 5, 'all', false, null, 0)$q$, repeat('ب', 61)));
+  perform pg_temp.ok(s = 'invalid_name', 'a 61-character name is refused', s);
+
+  -- names
+  perform public.admin_save_custom_kind(null, 'leave', 'Study', true, 5, 'all', false, null, 0);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', '  study ', true, 5, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'kind_name_taken', 'the same name differing by case and spaces is refused', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'Study', true, null, 'all', false, 'range', 0)$q$);
+  perform pg_temp.ok(s = '', 'the same name is allowed in the other family', s);
+  s := pg_temp.err(format($q$select public.admin_save_custom_kind(%L, 'leave', 'Study', true, 5, 'all', false, null, 0)$q$, k1));
+  perform pg_temp.ok(s = 'kind_name_taken', 'renaming onto another kind is refused', s);
+
+  -- the 30-per-family limit (a family has 3 leave kinds now: k1, k2, Study)
+  insert into public.custom_request_kinds (company_id, family, name)
+  select v_comp, 'leave', 'حد ' || g from generate_series(1, 27) g;
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'الحادي والثلاثون', true, 5, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'kind_limit', 'the 31st leave kind is refused', s);
+  s := pg_temp.err(format($q$select public.admin_save_custom_kind(%L, 'leave', 'إجازة دراسية طويلة', false, 20, 'female', true, null, 2)$q$, k1));
+  perform pg_temp.ok(s = '', 'a kind can still be edited at the limit', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'other', 'طلب في الأخرى', true, null, 'all', false, 'none', 0)$q$);
+  perform pg_temp.ok(s = '', 'the limit is per family', s);
+  delete from public.custom_request_kinds where company_id = v_comp and name like 'حد %';
+
+  -- counts and delete
+  s := pg_temp.raw_req('leave', 'custom', k1);
+  perform pg_temp.ok(s = '', 'a raw request under the kind', s);
+  e := (select x from jsonb_array_elements(public.admin_list_custom_kinds()) x where x ->> 'id' = k1::text);
+  perform pg_temp.ok((e ->> 'requests_count')::int = 1 and (e ->> 'pending_count')::int = 1, 'the list counts the requests of a kind', e::text);
+  s := pg_temp.err(format('select public.admin_delete_custom_kind(%L)', k1));
+  perform pg_temp.ok(s = 'kind_in_use', 'a kind with a request cannot be deleted', s);
+  delete from public.requests where reason = 'T24RAW';
+  k_del := public.admin_save_custom_kind(null, 'leave', 'للحذف', true, 1, 'all', false, null, 0);
+  perform public.admin_delete_custom_kind(k_del);
+  perform pg_temp.ok(not exists (select 1 from public.custom_request_kinds where id = k_del), 'an unused kind is deleted');
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'custom_kind.delete' and target_id = k_del::text) = 1, 'delete writes one audit row');
+
+  -- isolation: a kind of another company
+  s := pg_temp.err(format($q$select public.admin_save_custom_kind(%L, 'leave', 'Other Co Kind', true, 5, 'all', false, null, 0)$q$, k_x2));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'a kind of another company cannot be updated', s);
+  s := pg_temp.err(format('select public.admin_delete_custom_kind(%L)', k_x2));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'a kind of another company cannot be deleted', s);
+  perform pg_temp.ok(not exists (select 1 from jsonb_array_elements(public.admin_list_custom_kinds()) x where x ->> 'id' = k_x2::text),
+    'the list never shows a kind of another company');
+  s := pg_temp.err(format('select public.admin_delete_custom_kind(%L)', gen_random_uuid()));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'an unknown kind id is not found', s);
+
+  -- who may call
+  perform pg_temp.as_user(a);
+  s := pg_temp.err('select public.admin_list_custom_kinds()');
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot list kinds', s);
+  s := pg_temp.err($q$select public.admin_save_custom_kind(null, 'leave', 'ممنوع', true, 5, 'all', false, null, 0)$q$);
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot save a kind', s);
+  s := pg_temp.err(format('select public.admin_delete_custom_kind(%L)', k1));
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot delete a kind', s);
+  perform pg_temp.ok(
+    has_function_privilege('authenticated', 'public.admin_list_custom_kinds()', 'execute')
+    and has_function_privilege('authenticated', 'public.admin_save_custom_kind(uuid,text,text,boolean,numeric,text,boolean,text,integer)', 'execute')
+    and has_function_privilege('authenticated', 'public.admin_delete_custom_kind(uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.admin_list_custom_kinds()', 'execute')
+    and not has_function_privilege('anon', 'public.admin_save_custom_kind(uuid,text,text,boolean,numeric,text,boolean,text,integer)', 'execute')
+    and not has_function_privilege('anon', 'public.admin_delete_custom_kind(uuid)', 'execute'), 'authenticated may execute the three functions, anon may not');
 end
 $tests$;
 

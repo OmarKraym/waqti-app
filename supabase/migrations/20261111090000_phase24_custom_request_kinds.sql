@@ -81,3 +81,128 @@ drop index public.approval_steps_order_uidx;
 create unique index approval_steps_order_uidx on public.approval_steps
   (company_id, request_type, coalesce(permission_type_id, '00000000-0000-0000-0000-000000000000'::uuid),
    coalesce(custom_kind_id, '00000000-0000-0000-0000-000000000000'::uuid), step_order);
+
+-- ---------------------------------------------------------------- B. admin: the kinds
+create or replace function public.admin_list_custom_kinds()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', k.id, 'family', k.family, 'name', k.name, 'enabled', k.enabled, 'sort_order', k.sort_order,
+             'default_days', k.default_days, 'gender', k.gender, 'reason_required', k.reason_required, 'date_mode', k.date_mode,
+             'requests_count', (select count(*) from public.requests r where r.custom_kind_id = k.id),
+             'pending_count', (select count(*) from public.requests r where r.custom_kind_id = k.id and r.status = 'pending'))
+           order by k.family, k.sort_order, k.name)
+    from public.custom_request_kinds k where k.company_id = v_company), '[]'::jsonb);
+end;
+$$;
+
+-- p_id null = a new kind. The family never changes. A kind that a request used is never deleted: disable it instead.
+create or replace function public.admin_save_custom_kind(
+  p_id uuid, p_family text, p_name text, p_enabled boolean, p_default_days numeric, p_gender text,
+  p_reason_required boolean, p_date_mode text, p_sort_order integer default 0
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+  v_name text := btrim(coalesce(p_name, ''));
+  v_old public.custom_request_kinds;
+  v_id uuid;
+begin
+  if length(v_name) not between 1 and 60 then
+    raise exception 'invalid_name' using errcode = '22023';
+  end if;
+  if p_family is null or p_family not in ('leave', 'other') or p_enabled is null
+     or coalesce(p_sort_order, 0) not between 0 and 1000
+     or (p_family = 'leave' and (
+           p_date_mode is not null or p_reason_required is null
+           or p_gender is null or p_gender not in ('all', 'female', 'male')
+           or (p_default_days is not null and p_default_days not between 0 and 366)))
+     or (p_family = 'other' and (
+           p_date_mode is null or p_date_mode not in ('single', 'range', 'none')
+           or p_default_days is not null or coalesce(p_gender, 'all') <> 'all' or coalesce(p_reason_required, false))) then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+
+  -- two admins saving at once: the count and the name check below must see each other
+  perform pg_advisory_xact_lock(hashtextextended('custom_kinds:' || v_company::text, 0));
+
+  if p_id is not null then
+    select * into v_old from public.custom_request_kinds where id = p_id and company_id = v_company for update;
+    if not found then
+      raise exception 'custom_kind_not_found' using errcode = '22023';
+    end if;
+    if v_old.family <> p_family then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+  end if;
+  if exists (select 1 from public.custom_request_kinds
+             where company_id = v_company and family = p_family and lower(btrim(name)) = lower(v_name) and id is distinct from p_id) then
+    raise exception 'kind_name_taken' using errcode = '22023';
+  end if;
+
+  if p_id is null then
+    if (select count(*) from public.custom_request_kinds where company_id = v_company and family = p_family) >= 30 then
+      raise exception 'kind_limit' using errcode = 'P0001';
+    end if;
+    insert into public.custom_request_kinds (company_id, family, name, enabled, sort_order, default_days, gender, reason_required, date_mode)
+    values (v_company, p_family, v_name, p_enabled, coalesce(p_sort_order, 0), p_default_days,
+            case when p_family = 'leave' then p_gender else 'all' end, coalesce(p_reason_required, false), p_date_mode)
+    returning id into v_id;
+  else
+    update public.custom_request_kinds
+       set name = v_name, enabled = p_enabled, sort_order = coalesce(p_sort_order, 0), default_days = p_default_days,
+           gender = case when p_family = 'leave' then p_gender else 'all' end,
+           reason_required = coalesce(p_reason_required, false), date_mode = p_date_mode, updated_at = now()
+     where id = p_id
+    returning id into v_id;
+  end if;
+
+  perform public.audit_write(v_company, case when p_id is null then 'custom_kind.create' else 'custom_kind.update' end,
+    'custom_kind', v_id::text,
+    jsonb_build_object('family', p_family, 'name', v_name, 'enabled', p_enabled, 'default_days', p_default_days,
+                       'gender', p_gender, 'reason_required', p_reason_required, 'date_mode', p_date_mode, 'sort_order', coalesce(p_sort_order, 0)));
+  return v_id;
+end;
+$$;
+
+create or replace function public.admin_delete_custom_kind(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+  v_kind public.custom_request_kinds;
+begin
+  select * into v_kind from public.custom_request_kinds where id = p_id and company_id = v_company for update;
+  if not found then
+    raise exception 'custom_kind_not_found' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.requests r where r.custom_kind_id = p_id) then
+    raise exception 'kind_in_use' using errcode = 'P0001';
+  end if;
+  delete from public.custom_request_kinds where id = p_id;
+  perform public.audit_write(v_company, 'custom_kind.delete', 'custom_kind', p_id::text,
+    jsonb_build_object('family', v_kind.family, 'name', v_kind.name));
+end;
+$$;
+
+revoke all on function public.admin_list_custom_kinds() from public, anon;
+revoke all on function public.admin_save_custom_kind(uuid, text, text, boolean, numeric, text, boolean, text, integer) from public, anon;
+revoke all on function public.admin_delete_custom_kind(uuid) from public, anon;
+grant execute on function public.admin_list_custom_kinds() to authenticated;
+grant execute on function public.admin_save_custom_kind(uuid, text, text, boolean, numeric, text, boolean, text, integer) to authenticated;
+grant execute on function public.admin_delete_custom_kind(uuid) to authenticated;

@@ -7,6 +7,11 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------- B. admin: the kinds
+drop function public.admin_delete_custom_kind(uuid);
+drop function public.admin_save_custom_kind(uuid, text, text, boolean, numeric, text, boolean, text, integer);
+drop function public.admin_list_custom_kinds();
+
 -- ---------------------------------------------------------------- A. schema
 drop index public.approval_steps_order_uidx;
 alter table public.approval_steps
