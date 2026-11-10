@@ -327,3 +327,152 @@ revoke all on function public.admin_get_employee_kind_days(uuid) from public, an
 revoke all on function public.admin_set_employee_kind_days(uuid, jsonb) from public, anon;
 grant execute on function public.admin_get_employee_kind_days(uuid) to authenticated;
 grant execute on function public.admin_set_employee_kind_days(uuid, jsonb) to authenticated;
+
+-- ================================================================ D. approval paths per custom kind
+-- The path of a request type (and permission type, or custom kind): the company's steps, or direct manager -> HR.
+-- A kind's rows and the plain path never see each other: both branches match custom_kind_id with "is not distinct from".
+drop function private.request_chain(uuid, public.request_type, uuid);
+create function private.request_chain(p_company uuid, p_type public.request_type, p_permission_type uuid default null, p_custom_kind uuid default null)
+returns table (step_order smallint, approver_kind text, approver_employee_id uuid)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.step_order, s.approver_kind, s.approver_employee_id
+  from public.approval_steps s
+  where s.company_id = p_company and s.request_type = p_type
+    and s.permission_type_id is not distinct from p_permission_type
+    and s.custom_kind_id is not distinct from p_custom_kind
+  union all
+  select d.step_order, d.approver_kind, null::uuid
+  from (values (1::smallint, 'direct_manager'), (2::smallint, 'hr')) as d (step_order, approver_kind)
+  where not exists (select 1 from public.approval_steps s
+                    where s.company_id = p_company and s.request_type = p_type
+                      and s.permission_type_id is not distinct from p_permission_type
+                      and s.custom_kind_id is not distinct from p_custom_kind)
+  order by 1
+$$;
+revoke all on function private.request_chain(uuid, public.request_type, uuid, uuid) from public, anon, authenticated;
+
+-- The paths for the admin screen: leave / other / one per permission type (unchanged) and now one per "other" kind.
+-- "customized" lists the request types with their own plain path, so kind rows are left out of it.
+create or replace function public.admin_get_approval_chains()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+begin
+  return jsonb_build_object(
+    'chains', (
+      select jsonb_object_agg(t, coalesce((
+        select jsonb_agg(jsonb_build_object('step_order', c.step_order, 'kind', c.approver_kind,
+                 'approver_employee_id', c.approver_employee_id,
+                 'approver_name', (select e.full_name from public.employees e where e.id = c.approver_employee_id))
+               order by c.step_order)
+        from private.request_chain(v_company, t::public.request_type) c), '[]'::jsonb))
+      from unnest(array['leave', 'other']) as t),
+    'customized', (
+      select coalesce(jsonb_agg(distinct s.request_type), '[]'::jsonb)
+      from public.approval_steps s
+      where s.company_id = v_company and s.request_type <> 'permission' and s.custom_kind_id is null),
+    'permission_types', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', pt.id, 'name', pt.name, 'is_active', pt.is_active,
+               'customized', exists (select 1 from public.approval_steps s where s.permission_type_id = pt.id),
+               'steps', coalesce((
+                 select jsonb_agg(jsonb_build_object('step_order', c.step_order, 'kind', c.approver_kind,
+                          'approver_employee_id', c.approver_employee_id,
+                          'approver_name', (select e.full_name from public.employees e where e.id = c.approver_employee_id))
+                        order by c.step_order)
+                 from private.request_chain(v_company, 'permission', pt.id) c), '[]'::jsonb))
+             order by pt.sort_order, pt.name)
+      from public.permission_types pt where pt.company_id = v_company), '[]'::jsonb),
+    'custom_kinds', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', k.id, 'name', k.name, 'enabled', k.enabled,
+               'customized', exists (select 1 from public.approval_steps s where s.custom_kind_id = k.id),
+               'steps', coalesce((
+                 select jsonb_agg(jsonb_build_object('step_order', c.step_order, 'kind', c.approver_kind,
+                          'approver_employee_id', c.approver_employee_id,
+                          'approver_name', (select e.full_name from public.employees e where e.id = c.approver_employee_id))
+                        order by c.step_order)
+                 from private.request_chain(v_company, 'other', null, k.id) c), '[]'::jsonb))
+             order by k.sort_order, k.name)
+      from public.custom_request_kinds k where k.company_id = v_company and k.family = 'other'), '[]'::jsonb));
+end;
+$$;
+
+-- p_steps: [{"kind": "direct_manager"}, {"kind": "specific_employee", "approver_employee_id": "..."}, {"kind": "hr"}]
+-- An empty array goes back to the default path. Requests already submitted keep their frozen path.
+-- For 'permission', p_permission_type_id says which type; for 'leave' and 'other' it must be null.
+-- p_custom_kind_id (new): the path of one "other" kind of this company; only with 'other' and no permission type.
+drop function public.admin_set_approval_chain(text, jsonb, uuid);
+create function public.admin_set_approval_chain(p_request_type text, p_steps jsonb, p_permission_type_id uuid default null, p_custom_kind_id uuid default null)
+returns void
+language plpgsql
+security definer
+set search_path = 'public'
+as $$
+declare
+  v_company uuid := public.require_company_admin();
+  v_item jsonb;
+  v_order smallint := 0;
+  v_kind text;
+  v_emp uuid;
+  v_family text;
+begin
+  if p_request_type is null or p_request_type not in ('leave', 'permission', 'other')
+     or jsonb_typeof(p_steps) is distinct from 'array' or jsonb_array_length(p_steps) > 5
+     or (p_request_type = 'permission') <> (p_permission_type_id is not null)
+     or (p_custom_kind_id is not null and (p_request_type <> 'other' or p_permission_type_id is not null)) then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+  if p_permission_type_id is not null
+     and not exists (select 1 from public.permission_types where id = p_permission_type_id and company_id = v_company) then
+    raise exception 'permission_type_not_found' using errcode = '22023';
+  end if;
+  if p_custom_kind_id is not null then
+    select k.family into v_family from public.custom_request_kinds k where k.id = p_custom_kind_id and k.company_id = v_company;
+    if not found then
+      raise exception 'custom_kind_not_found' using errcode = '22023';
+    end if;
+    if v_family <> 'other' then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+  end if;
+  delete from public.approval_steps
+   where company_id = v_company and request_type = p_request_type::public.request_type
+     and permission_type_id is not distinct from p_permission_type_id
+     and custom_kind_id is not distinct from p_custom_kind_id;
+  for v_item in select * from jsonb_array_elements(p_steps) loop
+    v_order := v_order + 1;
+    v_kind := v_item ->> 'kind';
+    v_emp := nullif(v_item ->> 'approver_employee_id', '')::uuid;
+    if v_kind is null or v_kind not in ('direct_manager', 'second_manager', 'specific_employee', 'hr') then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+    if v_kind <> 'specific_employee' then
+      v_emp := null;
+    elsif v_emp is null or not exists (select 1 from public.employees where id = v_emp and company_id = v_company and is_active) then
+      raise exception 'employee_not_found' using errcode = '22023';
+    end if;
+    insert into public.approval_steps (company_id, request_type, step_order, approver_kind, approver_employee_id, permission_type_id, custom_kind_id)
+    values (v_company, p_request_type::public.request_type, v_order, v_kind, v_emp, p_permission_type_id, p_custom_kind_id);
+  end loop;
+  perform public.audit_write(v_company, 'approval_chain.set', 'company', v_company::text,
+    jsonb_build_object('request_type', p_request_type, 'permission_type_id', p_permission_type_id,
+                       'custom_kind_id', p_custom_kind_id, 'steps', p_steps));
+exception
+  when invalid_text_representation then
+    raise exception 'invalid_input' using errcode = '22023';
+end;
+$$;
+revoke all on function public.admin_set_approval_chain(text, jsonb, uuid, uuid) from public, anon;
+revoke all on function public.admin_get_approval_chains() from public, anon;
+grant execute on function public.admin_set_approval_chain(text, jsonb, uuid, uuid) to authenticated;
+grant execute on function public.admin_get_approval_chains() to authenticated;

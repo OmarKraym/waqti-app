@@ -465,6 +465,135 @@ begin
 end
 $tests$;
 
+-- ================================================================ Task 4: approval chains per custom kind
+do $tests$
+declare
+  v_admin uuid; a uuid; b uuid; v_comp uuid; v_comp2 uuid;
+  kl uuid; k1 uuid; k2 uuid; kxo uuid; v_pt uuid;
+  r jsonb; s text; n_before int; n int;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into b from public.employees e where e.is_active and e.id not in (v_admin, a) and e.company_id = v_comp order by employee_number limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  perform pg_temp.reset_kinds(v_comp);
+  perform pg_temp.ok(to_regprocedure('public.admin_set_approval_chain(text,jsonb,uuid,uuid)') is not null
+    and to_regprocedure('private.request_chain(uuid,public.request_type,uuid,uuid)') is not null,
+    'the chain functions take a custom kind');
+  perform pg_temp.ok(to_regprocedure('public.admin_set_approval_chain(text,jsonb,uuid)') is null
+    and to_regprocedure('private.request_chain(uuid,public.request_type,uuid)') is null,
+    'the old signatures are gone (a named call stays unambiguous)');
+  if to_regprocedure('public.admin_set_approval_chain(text,jsonb,uuid,uuid)') is null
+     or to_regprocedure('private.request_chain(uuid,public.request_type,uuid,uuid)') is null then return; end if;
+
+  perform pg_temp.as_user(v_admin);
+  kl := public.admin_save_custom_kind(null, 'leave', 'إجازة للسلاسل', true, 5, 'all', false, null, 0);
+  k1 := public.admin_save_custom_kind(null, 'other', 'خطاب للسلاسل', true, null, 'all', false, 'single', 1);
+  k2 := public.admin_save_custom_kind(null, 'other', 'شهادة للسلاسل', true, null, 'all', false, 'single', 2);
+  select id into v_pt from public.permission_types where company_id = v_comp limit 1;
+  v_pt := coalesce(v_pt, gen_random_uuid());
+  insert into public.custom_request_kinds (company_id, family, name, date_mode) values (v_comp2, 'other', 'نوع الشركة الثانية 4', 'single') returning id into kxo;
+
+  -- nothing customised: every kind has the default path
+  r := public.admin_get_approval_chains();
+  perform pg_temp.ok(jsonb_array_length(r -> 'custom_kinds') = 2, 'custom_kinds lists the other-family kinds only', (r -> 'custom_kinds')::text);
+  perform pg_temp.ok(not exists (select 1 from jsonb_array_elements(r -> 'custom_kinds') x where (x ->> 'customized')::boolean)
+    and not exists (select 1 from jsonb_array_elements(r -> 'custom_kinds') x
+                    where (select jsonb_agg(st ->> 'kind' order by (st ->> 'step_order')::int) from jsonb_array_elements(x -> 'steps') st) is distinct from '["direct_manager","hr"]'::jsonb),
+    'a kind with no rows has the default path direct_manager, hr and is not customized', (r -> 'custom_kinds')::text);
+
+  -- customise K1 only
+  perform public.admin_set_approval_chain('other', '[{"kind":"hr"}]', null, k1);
+  r := public.admin_get_approval_chains();
+  perform pg_temp.ok((select (x ->> 'customized')::boolean and (select jsonb_agg(st ->> 'kind') from jsonb_array_elements(x -> 'steps') st) = '["hr"]'::jsonb
+                        from jsonb_array_elements(r -> 'custom_kinds') x where x ->> 'id' = k1::text), 'K1 shows its own path', (r -> 'custom_kinds')::text);
+  perform pg_temp.ok(not (select (x ->> 'customized')::boolean from jsonb_array_elements(r -> 'custom_kinds') x where x ->> 'id' = k2::text), 'K2 stays default');
+  perform pg_temp.ok((select jsonb_agg(st ->> 'kind' order by (st ->> 'step_order')::int) from jsonb_array_elements(r -> 'chains' -> 'other') st) = '["direct_manager","hr"]'::jsonb,
+    'the plain other path stays default when only a kind is customised', (r -> 'chains' -> 'other')::text);
+  perform pg_temp.ok(not ((r -> 'customized') @> '"other"'::jsonb), 'the top-level customized list ignores kind rows', (r -> 'customized')::text);
+  perform pg_temp.ok((select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k1) c) = array['hr']
+    and (select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k2) c) = array['direct_manager', 'hr']
+    and (select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other') c) = array['direct_manager', 'hr'],
+    'request_chain: K1 own path, K2 and plain default');
+
+  -- customise the plain other path: the kinds do not move
+  perform public.admin_set_approval_chain('other', '[{"kind":"second_manager"},{"kind":"hr"}]');
+  r := public.admin_get_approval_chains();
+  perform pg_temp.ok((select jsonb_agg(st ->> 'kind' order by (st ->> 'step_order')::int) from jsonb_array_elements(r -> 'chains' -> 'other') st) = '["second_manager","hr"]'::jsonb
+    and (r -> 'customized') @> '"other"'::jsonb, 'the plain other path is customised', (r -> 'chains' -> 'other')::text);
+  perform pg_temp.ok((select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k1) c) = array['hr']
+    and (select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k2) c) = array['direct_manager', 'hr'],
+    'setting the plain path leaves every kind path unchanged');
+
+  -- the old 3-argument call, named and positional
+  perform public.admin_set_approval_chain(p_request_type => 'other', p_steps => '[{"kind":"hr"}]'::jsonb);
+  perform public.admin_set_approval_chain('other', '[{"kind":"second_manager"},{"kind":"hr"}]', null);
+  perform pg_temp.ok((select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other') c) = array['second_manager', 'hr'],
+    'the old 3-argument call still works, named and positional');
+
+  -- an empty array resets that kind only
+  perform public.admin_set_approval_chain('other', '[]', null, k1);
+  perform pg_temp.ok((select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k1) c) = array['direct_manager', 'hr']
+    and (select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other') c) = array['second_manager', 'hr']
+    and (select count(*) from public.approval_steps where company_id = v_comp and request_type = 'other' and custom_kind_id is null) = 2,
+    'an empty array resets only that kind');
+
+  -- a specific employee works for a kind
+  perform public.admin_set_approval_chain('other', format('[{"kind":"specific_employee","approver_employee_id":"%s"},{"kind":"hr"}]', b)::jsonb, null, k2);
+  r := public.admin_get_approval_chains();
+  perform pg_temp.ok((select (x -> 'steps' -> 0 ->> 'approver_employee_id') = b::text and (x -> 'steps' -> 0 ->> 'approver_name') is not null
+                        from jsonb_array_elements(r -> 'custom_kinds') x where x ->> 'id' = k2::text), 'a specific employee step is kept with the name', (r -> 'custom_kinds')::text);
+  perform pg_temp.ok((select c.approver_employee_id from private.request_chain(v_comp, 'other', null, k2) c where c.step_order = 1) = b, 'request_chain returns that approver');
+
+  -- refused calls
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other', '[{"kind":"hr"}]', kxo));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'a kind of another company is refused', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other', '[{"kind":"hr"}]', gen_random_uuid()));
+  perform pg_temp.ok(s = 'custom_kind_not_found', 'an unknown kind is refused', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other', '[{"kind":"hr"}]', kl));
+  perform pg_temp.ok(s = 'invalid_input', 'a leave-family kind cannot have a path', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'leave', '[{"kind":"hr"}]', k1));
+  perform pg_temp.ok(s = 'invalid_input', 'a kind with the leave path is refused', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, %L, %L)', 'permission', '[{"kind":"hr"}]', v_pt, k1));
+  perform pg_temp.ok(s = 'invalid_input', 'a kind with a permission path is refused', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, %L, %L)', 'other', '[{"kind":"hr"}]', v_pt, k1));
+  perform pg_temp.ok(s = 'invalid_input', 'a kind together with a permission type is refused', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other', '[{"kind":"boss"}]', k2));
+  perform pg_temp.ok(s = 'invalid_input' and (select array_agg(c.approver_kind order by c.step_order) from private.request_chain(v_comp, 'other', null, k2) c) = array['specific_employee', 'hr'],
+    'a bad step is refused and the kind path is unchanged', s);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other',
+        format('[{"kind":"specific_employee","approver_employee_id":"%s"}]', (select id from public.employees where employee_number = 'T24-2' and company_id = v_comp2)), k2));
+  perform pg_temp.ok(s = 'employee_not_found', 'an approver from another company is refused', s);
+  perform pg_temp.as_user(a);
+  s := pg_temp.err(format('select public.admin_set_approval_chain(%L, %L::jsonb, null, %L)', 'other', '[{"kind":"hr"}]', k1));
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot set a kind path', s);
+  s := pg_temp.err('select public.admin_get_approval_chains()');
+  perform pg_temp.ok(s = 'forbidden', 'an employee cannot read the paths', s);
+  perform pg_temp.as_user(v_admin);
+
+  -- audit
+  select count(*) into n_before from public.audit_log where action = 'approval_chain.set' and details ->> 'custom_kind_id' = k1::text;
+  perform public.admin_set_approval_chain('other', '[{"kind":"direct_manager"}]', null, k1);
+  perform pg_temp.ok((select count(*) from public.audit_log where action = 'approval_chain.set' and details ->> 'custom_kind_id' = k1::text) = n_before + 1,
+    'setting a kind path writes one audit row with custom_kind_id');
+
+  -- deleting a kind takes its path with it
+  select count(*) into n from public.approval_steps where custom_kind_id = k2;
+  perform public.admin_delete_custom_kind(k2);
+  perform pg_temp.ok(n = 2 and not exists (select 1 from public.approval_steps where custom_kind_id = k2), 'deleting a kind removes its path', n::text);
+
+  -- grants
+  perform pg_temp.ok(has_function_privilege('authenticated', 'public.admin_set_approval_chain(text,jsonb,uuid,uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.admin_set_approval_chain(text,jsonb,uuid,uuid)', 'execute')
+    and has_function_privilege('authenticated', 'public.admin_get_approval_chains()', 'execute')
+    and not has_function_privilege('anon', 'public.admin_get_approval_chains()', 'execute')
+    and not has_function_privilege('authenticated', 'private.request_chain(uuid,public.request_type,uuid,uuid)', 'execute')
+    and not has_function_privilege('anon', 'private.request_chain(uuid,public.request_type,uuid,uuid)', 'execute'),
+    'grants: admin RPCs for authenticated only, request_chain for nobody');
+end
+$tests$;
+
 do $report$
 declare v text;
 begin
