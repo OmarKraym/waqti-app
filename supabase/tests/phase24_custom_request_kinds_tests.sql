@@ -946,6 +946,139 @@ exception when others then
 end
 $tests$;
 
+-- ================================================================ Task 7: request JSON, notification text, final-approval check, overview
+-- the manager (p_mgr) approves the first step; the id of the approval comes from his inbox. Returns the error text ('' = ok).
+create function pg_temp.mgr_approve(p_req uuid, p_mgr uuid) returns text language plpgsql as $f$
+declare v_ap uuid;
+begin
+  perform pg_temp.as_user(p_mgr);
+  v_ap := (select (x ->> 'approval_id')::uuid from jsonb_array_elements(public.approver_inbox()) x where x ->> 'id' = p_req::text);
+  if v_ap is null then return 'not_in_inbox'; end if;
+  perform public.approver_decide(v_ap, 'approve');
+  return '';
+exception when others then return sqlerrm;
+end $f$;
+create function pg_temp.names_of(p_ov jsonb) returns text[] language sql as $$
+  select coalesce(array_agg(x ->> 'name' order by i), '{}') from jsonb_array_elements(p_ov -> 'custom_kinds') with ordinality as t (x, i) $$;
+
+do $tests$
+declare
+  v_admin uuid; a uuid; b uuid; d uuid; v_comp uuid; v_comp2 uuid; e2 uuid;
+  k_a uuid; k_c uuid; k_b uuid; k_m uuid; k_f uuid; k_off uuid; k_re uuid;
+  r1 uuid; r2 uuid; r3 uuid; r4 uuid; r jsonb; ov jsonb; s text;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into b from public.employees e where e.is_active and e.id not in (v_admin, a) and e.company_id = v_comp order by employee_number limit 1;
+  select id into d from public.employees e where e.is_active and e.id not in (v_admin, a, b) and e.company_id = v_comp order by employee_number offset 1 limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  select id into e2 from public.employees where employee_number = 'T24-2' and company_id = v_comp2;
+  perform pg_temp.reset_kinds(v_comp);
+  delete from public.notifications where user_id in (a, b, d);
+  update public.employees set gender = 'male', manager_id = d where id = a;
+  update public.employees set gender = 'female', manager_id = d where id = b;
+  delete from public.employee_work_schedules where employee_id in (a, b, d);
+  delete from public.approval_steps where company_id = v_comp and request_type in ('leave', 'other');
+  perform pg_temp.as_user(v_admin);
+  k_a := public.admin_save_custom_kind(null, 'leave', 'A order', true, 10, 'all', false, null, 1);
+  k_c := public.admin_save_custom_kind(null, 'other', 'C order', true, null, 'all', false, 'range', 1);
+  k_b := public.admin_save_custom_kind(null, 'leave', 'B order', true, 4, 'all', false, null, 2);
+  k_m := public.admin_save_custom_kind(null, 'leave', 'M only', true, 4, 'male', false, null, 3);
+  k_f := public.admin_save_custom_kind(null, 'leave', 'F only', true, 4, 'female', false, null, 3);
+  k_off := public.admin_save_custom_kind(null, 'leave', 'Off kind', true, 4, 'all', false, null, 0);
+  perform public.admin_save_custom_kind(k_off, 'leave', 'Off kind', false, 4, 'all', false, null, 0);
+
+  -- request_json: custom leave, built-in leave, plain other, custom other
+  r := pg_temp.sub_leave(a, k_a, pg_temp.win(10), pg_temp.win(10) + 1);
+  r1 := (r ->> 'id')::uuid;
+  perform pg_temp.ok(r ->> 'kind_name' = 'A order' and r ->> 'custom_kind_id' = k_a::text and r ->> 'leave_type' = 'custom' and (r -> 'date_mode') = 'null'::jsonb,
+    'request_json of a custom leave: kind_name, custom_kind_id, leave_type custom', r::text);
+  r := pg_temp.sub_leave(a, null, pg_temp.win(11), pg_temp.win(11), null, false, null, 'unpaid');
+  perform pg_temp.ok((r -> 'kind_name') = 'null'::jsonb and (r -> 'custom_kind_id') = 'null'::jsonb and (r -> 'date_mode') = 'null'::jsonb and r ->> 'leave_type' = 'unpaid',
+    'request_json of a built-in leave: the three keys are null', r::text);
+  r := pg_temp.sub_other(a, null, date '2026-11-20', date '2026-11-20');
+  perform pg_temp.ok(r ->> 'error' is null and (r -> 'kind_name') = 'null'::jsonb and (r -> 'custom_kind_id') = 'null'::jsonb and (r -> 'date_mode') = 'null'::jsonb,
+    'request_json of a plain other: the three keys are null', r::text);
+  r := pg_temp.sub_other(a, k_c, date '2026-11-20', date '2026-11-21');
+  perform pg_temp.ok(r ->> 'kind_name' = 'C order' and r ->> 'date_mode' = 'range' and r ->> 'custom_kind_id' = k_c::text, 'request_json of a custom other: kind_name and date_mode', r::text);
+  r2 := (r ->> 'id')::uuid;
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_save_custom_kind(k_a, 'leave', 'A renamed', true, 10, 'all', false, null, 1);
+  perform pg_temp.ok(private.request_json(r1) ->> 'kind_name' = 'A renamed', 'renaming the kind changes kind_name in an old request');
+  perform public.admin_save_custom_kind(k_a, 'leave', 'A order', true, 10, 'all', false, null, 1);
+
+  -- notifications carry the kind name, for both families
+  perform pg_temp.ok(exists (select 1 from public.notifications where user_id = d and kind = 'approval_needed' and position('A order' in body) > 0),
+    'the manager is told about the custom leave by its name');
+  perform pg_temp.ok(exists (select 1 from public.notifications where user_id = d and kind = 'approval_needed' and position('C order' in body) > 0),
+    'the manager is told about the custom other request by its name');
+  perform pg_temp.ok(not exists (select 1 from public.notifications where user_id = d and kind = 'approval_needed' and position('إجازة ·' in body) > 0),
+    'no leave line is left without a name');
+  s := pg_temp.mgr_approve(r1, d);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_decide_request(r1, 'approve');
+  perform pg_temp.ok(s = '' and exists (select 1 from public.notifications where user_id = a and kind = 'request_decided' and position('A order' in body) > 0),
+    'the employee is told about the decision with the kind name', s);
+
+  -- the overview
+  r := pg_temp.sub_leave(a, k_a, pg_temp.win(12), pg_temp.win(12) + 2);
+  perform pg_temp.ok(r ->> 'error' is null, 'a second custom leave (3 days) is pending');
+  perform pg_temp.as_user(a);
+  ov := public.employee_requests_overview();
+  perform pg_temp.ok(pg_temp.names_of(ov) = array['A order', 'C order', 'B order', 'M only'],
+    'overview for a man: enabled kinds only, the female kind hidden, ordered by sort_order then name', pg_temp.names_of(ov)::text);
+  perform pg_temp.ok((select (x -> 'balance' ->> 'entitled')::numeric = 10 and (x -> 'balance' ->> 'used')::numeric = 2
+                        and (x -> 'balance' ->> 'pending')::numeric = 3 and (x -> 'balance' ->> 'remaining')::numeric = 5 and x ->> 'family' = 'leave'
+                        from jsonb_array_elements(ov -> 'custom_kinds') x where x ->> 'id' = k_a::text),
+    'a leave kind carries entitled 10, used 2, pending 3, remaining 5', (ov -> 'custom_kinds')::text);
+  perform pg_temp.ok((select x ->> 'family' = 'other' and x ->> 'date_mode' = 'range' and (x -> 'balance') = 'null'::jsonb and (x ->> 'reason_required')::boolean is not null
+                        from jsonb_array_elements(ov -> 'custom_kinds') x where x ->> 'id' = k_c::text), 'an other kind shows date_mode and no balance');
+  perform pg_temp.ok(ov ? 'balances' and ov ? 'permission_types' and ov ? 'requests' and ov ? 'inbox_count' and ov ? 'timezone' and ov ? 'today'
+                     and jsonb_array_length(ov -> 'balances') >= 5, 'the old keys are unchanged', (select string_agg(k, ',') from jsonb_object_keys(ov) k));
+  perform pg_temp.as_user(b);
+  ov := public.employee_requests_overview();
+  perform pg_temp.ok(pg_temp.names_of(ov) = array['A order', 'C order', 'B order', 'F only'], 'overview for a woman: the female kind shown, the male one hidden', pg_temp.names_of(ov)::text);
+  perform pg_temp.ok((select (x -> 'balance' ->> 'used')::numeric = 0 and (x -> 'balance' ->> 'remaining')::numeric = 10
+                        from jsonb_array_elements(ov -> 'custom_kinds') x where x ->> 'id' = k_a::text), 'another employee has a fresh balance on the same kind');
+  perform pg_temp.as_user(e2);
+  ov := public.employee_requests_overview();
+  perform pg_temp.ok(not (pg_temp.names_of(ov) && array['A order', 'C order', 'B order', 'M only', 'F only']) and ov ? 'custom_kinds',
+    'kinds of another company are absent', pg_temp.names_of(ov)::text);
+  perform pg_temp.as_user(v_admin);
+  delete from public.custom_request_kinds where company_id = v_comp2;
+  perform pg_temp.as_user(e2);
+  ov := public.employee_requests_overview();
+  perform pg_temp.ok((ov -> 'custom_kinds') = '[]'::jsonb, 'a company with no kinds gets [] (never null)', (ov -> 'custom_kinds')::text);
+
+  -- the check at final approval (Review Focus 2)
+  perform pg_temp.as_user(v_admin);
+  k_re := public.admin_save_custom_kind(null, 'leave', 'Recheck kind', true, 5, 'all', false, null, 9);
+  r := pg_temp.sub_leave(b, k_re, pg_temp.win(10), pg_temp.win(10) + 2);
+  r3 := (r ->> 'id')::uuid;
+  perform pg_temp.ok(r ->> 'error' is null, '3 days with no reason under a default of 5 are accepted', r::text);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_save_custom_kind(k_re, 'leave', 'Recheck kind', true, 2, 'all', false, null, 9);
+  s := pg_temp.mgr_approve(r3, d);
+  perform pg_temp.as_user(v_admin);
+  s := s || pg_temp.err(format($q$select public.admin_decide_request(%L, 'approve')$q$, r3));
+  perform pg_temp.ok(s = 'insufficient_balance', 'the default is lowered to 2: final approval of the 3-day request is refused', s);
+  perform pg_temp.ok((select status::text from public.requests where id = r3) = 'pending', '...and the request stays pending');
+  r := pg_temp.sub_leave(b, k_re, pg_temp.win(11), pg_temp.win(11) + 2, 'حاجة ملحّة');
+  r4 := (r ->> 'id')::uuid;
+  s := pg_temp.mgr_approve(r4, d);
+  perform pg_temp.as_user(v_admin);
+  s := s || pg_temp.err(format($q$select public.admin_decide_request(%L, 'approve')$q$, r4));
+  perform pg_temp.ok(s = '' and (select status::text from public.requests where id = r4) = 'approved', 'the same 3 days with a reason are approved', s);
+  perform public.admin_save_custom_kind(k_re, 'leave', 'Recheck kind', true, 8, 'all', false, null, 9);
+  s := pg_temp.err(format($q$select public.admin_decide_request(%L, 'approve')$q$, r3));
+  perform pg_temp.ok(s = '' and (select status::text from public.requests where id = r3) = 'approved', 'with the default raised again the first request can be approved', s);
+  perform pg_temp.as_user(v_admin);
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
+end
+$tests$;
+
 do $report$
 declare v text;
 begin
