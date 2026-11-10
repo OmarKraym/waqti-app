@@ -132,7 +132,8 @@ export interface LateStatus {
 // ---------------------------------------------------------------- Requests (Phase 4). See docs/API_CONTRACT.md §4.
 
 export type RequestType = "leave" | "permission" | "other";
-export type LeaveType = "annual" | "sick" | "emergency" | "marriage" | "maternity" | "unpaid";
+/** "custom" = a leave type the administration added (phase 24); the request carries its kind in `custom_kind_id`. */
+export type LeaveType = "annual" | "sick" | "emergency" | "marriage" | "maternity" | "unpaid" | "custom";
 export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type ApproverKind = "direct_manager" | "second_manager" | "specific_employee" | "hr";
 export type StepStatus = "waiting" | "pending" | "approved" | "rejected" | "skipped" | "cancelled";
@@ -153,6 +154,11 @@ export interface RequestItem {
   /** Permissions only (phase 4d): the company's permission type. */
   permission_type_id?: string | null;
   permission_type?: string | null;
+  /** A request of a kind the administration added (phase 24): the kind and its name (kept after the kind is renamed or switched off). */
+  custom_kind_id?: string | null;
+  kind_name?: string | null;
+  /** Only for a custom "other" kind: how its date is asked. */
+  date_mode?: DateMode | null;
   status: RequestStatus;
   start_at: string;
   /** Exclusive end: a leave on 3-4 March ends at 5 March 00:00. */
@@ -170,6 +176,23 @@ export interface RequestItem {
   current_step: number | null;
   employee: { full_name: string; employee_number: string | null; department: string | null; job_title: string | null };
   steps: ApprovalStep[];
+}
+
+/** How a custom «طلب آخر» kind asks for its date: one day, a period, or no date at all. */
+export type DateMode = "single" | "range" | "none";
+
+/** A request kind the administration added, as the server offers it to this employee (phase 24). */
+export interface CustomKind {
+  id: string;
+  family: "leave" | "other";
+  name: string;
+  sort_order: number;
+  gender: "all" | "female" | "male";
+  reason_required: boolean;
+  /** «other» kinds only. */
+  date_mode: DateMode | null;
+  /** «leave» kinds only: this employee's days for the kind. */
+  balance: LeaveBalance | null;
 }
 
 /** One leave type for one year. entitled/remaining null = not limited. */
@@ -218,12 +241,14 @@ export interface RequestsOverview {
   today: string; // YYYY-MM-DD in the company time zone
   /** Earliest day a leave may start (company rule). Missing = the server does not say (older database). */
   leave_earliest?: string;
+  /** Kinds the administration added (phase 24). Missing = an older database: the form shows only the built-in types. */
+  custom_kinds?: CustomKind[];
 }
 
 export type NewRequest =
-  | { type: "leave"; leave_type: LeaveType; start_date: string; end_date: string; reason: string | null }
+  | { type: "leave"; leave_type: LeaveType; custom_kind_id?: string | null; start_date: string; end_date: string; reason: string | null }
   | { type: "permission"; permission_type_id: string; start_at: string | null; end_at: string | null; reason: string | null }
-  | { type: "other"; start_date: string; end_date: string; reason: string };
+  | { type: "other"; custom_kind_id?: string | null; start_date: string; end_date: string; reason: string };
 
 /** What the server computed for a request without saving it (dry run). */
 export interface RequestPreview {

@@ -7,7 +7,8 @@
 //   history = 1      (adds three earlier work days, for screenshots)
 //   admin = 1        (the history's check-out of yesterday and a check-in of two days ago were added by the admin: «أضافه المدير»; also every new punch)
 //   inbox = 0        (no requests waiting for my approval; default: two, as a manager)
-//   requests = 1     (adds sample requests of my own: approved, pending, rejected)
+//   requests = 1     (adds sample requests of my own: approved, pending, rejected, and two of the kinds the administration added)
+//   kinds = 0        (an older database: the overview has no custom kinds)
 //   overtime = 1     (I manage a team of 3 and have one assignment of my own)
 //   grace = 15       (the company's grace period in minutes; the server decides what counts as late — default 15)
 //   rule = beyond_grace  (count only the minutes after the grace period; default: all minutes once the grace is passed)
@@ -23,6 +24,7 @@ import { newRequestId } from "./attendance";
 import { AppError } from "./errors";
 import { addDays, localDate } from "./requests";
 import type {
+  CustomKind,
   OvertimeInput,
   OvertimeItem,
   OvertimeOverview,
@@ -402,6 +404,18 @@ const PERMISSION_TYPES = [
   { id: "pt-late", name: "تبرير تأخير", mode: "late_arrival" as const, max_per_month: 3, max_minutes: 60, days_back: 0, days_ahead: 0 },
   { id: "pt-mission", name: "مهمة عمل", mode: "range" as const, max_per_month: null, max_minutes: null, days_back: 7, days_ahead: 30 },
 ];
+/**
+ * Kinds the administration added (phase 24), as the server offers them to this employee (a man: female-only kinds are not offered).
+ * Two of leave (one needs a reason) and two of «other» (one day / no date); a period kind is covered by the unit tests.
+ */
+const CUSTOM_KINDS: Omit<CustomKind, "balance">[] = [
+  { id: "ck-hajj", family: "leave", name: "حج", sort_order: 1, gender: "all", reason_required: false, date_mode: null },
+  { id: "ck-study", family: "leave", name: "دراسة", sort_order: 2, gender: "all", reason_required: true, date_mode: null },
+  { id: "ck-advance", family: "other", name: "سلفة", sort_order: 3, gender: "all", reason_required: false, date_mode: "single" },
+  { id: "ck-letter", family: "other", name: "إفادة عمل", sort_order: 4, gender: "all", reason_required: false, date_mode: "none" },
+];
+/** The days of a custom leave kind for this employee in a year (null = not limited). */
+const KIND_DAYS: Record<string, number | null> = { "ck-hajj": 10, "ck-study": null };
 const SHIFT_START_H = 8;
 const SHIFT_END_H = 16;
 const ME = { full_name: "أحمد سالم", employee_number: "1024", department: "المبيعات", job_title: "مندوب" };
@@ -463,6 +477,11 @@ function createMockRequests() {
              decision_note: "ضغط عمل في هذا اليوم", steps: steps("خالد المبروك", "rejected", "cancelled"), created_at: startOfDay(plusDays(t, -4)) }),
       make({ type: "leave", leave_type: "annual", start_at: startOfDay(plusDays(t, 12)), end_at: startOfDay(plusDays(t, 15)), days: 3,
              reason: "سفر عائلي", created_at: startOfDay(plusDays(t, -1)) }),
+      // two requests of kinds the administration added: a leave (titled with the kind) and an «other» without a date
+      make({ type: "leave", leave_type: "custom", custom_kind_id: "ck-hajj", kind_name: "حج", status: "approved", start_at: startOfDay(plusDays(t, -40)),
+             end_at: startOfDay(plusDays(t, -37)), days: 3, current_step: null, steps: steps("خالد المبروك", "approved", "approved"), created_at: startOfDay(plusDays(t, -45)) }),
+      make({ type: "other", custom_kind_id: "ck-letter", kind_name: "إفادة عمل", date_mode: "none", start_at: startOfDay(t), end_at: startOfDay(plusDays(t, 1)),
+             reason: "لتقديمها للسفارة", created_at: startOfDay(plusDays(t, -2)) }),
     );
   }
 
@@ -495,6 +514,17 @@ function createMockRequests() {
     const earned = Math.floor(((entitled * n) / 365) * 2) / 2;
     return { leave_type: type, entitled, used, pending, remaining: earned - used - pending, year: Number(year), earned, carried: 0, used_outside: 0, as_of: day };
   }
+  /** A custom leave kind's days for one year: the whole entitlement from the first day (no day-by-day accrual). */
+  function kindBalance(kindId: string, year: string, exclude?: string): LeaveBalance {
+    const entitled = KIND_DAYS[kindId] ?? null;
+    const rows = mine.filter((r) => r.type === "leave" && r.custom_kind_id === kindId && r.id !== exclude && localDate(r.start_at, TZ).startsWith(year));
+    const used = rows.filter((r) => r.status === "approved").reduce((a, r) => a + (r.charged_days ?? r.days ?? 0), 0);
+    const pending = rows.filter((r) => r.status === "pending").reduce((a, r) => a + (r.days ?? 0), 0);
+    return { leave_type: "custom", entitled, used, pending, remaining: entitled === null ? null : entitled - used - pending };
+  }
+  /** The kinds this employee is offered: none when the scenario plays an older database. */
+  const offeredKinds = (): CustomKind[] => q.get("kinds") === "0" ? []
+    : CUSTOM_KINDS.map((k) => ({ ...k, balance: k.family === "leave" ? kindBalance(k.id, today().slice(0, 4)) : null }));
   function permission(typeId: string, month: string): PermissionUsage {
     const pt = PERMISSION_TYPES.find((x) => x.id === typeId)!;
     const rows = mine.filter((r) => r.permission_type_id === typeId && localDate(r.start_at, TZ).startsWith(month));
@@ -534,16 +564,25 @@ function createMockRequests() {
       perm = permission(pt.id, day.slice(0, 7));
       if (pt.max_per_month !== null && perm.used + perm.pending >= pt.max_per_month) throw new AppError("permission_limit");
     } else {
-      if (r.end_date < r.start_date || r.start_date < plusDays(t, -30) || r.start_date > plusDays(t, 365)) throw new AppError("invalid_dates");
+      // a kind the administration added must exist, be of this form's family and be offered to this employee
+      const kind = r.custom_kind_id ? offeredKinds().find((k) => k.id === r.custom_kind_id && k.family === r.type) : undefined;
+      if (r.custom_kind_id && !kind) throw new AppError("custom_kind_not_found");
+      // «no date»: the server records today, whatever dates came
+      const noDate = kind?.date_mode === "none";
+      const first = noDate ? t : r.start_date;
+      const last = noDate ? t : kind?.date_mode === "single" ? r.start_date : r.end_date;
+      if (last < first || first < plusDays(t, -30) || first > plusDays(t, 365)) throw new AppError("invalid_dates");
       if (r.type === "other" && !r.reason) throw new AppError("reason_required");
       if (r.type === "leave") {
-        if (r.start_date.slice(0, 4) !== r.end_date.slice(0, 4)) throw new AppError("crosses_year");
-        days = workDays(r.start_date, r.end_date);
+        if (first.slice(0, 4) !== last.slice(0, 4)) throw new AppError("crosses_year");
+        if (kind?.reason_required && !r.reason?.trim()) throw new AppError("reason_required");
+        days = workDays(first, last);
         if (days === 0) throw new AppError("no_working_days");
-        bal = balance(r.leave_type, r.start_date.slice(0, 4), undefined, r.start_date);
+        if (kind) bal = kindBalance(kind.id, first.slice(0, 4));
+        else bal = balance(r.leave_type, first.slice(0, 4), undefined, first);
         over = bal.remaining !== null && bal.remaining < days;
       }
-      start = startOfDay(r.start_date); end = startOfDay(plusDays(r.end_date, 1));
+      start = startOfDay(first); end = startOfDay(plusDays(last, 1));
     }
     if (r.type !== "other") {
       const overlap = mine.some((x) => x.type !== "other" && (x.status === "pending" || x.status === "approved")
@@ -599,6 +638,7 @@ function createMockRequests() {
         timezone: TZ,
         today: t,
         leave_earliest: addDays(t, leaveNotice - leaveBack),
+        ...(q.get("kinds") === "0" ? {} : { custom_kinds: offeredKinds() }),
       };
     },
     async previewRequest(r: NewRequest) {
@@ -613,8 +653,10 @@ function createMockRequests() {
       const p = check(r);
       if (p.over_balance && !r.reason?.trim()) throw new AppError("insufficient_balance");
       const pt = r.type === "permission" ? PERMISSION_TYPES.find((x) => x.id === r.permission_type_id) : undefined;
+      const kind = r.type !== "permission" && r.custom_kind_id ? CUSTOM_KINDS.find((k) => k.id === r.custom_kind_id) : undefined;
       const item = make({ type: r.type, leave_type: r.type === "leave" ? r.leave_type : null, start_at: p.start_at, end_at: p.end_at,
                           permission_type_id: pt?.id ?? null, permission_type: pt?.name ?? null,
+                          ...(kind ? { custom_kind_id: kind.id, kind_name: kind.name, date_mode: kind.date_mode } : {}),
                           days: p.days, minutes: p.minutes, reason: r.reason });
       mine.push(item);
       byKey.set(key, item.id);

@@ -49,6 +49,10 @@ export type AppErrorCode =
   | "overlapping_request"
   | "reason_required"
   | "maternity_female_only"
+  // kinds the administration added (phase 24)
+  | "custom_kind_not_found"
+  | "custom_kind_disabled"
+  | "kind_gender_mismatch"
   | "request_not_found"
   | "already_decided"
   | "cannot_decide_own"
@@ -91,6 +95,7 @@ const KNOWN = new Set<AppErrorCode>([
   "cannot_decide_own", "permission_type_not_found", "permission_too_long", "outside_window", "not_late", "no_device",
   "not_your_team", "overlaps_shift", "on_leave", "overlapping_overtime", "overtime_day_limit", "overtime_month_limit",
   "overtime_not_found", "overtime_started", "overtime_closed",
+  "custom_kind_not_found", "custom_kind_disabled", "kind_gender_mismatch",
   "password_too_short", "password_too_long", "password_too_weak", "same_password", "not_required",
   "biometric_required", "device_not_registered", "device_already_registered", "biometric_failed", "outside_punch_window", "day_off",
   "too_many_attempts", "password_required", "biometric_off", "login_disabled", "leave_date_not_allowed",
@@ -133,6 +138,9 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   overlapping_request: "لديك طلب آخر في نفس الفترة.",
   reason_required: "اكتب سبب الطلب.",
   maternity_female_only: "إجازة الأمومة غير متاحة لهذا الحساب.",
+  custom_kind_not_found: "هذا النوع لم يعد متاحاً.",
+  custom_kind_disabled: "هذا النوع متوقف حالياً.",
+  kind_gender_mismatch: "هذا النوع غير متاح لهذا الحساب.",
   request_not_found: "الطلب غير موجود أو لم يعد بانتظار قرارك.",
   already_decided: "تم البتّ في هذا الطلب من قبل.",
   cannot_decide_own: "لا يمكنك اتخاذ قرار في طلبك أنت.",

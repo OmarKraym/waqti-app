@@ -417,7 +417,7 @@ const PREVIEW_KEY = "00000000-0000-4000-8000-000000000000";
 
 /** Arguments of employee_submit_request (dates for leave/other, instants for permission). */
 export function submitArgs(key: string, r: NewRequest, dryRun: boolean): Record<string, unknown> {
-  return {
+  const args: Record<string, unknown> = {
     p_request_key: key,
     p_type: r.type,
     p_leave_type: r.type === "leave" ? r.leave_type : null,
@@ -429,4 +429,8 @@ export function submitArgs(key: string, r: NewRequest, dryRun: boolean): Record<
     p_dry_run: dryRun,
     p_permission_type_id: r.type === "permission" ? r.permission_type_id : null,
   };
+  // Sent only for a kind the administration added: a database before phase 24 does not know the parameter,
+  // so built-in requests must not carry it.
+  if (r.type !== "permission" && r.custom_kind_id) args.p_custom_kind_id = r.custom_kind_id;
+  return args;
 }

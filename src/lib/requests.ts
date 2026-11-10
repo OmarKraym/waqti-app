@@ -6,6 +6,7 @@ import { format12, zonedHMS } from "./time12";
 import type {
   ApprovalStep,
   ApproverKind,
+  CustomKind,
   LeaveBalance,
   LeaveType,
   NewRequest,
@@ -13,6 +14,7 @@ import type {
   PermissionUsage,
   RequestItem,
   RequestStatus,
+  RequestsOverview,
   RequestType,
 } from "./types";
 import type { AppErrorCode } from "./errors";
@@ -30,6 +32,7 @@ export const LEAVE_LABEL: Record<LeaveType, string> = {
   marriage: "زواج",
   maternity: "أمومة",
   unpaid: "بدون راتب",
+  custom: "خاصة",
 };
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
@@ -46,8 +49,15 @@ export const KIND_LABEL: Record<ApproverKind, string> = {
   hr: "الموارد البشرية",
 };
 
-/** Full title of a request: "إجازة سنوية", "إذن: تبرير تأخير", "طلب آخر". */
-export function requestTitle(r: Pick<RequestItem, "type" | "leave_type"> & { permission_type?: string | null }): string {
+/**
+ * Full title of a request: "إجازة سنوية", "إذن: تبرير تأخير", "طلب آخر".
+ * A request of a kind the administration added is titled with the kind's name ("إجازة حج", "سلفة");
+ * a name that already starts with «إجازة» is not prefixed twice.
+ */
+export function requestTitle(r: Pick<RequestItem, "type" | "leave_type"> & { permission_type?: string | null; kind_name?: string | null }): string {
+  const kind = r.kind_name?.trim();
+  if (r.type === "leave" && kind) return kind.startsWith("إجازة") ? kind : `إجازة ${kind}`;
+  if (r.type === "other" && kind) return kind;
   if (r.type === "leave" && r.leave_type) return `إجازة ${LEAVE_LABEL[r.leave_type]}`;
   if (r.type === "permission" && r.permission_type) return `إذن: ${r.permission_type}`;
   return TYPE_LABEL[r.type];
@@ -218,13 +228,20 @@ export interface Draft {
   from: string;
   to: string;
   reason: string;
+  /** A kind the administration added (leave or other); "" = a built-in type. */
+  custom_kind_id: string;
+}
+
+/** The kinds of one family the server offers this employee (none from an older database). */
+export function customKindsOf(o: Pick<RequestsOverview, "custom_kinds">, family: CustomKind["family"]): CustomKind[] {
+  return (o.custom_kinds ?? []).filter((k) => k.family === family);
 }
 
 export function emptyDraft(today: string, firstType?: Pick<PermissionUsage, "id" | "mode">): Draft {
   return {
     type: "leave", leave_type: "annual", start_date: today, end_date: today,
     permission_type_id: firstType?.id ?? "", permission_mode: firstType?.mode ?? "range",
-    date: today, from: "", to: "", reason: "",
+    date: today, from: "", to: "", reason: "", custom_kind_id: "",
   };
 }
 
@@ -253,7 +270,7 @@ const TIME = /^\d{2}:\d{2}$/;
  * The form as a request the server understands, or the reason it is not complete yet.
  * These are only the obvious checks (so the employee is told at once); the server re-checks everything.
  */
-export function draftToRequest(d: Draft, timeZone: string): { ok: true; request: NewRequest } | { ok: false; error: AppErrorCode } {
+export function draftToRequest(d: Draft, timeZone: string, kinds: CustomKind[] = []): { ok: true; request: NewRequest } | { ok: false; error: AppErrorCode } {
   const reason = d.reason.trim() === "" ? null : d.reason.trim();
   if (reason !== null && reason.length > 500) return { ok: false, error: "invalid_input" };
   if (d.type === "permission") {
@@ -271,12 +288,26 @@ export function draftToRequest(d: Draft, timeZone: string): { ok: true; request:
     if (!TIME.test(d.from) || !TIME.test(d.to) || d.to <= d.from) return { ok: false, error: "invalid_dates" };
     return { ok: true, request: { ...base, start_at: zonedToUtc(d.date, d.from, timeZone), end_at: zonedToUtc(d.date, d.to, timeZone) } };
   }
-  if (!DATE.test(d.start_date) || !DATE.test(d.end_date) || d.end_date < d.start_date) return { ok: false, error: "invalid_dates" };
+  // a kind the administration added: it must be one the server offered, of the family of this form
+  const kind = d.custom_kind_id ? kinds.find((k) => k.id === d.custom_kind_id && k.family === d.type) : undefined;
+  if (d.custom_kind_id && !kind) return { ok: false, error: "custom_kind_not_found" };
+  // an «other» kind with one day or no date has no end field on screen: only the start counts
+  const oneDay = d.type === "other" && kind !== undefined && kind.date_mode !== "range";
+  if (!DATE.test(d.start_date) || (!oneDay && (!DATE.test(d.end_date) || d.end_date < d.start_date))) return { ok: false, error: "invalid_dates" };
   if (d.type === "leave") {
     if (d.start_date.slice(0, 4) !== d.end_date.slice(0, 4)) return { ok: false, error: "crosses_year" };
+    if (kind) {
+      if (kind.reason_required && reason === null) return { ok: false, error: "reason_required" };
+      return { ok: true, request: { type: "leave", leave_type: "custom", custom_kind_id: kind.id, start_date: d.start_date, end_date: d.end_date, reason } };
+    }
     return { ok: true, request: { type: "leave", leave_type: d.leave_type, start_date: d.start_date, end_date: d.end_date, reason } };
   }
   if (reason === null) return { ok: false, error: "reason_required" };
+  if (kind) {
+    // one day and no date both send a single day (for «no date» the server stores today)
+    const end = kind.date_mode === "range" ? d.end_date : d.start_date;
+    return { ok: true, request: { type: "other", custom_kind_id: kind.id, start_date: d.start_date, end_date: end, reason } };
+  }
   return { ok: true, request: { type: "other", start_date: d.start_date, end_date: d.end_date, reason } };
 }
 

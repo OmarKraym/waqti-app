@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampLeaveDates,
+  customKindsOf,
   leaveEarliest,
   addDays,
   draftToRequest,
@@ -20,8 +21,9 @@ import {
   visibleSteps,
   zonedToUtc,
 } from "./requests";
+import { ERROR_TEXT, toKnownCode } from "./errors";
 import { submitArgs } from "./supabaseApi";
-import type { ApprovalStep, RequestItem } from "./types";
+import type { ApprovalStep, CustomKind, DateMode, RequestItem } from "./types";
 
 const TZ = "Africa/Tripoli"; // UTC+2, no daylight saving
 
@@ -243,5 +245,127 @@ describe("when a leave may start", () => {
     expect(clampLeaveDates(ok, "2026-11-02")).toBe(ok);
     const perm = { ...emptyDraft(today), type: "permission" as const, start_date: "2026-10-01" };
     expect(clampLeaveDates(perm, "2026-11-02")).toBe(perm);
+  });
+});
+
+// ---------------------------------------------------------------- custom request kinds (phase 24)
+
+describe("custom request kinds", () => {
+  const today = "2026-11-02";
+  const balance = { leave_type: "custom" as const, entitled: 10, used: 0, pending: 0, remaining: 10 };
+  const leaveKind: CustomKind = { id: "k1", family: "leave", name: "حج", sort_order: 1, gender: "all", reason_required: false, date_mode: null, balance };
+  const reasonKind: CustomKind = { ...leaveKind, id: "k2", name: "دراسة", reason_required: true };
+  const otherKind = (mode: DateMode, id = "k3"): CustomKind => ({ id, family: "other", name: "سلفة", sort_order: 3, gender: "all", reason_required: false, date_mode: mode, balance: null });
+  const kinds = [leaveKind, reasonKind, otherKind("single")];
+
+  it("a request is titled with the name of its kind", () => {
+    expect(requestTitle({ type: "leave", leave_type: "custom", kind_name: "حج" })).toBe("إجازة حج");
+    expect(requestTitle({ type: "other", leave_type: null, kind_name: "سلفة" })).toBe("سلفة");
+  });
+  it("a kind name that already starts with «إجازة» is not prefixed twice", () => {
+    expect(requestTitle({ type: "leave", leave_type: "custom", kind_name: "إجازة حج" })).toBe("إجازة حج");
+  });
+  it("without a kind name: a custom leave reads «إجازة خاصة», a plain other stays «طلب آخر», built-ins are unchanged", () => {
+    expect(requestTitle({ type: "leave", leave_type: "custom", kind_name: null })).toBe("إجازة خاصة");
+    expect(requestTitle({ type: "leave", leave_type: "custom" })).toBe("إجازة خاصة");
+    expect(requestTitle({ type: "other", leave_type: null, kind_name: null })).toBe("طلب آخر");
+    expect(requestTitle({ type: "leave", leave_type: "sick" })).toBe("إجازة مرضية");
+    expect(requestTitle({ type: "permission", leave_type: null, permission_type: "خروج" })).toBe("إذن: خروج");
+  });
+
+  it("customKindsOf: the kinds of one family; an older database sends none", () => {
+    expect(customKindsOf({}, "leave")).toEqual([]);
+    expect(customKindsOf({ custom_kinds: undefined }, "other")).toEqual([]);
+    expect(customKindsOf({ custom_kinds: kinds }, "leave").map((k) => k.id)).toEqual(["k1", "k2"]);
+    expect(customKindsOf({ custom_kinds: kinds }, "other").map((k) => k.id)).toEqual(["k3"]);
+  });
+
+  it("emptyDraft has no kind", () => {
+    expect(emptyDraft(today).custom_kind_id).toBe("");
+  });
+
+  it("custom leave: leave_type custom, the kind id, the same dates as a built-in leave", () => {
+    const r = draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1", start_date: "2026-11-10", end_date: "2026-11-12", reason: "  " }, TZ, kinds);
+    expect(r).toEqual({ ok: true, request: { type: "leave", leave_type: "custom", custom_kind_id: "k1", start_date: "2026-11-10", end_date: "2026-11-12", reason: null } });
+  });
+  it("custom leave: a kind that needs a reason is not sent without one", () => {
+    const d = { ...emptyDraft(today), custom_kind_id: "k2", start_date: "2026-11-10", end_date: "2026-11-10" };
+    expect(draftToRequest({ ...d, reason: " " }, TZ, kinds)).toEqual({ ok: false, error: "reason_required" });
+    expect(draftToRequest({ ...d, reason: "امتحان" }, TZ, kinds).ok).toBe(true);
+  });
+  it("custom leave: a kind that is not in the list (or of the other family) is refused before sending", () => {
+    expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "gone" }, TZ, kinds)).toEqual({ ok: false, error: "custom_kind_not_found" });
+    expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k3" }, TZ, kinds)).toEqual({ ok: false, error: "custom_kind_not_found" });
+    expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1" }, TZ)).toEqual({ ok: false, error: "custom_kind_not_found" });
+  });
+  it("custom leave: dates and the year rule are still checked", () => {
+    expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1", start_date: "2026-11-12", end_date: "2026-11-10" }, TZ, kinds)).toEqual({ ok: false, error: "invalid_dates" });
+    expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1", start_date: "2026-12-30", end_date: "2027-01-02" }, TZ, kinds)).toEqual({ ok: false, error: "crosses_year" });
+  });
+  it("a built-in leave is unchanged: no kind id in the request", () => {
+    const r = draftToRequest({ ...emptyDraft(today), start_date: "2026-11-10", end_date: "2026-11-10" }, TZ, kinds);
+    expect(r.ok && r.request).not.toHaveProperty("custom_kind_id");
+    expect(r.ok && r.request).toMatchObject({ leave_type: "annual" });
+  });
+
+  const otherDraft = (over: object = {}) => ({ ...emptyDraft(today), type: "other" as const, custom_kind_id: "k3", start_date: "2026-11-10", end_date: "2026-11-12", reason: "سلفة 500", ...over });
+  it("custom other, one day: the end is the start", () => {
+    expect(draftToRequest(otherDraft(), TZ, kinds)).toEqual({ ok: true, request: { type: "other", custom_kind_id: "k3", start_date: "2026-11-10", end_date: "2026-11-10", reason: "سلفة 500" } });
+  });
+  it("custom other, no date: both dates are the chosen start (the server stores today)", () => {
+    const k = [otherKind("none")];
+    expect(draftToRequest(otherDraft({ start_date: "2026-11-02", end_date: "2026-11-05" }), TZ, k)).toEqual({ ok: true, request: { type: "other", custom_kind_id: "k3", start_date: "2026-11-02", end_date: "2026-11-02", reason: "سلفة 500" } });
+  });
+  it("custom other, a period: the dates go as they are, and a reversed period is caught", () => {
+    const k = [otherKind("range")];
+    expect(draftToRequest(otherDraft(), TZ, k)).toEqual({ ok: true, request: { type: "other", custom_kind_id: "k3", start_date: "2026-11-10", end_date: "2026-11-12", reason: "سلفة 500" } });
+    expect(draftToRequest(otherDraft({ start_date: "2026-11-12", end_date: "2026-11-10" }), TZ, k)).toEqual({ ok: false, error: "invalid_dates" });
+  });
+  it("custom other, one day or no date: a leftover end date before the start does not block the request (the field is not shown)", () => {
+    for (const mode of ["single", "none"] as const) {
+      const r = draftToRequest(otherDraft({ start_date: "2026-11-10", end_date: "2026-11-01" }), TZ, [otherKind(mode)]);
+      expect(r).toEqual({ ok: true, request: { type: "other", custom_kind_id: "k3", start_date: "2026-11-10", end_date: "2026-11-10", reason: "سلفة 500" } });
+    }
+  });
+  it("custom other: the reason is required as for any other request; an unknown kind is refused", () => {
+    expect(draftToRequest(otherDraft({ reason: " " }), TZ, kinds)).toEqual({ ok: false, error: "reason_required" });
+    expect(draftToRequest(otherDraft({ custom_kind_id: "gone" }), TZ, kinds)).toEqual({ ok: false, error: "custom_kind_not_found" });
+    expect(draftToRequest(otherDraft({ custom_kind_id: "k1" }), TZ, kinds)).toEqual({ ok: false, error: "custom_kind_not_found" });
+  });
+  it("a plain other request is unchanged", () => {
+    const r = draftToRequest({ ...emptyDraft(today), type: "other", start_date: "2026-11-10", end_date: "2026-11-12", reason: "شهادة راتب" }, TZ, kinds);
+    expect(r).toEqual({ ok: true, request: { type: "other", start_date: "2026-11-10", end_date: "2026-11-12", reason: "شهادة راتب" } });
+  });
+
+  it("two kinds are two different requests for the preview", () => {
+    const a = draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1" }, TZ, kinds);
+    const b = draftToRequest({ ...emptyDraft(today), custom_kind_id: "k2", reason: "س" }, TZ, kinds);
+    if (!a.ok || !b.ok) throw new Error("drafts should be valid");
+    expect(requestSignature(a.request)).not.toBe(requestSignature(b.request));
+  });
+
+  it("server arguments: the kind id goes with a custom leave and a custom other", () => {
+    const leave = submitArgs("k", { type: "leave", leave_type: "custom", custom_kind_id: "k1", start_date: "2026-11-10", end_date: "2026-11-11", reason: null }, false);
+    expect(leave).toMatchObject({ p_type: "leave", p_leave_type: "custom", p_custom_kind_id: "k1", p_permission_type_id: null });
+    const other = submitArgs("k", { type: "other", custom_kind_id: "k3", start_date: "2026-11-10", end_date: "2026-11-10", reason: "x" }, false);
+    expect(other).toMatchObject({ p_type: "other", p_leave_type: null, p_custom_kind_id: "k3" });
+  });
+  it("server arguments: built-ins and permissions do not send the parameter at all (a database before phase 24 does not know it)", () => {
+    const leave = submitArgs("k", { type: "leave", leave_type: "sick", start_date: "2026-11-10", end_date: "2026-11-11", reason: null }, true);
+    const other = submitArgs("k", { type: "other", start_date: "2026-11-10", end_date: "2026-11-10", reason: "x" }, false);
+    const perm = submitArgs("k", { type: "permission", permission_type_id: "t1", start_at: null, end_at: "2026-11-05T08:00:00.000Z", reason: null }, false);
+    for (const a of [leave, other, perm]) expect(a).not.toHaveProperty("p_custom_kind_id");
+  });
+
+  it("the three new refusals have their own text", () => {
+    const texts: Record<string, string> = {
+      custom_kind_not_found: "هذا النوع لم يعد متاحاً.",
+      custom_kind_disabled: "هذا النوع متوقف حالياً.",
+      kind_gender_mismatch: "هذا النوع غير متاح لهذا الحساب.",
+    };
+    for (const [code, text] of Object.entries(texts)) {
+      expect(toKnownCode(code)).toBe(code);
+      expect(ERROR_TEXT[code as keyof typeof ERROR_TEXT]).toBe(text);
+    }
   });
 });
