@@ -1,5 +1,23 @@
 # Changelog
 
+## Phase 24 — request types the admin adds himself: new leave types and new «طلب آخر» types (2026-11-10) — migration 24 NOT applied; panel 12.23 delivered as a zip (not installed); app changed (not built for release, not deployed)
+
+Omar's request (brainstorming 2026-11-09, «تطوير مرونة لوحة إدارة وقتي»): the admin can add **new leave types** and **new «طلب آخر» types** without a developer; existing requests and types stay unchanged; the audience is everyone; **no** attachments, field builder, advanced workflow or wider rules engine. Spec: `docs/superpowers/specs/2026-11-09-custom-request-kinds-design.md`; plan (13 tasks, executed in one session, TDD, one ledger line per task): `docs/superpowers/plans/2026-11-10-custom-request-kinds.md`.
+**Nothing of this phase is applied to production, deployed or pushed.** Applying migration 24 needs Omar's fresh «نعم» («طبّق المرحلة 24»); hand-off with the fingerprints, the apply order (**migration, panel, app**), the rulings and the rollback: `docs/PHASE24_RUN_LOCALLY.md`. Contract: `docs/API_CONTRACT.md` §12.
+
+### What changes for people
+- **Admin panel 12.23 — Settings ← «أنواع الطلبات»:** add, edit, switch off and delete (only when no request used it) a kind. A **leave kind** has the days per year (empty = not limited, 0 = no days), who sees it (everyone / women / men) and «السبب إلزامي». An **«other» kind** has how its date is asked: one day / a period / no date. Each kind has a name, an order and an on/off switch.
+- **Admin panel — «مسار الموافقات»:** every «other» kind gets its own approval path (a leave kind follows the leave path). **Employee card — leave tab:** the days of this one employee for each leave kind (empty = the kind's default; only changed values are saved; shown for existing employees).
+- **Requests everywhere** (requests tab, HR decision window, Excel): titled with the kind's name («إجازة حج», «سلفة»); a request of a no-date kind shows «بدون تاريخ» and marks no day on the daily sheet.
+- **Employee app — new request:** under «إجازة», the kinds appear in an «إجازات أخرى» group with a line «المتبقي لك: N أيام من M هذه السنة» (and «السبب (مطلوب)» when the kind says so); under «طلب آخر», a «النوع» list appears when kinds exist, and the date field follows the kind (one «التاريخ», a period, or none). Used or waiting days of a kind join the «other types» line of the balances. Without kinds the form is exactly as before.
+- **Database:** two tables (`custom_request_kinds`, `custom_kind_entitlements`), `requests.custom_kind_id`, `approval_steps.custom_kind_id`; six new functions; eight replaced (`employee_submit_request` gets an eleventh argument `p_custom_kind_id`; `request_chain` and `admin_set_approval_chain` a fourth; `apply_decision` re-checks a custom leave against **its kind's** balance at final approval; `request_json`, `request_summary`, `employee_requests_overview`, `admin_get_approval_chains` carry the kinds).
+
+### Safe on both sides of the apply
+A new panel or app on a database **before** phase 24 degrades silently (the pane says «غير متاح بعد»; no new argument is sent for built-in requests; the overview has no `custom_kinds`, so the form is today's). The one transition effect: an **old app** shows «إجازة undefined» for a custom leave request it meets in a manager's inbox, until the app is replaced (ruling R9).
+
+### Tests
+Database **1658 / 1658** (phase 24 file: 241 assertions; the full suite needs the local clock between 12:00 and 13:00 — older phases are time-of-day dependent) · 21 / 21 migration mutants killed · rollback proven (1367 + 50 = 1417 passed on a rolled-back database; with a custom request present the rollback refuses) · panel unit **106 / 106**, behaviour **518 / 518**, layout audit **348 screens, 0 problems** · app unit **423 / 423**, typecheck and build clean, request form checked at 390 px in mock mode (41 checks) · production fingerprints of the eight replaced functions recorded read-only (three differ from local only in line endings).
+
 ## Phase 23c — a review row on a day with an approved leave says «عليه إجازة معتمدة» (2026-11-09) — migration 23 amended (not applied); panel 12.22 delivered as a zip (not installed)
 
 Reported by Omar with screenshots (2026-11-09): employee 1021057 (عمر امحمد كريم) still sat in «حركات تحتاج مراجعة» as «دخول 09:06 · بدون خروج» although his one-day annual leave for 2026-11-08 was approved.

@@ -357,3 +357,57 @@ The check-in itself is added with `admin_add_punch(..., 'check_in', ...)` (§8);
 
 Rollback: `20261110100000_phase23_forgotten_punches_ROLLBACK.sql` (puts the phase 15 queue text back, fingerprint `5068880f…`, and drops the two public and two private functions and the table).
 
+
+## 12. Request types the admin adds (phase 24)
+
+Two **families** of kinds, kept in `public.custom_request_kinds` (own company only, at most 30 per family):
+- `leave`: days per year (`default_days`; `null` = not limited, `0` = no days), `gender` (`all` / `female` / `male`), `reason_required`. A request of such a kind has `request_type = 'leave'`, `leave_type = 'custom'` and `custom_kind_id`.
+- `other`: `date_mode` (`single` / `range` / `none`). A request has `request_type = 'other'` and `custom_kind_id`; its approval path is its own (`approval_steps.custom_kind_id`), the default being the plain «other» path.
+
+`public.custom_kind_entitlements (kind_id, employee_id, days)` holds the days of one employee for one leave kind (his own days win over `default_days`). Both tables have RLS on and **no grant** for `anon` / `authenticated`; everything goes through the functions below.
+
+### `admin_list_custom_kinds()` → `[{id, family, name, enabled, sort_order, default_days, gender, reason_required, date_mode, requests_count, pending_count}]`
+Own company, ordered by family, `sort_order`, name. Admins only.
+
+### `admin_save_custom_kind(p_id uuid, p_family text, p_name text, p_enabled boolean, p_default_days numeric, p_gender text, p_reason_required boolean, p_date_mode text, p_sort_order integer default 0)` → `uuid`
+Creates (`p_id` null) or updates a kind and returns its id; audit `custom_kind.create` / `custom_kind.update`. The family cannot change. Fields of the other family must be empty: a leave kind has `p_date_mode` null; an «other» kind has `p_default_days` null, `p_gender` `all` (or null) and no `p_reason_required`.
+Errors: `invalid_name` (empty or over 60 characters), `invalid_input` (family, gender, date mode, days outside 0–366, order outside 0–1000, wrong family fields, family change), `custom_kind_not_found`, `kind_name_taken` (same name in the same family, case-insensitive), `kind_limit` (30). Two admins saving at once are serialized.
+
+### `admin_delete_custom_kind(p_id uuid)` → `void`
+Audit `custom_kind.delete`. Errors: `custom_kind_not_found`, `kind_in_use` (any request used it: switch it off instead).
+
+### `admin_get_employee_kind_days(p_employee_id uuid)` → `{ "<kind id>": days }`
+The days set for this one employee (only his own overrides). Error `employee_not_found` (also another company's employee).
+
+### `admin_set_employee_kind_days(p_employee_id uuid, p_days jsonb)` → `void`
+`p_days` is `{ "<kind id>": number | null }`. Only the given keys change; `null` deletes the employee's own days (back to the kind's default); a number is 0–366 with one decimal. **All or nothing**: one refused key changes nothing. Audit `custom_kind.days_set`.
+Errors: `invalid_input` (not an object, key not a uuid, a leave-family check, a bad number, a value that is neither number nor null), `employee_not_found`, `custom_kind_not_found` (also another company's kind).
+
+### `private.custom_leave_balance(p_employee uuid, p_kind uuid, p_year integer, p_exclude_request uuid default null)` → `{leave_type: 'custom', custom_kind_id, entitled, used, pending, remaining}`
+Not callable from the API. `entitled` = his own days, else the kind's `default_days`; `used` sums approved requests with `coalesce(charged_days, days)` (HR may change the days taken), `pending` sums waiting ones; `remaining = entitled − used − pending`, or `null` when `entitled` is null. The whole entitlement is available from the first day of the year (no day-by-day accrual as for annual leave). An unknown kind is `custom_kind_not_found`, never «unlimited».
+
+### `admin_get_approval_chains()` — new key `custom_kinds`
+`custom_kinds: [{id, name, enabled, customized, steps: [{step_order, kind, approver_employee_id, approver_name}]}]` for the kinds of the **other** family (a leave kind follows the leave path). `customized` (the list of request types with their own plain path) ignores kind rows.
+
+### `admin_set_approval_chain(p_request_type text, p_steps jsonb, p_permission_type_id uuid default null, p_custom_kind_id uuid default null)` → `void`
+The fourth argument is new and only valid with `p_request_type = 'other'` (not with a permission type). An empty `p_steps` goes back to the default path. Requests already sent keep their frozen path. New errors: `custom_kind_not_found`; `invalid_input` for a leave kind or the wrong combination.
+
+### `employee_submit_request(p_request_key uuid, p_type text, p_leave_type text default null, p_start_date date default null, p_end_date date default null, p_start_at timestamptz default null, p_end_at timestamptz default null, p_reason text default null, p_dry_run boolean default false, p_permission_type_id uuid default null, p_custom_kind_id uuid default null)` → request, or the preview when `p_dry_run`
+**The eleventh argument is new**; the 10-argument overload no longer exists. Without `p_custom_kind_id` nothing changes. With it:
+- the kind must be of the caller's company (`custom_kind_not_found`), match `p_type` — `leave` kinds only for `leave`, `other` kinds only for `other`, never `permission` (`invalid_input`) —, be switched on (`custom_kind_disabled`) and allowed for his gender (`kind_gender_mismatch`; the kind's `gender` against `employees.gender`, an empty gender matches only `all`).
+- **leave:** the leave type is `'custom'` whatever was sent. Dates, the year rule and overlap checks are those of any leave; the balance is `custom_leave_balance` of this kind. More than `remaining` needs a reason (`insufficient_balance` without one, as for built-in types) and the preview says `over_balance: true`. `reason_required` on the kind → `reason_required` — **on a real submit only, not on a dry run** (the preview is shown before the reason is typed).
+- **other:** the reason is required (as for any «other»). `single`: `p_end_date` is ignored. `none`: both dates are ignored and the request is stored for **today** in the company time zone. `range`: as the plain «other». The window is the existing one: start within today−30 … today+365, at most 365 days.
+- The request and its approvals use the path of the kind (other family) or the leave path (leave family). A retry with the same `p_request_key` returns the saved request even if the kind was switched off in between.
+
+Preview (dry run) result: as before, plus `custom_kind_id`.
+
+### `private.request_json` — request objects gain three keys
+`custom_kind_id` (uuid or null), `kind_name` (the kind's name, kept even after it is renamed or switched off — the request points at the kind), `date_mode` (`single` / `range` / `none` for an «other» kind, else null). Every list built on `request_json` (my requests, the inbox) carries them. `request_summary` (notification texts) uses the kind's name.
+
+### `employee_requests_overview()` — new key `custom_kinds`
+`custom_kinds: [{id, family, name, sort_order, gender, reason_required, date_mode, balance}]`: only **switched-on** kinds the caller's gender may use (`other` kinds are for everyone), ordered by `sort_order`, name. `balance` is the `custom_leave_balance` object for the current year for a leave kind, `null` for an «other» kind. A database before phase 24 has no such key; the app then shows only the built-in types. `balances` still has the five built-in types only (maternity for women), so older apps read it unchanged.
+
+### New error codes
+`custom_kind_not_found`, `custom_kind_disabled`, `kind_gender_mismatch`, `kind_name_taken`, `kind_in_use`, `kind_limit`. The app and the panel have Arabic text for each. `invalid_name` (already known) is used for a bad kind name.
+
+Rollback: `20261111090000_phase24_custom_request_kinds_ROLLBACK.sql` (refuses while a custom request exists; fingerprints and the apply steps: `docs/PHASE24_RUN_LOCALLY.md`).
