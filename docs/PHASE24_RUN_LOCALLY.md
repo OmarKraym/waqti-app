@@ -7,15 +7,15 @@ What it does: the admin adds **new leave types** (days per year with a general d
 ## 1. Run the database tests (local only)
 ```bash
 cd supabase
-PGDATABASE=postgres bash local/test-db.sh                                                    # every file, each on a fresh database: TOTAL passed=1658 failed=0
-PGDATABASE=postgres TESTS=tests/phase24_custom_request_kinds_tests.sql bash local/test-db.sh  # only phase 24 (241 assertions)
+PGDATABASE=postgres bash local/test-db.sh                                                    # every file, each on a fresh database: TOTAL passed=1660 failed=0
+PGDATABASE=postgres TESTS=tests/phase24_custom_request_kinds_tests.sql bash local/test-db.sh  # only phase 24 (243 assertions)
 ```
 Same setup as phase 23 (Postgres 16 + PostGIS, libfaketime). **Two things about the local clock** (tests of older phases depend on the time of day, not on phase 24): the full suite passes only when the local server clock starts between 12:00 and 13:00 on Saturday 2026-10-31 (Tripoli) — it was run at 12:05; phase 15 needs the clock after noon, phase 23's 240-minute grace needs it before 13:00. The phase 24 file itself is time-insensitive. One run at a time: the runner always rebuilds the database `waqti_test`.
 
 ## 2. Other tests (last run 2026-11-10)
 | What | Command | Last run |
 |---|---|---|
-| Database, whole suite | see §1 | 33 files, TOTAL passed=1658 failed=0 |
+| Database, whole suite | see §1 | 33 files, TOTAL passed=1660 failed=0 |
 | Database, rolled back | the migration + its rollback, then the suite with the pre-phase-24 `phase4` test file (the new one names the 11-argument function the rollback removes) | 1367 + 50 = 1417 passed, 0 failed (§5) |
 | Migration mutation checks | 21 mutants of the migration (gender / enabled / company / family checks removed, `remaining` compared with `<=`, per-employee days ignored, unlimited turned into 0, the chain without the kind match ×3, final approval still on the built-in balance or not checked, the two date modes, reason rule, `anon` may save a kind, overview showing wrong-gender or disabled kinds, summary without the kind name, pending not counted, a kind in use deletable) | 21 / 21 killed |
 | Admin panel, unit | `npm test` (panel folder) | 106 / 106 |
@@ -45,7 +45,7 @@ order by 1;
 | `private.custom_leave_balance(uuid,uuid,integer,uuid)` | `4e8f07280c05622f31162107a0c3793b` | yes / stable |
 | `private.request_chain(uuid,request_type,uuid,uuid)` | `625eace4e2cdee2d603246e4b2480d59` | yes / stable |
 | `private.request_json(uuid)` | `236c83e91af09d23bc7366704ed37031` | yes / stable |
-| `private.request_summary(uuid)` | `0bc0c61f152c8a36fd065cc38eaaf0e5` | yes / stable |
+| `private.request_summary(uuid)` | `6a25385c316c32caebc4eb4bfdd83d22` | yes / stable |
 | `public.admin_delete_custom_kind(uuid)` | `77c7bd1de2336cc6b3733c2a2b365264` | yes / volatile |
 | `public.admin_get_approval_chains()` | `c17667055be38dac4a257787e596aec5` | yes / stable |
 | `public.admin_get_employee_kind_days(uuid)` | `072596f57b2da0ec7f30094441c9436e` | yes / stable |
@@ -56,7 +56,7 @@ order by 1;
 | `public.employee_requests_overview()` | `69c409442107d17ed438b4ed3c4438e2` | yes / stable |
 | `public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)` | `a163495086e2caec0dc6291a67cc248b` | yes / volatile |
 
-   Group fingerprint (`md5(string_agg(md5(prosrc), '' order by proname))` over those fourteen): **`529e6e48a1fcb5822ec876719b55c7ca`**. The three overloads that existed before (`request_chain` with 3 arguments, `admin_set_approval_chain` with 3, `employee_submit_request` with 10) must be **gone**: `select count(*) from pg_proc where proname in (…)` gives 1 each.
+   Group fingerprint (`md5(string_agg(md5(prosrc), '' order by proname))` over those fourteen): **`45a70c2b4681bd4d25489065ffc567e5`**. The three overloads that existed before (`request_chain` with 3 arguments, `admin_set_approval_chain` with 3, `employee_submit_request` with 10) must be **gone**: `select count(*) from pg_proc where proname in (…)` gives 1 each.
 
    **Before** the apply, production must show these eight (read only, project `fgnbdlqmtezneznwvahf`, 2026-11-10):
 
@@ -90,7 +90,7 @@ P1–P5 were decided when the plan was written (spec amended in `1a5f02b`); the 
 | R1 | A bad kind name raises the existing `invalid_name` (as `admin_save_permission_type` does), not `invalid_input`. | One code in the function and the tests. |
 | R2 | A kind that needs a reason is enforced on a real submit only; a **dry run** (the balance preview) does not refuse it, like `insufficient_balance`. The app form blocks the send itself. | The form would learn the rule from the kind payload only. |
 | R3 | The kind checks (exists, family, enabled) run **after** the duplicate-key return, so a retry of an already saved request answers even if the kind was switched off in between. | None. |
-| R4 | A kind name that already starts with «إجازة» is not prefixed again («إجازة حج», never «إجازة إجازة حج»), in the panel and the app. | One title string. |
+| R4 | A kind name that already starts with «إجازة» is not prefixed again («إجازة حج», never «إجازة إجازة حج»), in the panel, the app **and the notification text** (`private.request_summary`; the last one found by the final review). | One title string. |
 | R5 | New optional arguments (`p_custom_kind_id`) are sent only when set, by the panel and the app, so a new client works against a database before phase 24 and the old exact-argument tests stay valid. | None (the new functions declare it `default null`). |
 | R6 | The HR decision window keeps the «days taken» field for a custom leave and names the kind in its label (the database charges `coalesce(charged_days, days)` against the kind). | One label. |
 | R7 | Excel: a custom «طلب آخر» keeps its reason in the reason column and the kind in the detail column; a no-date request shows «بدون تاريخ» in «من» and marks no day on the daily sheet. | A no-date request is absent from the daily sheet (it stays in «الطلبات»). |

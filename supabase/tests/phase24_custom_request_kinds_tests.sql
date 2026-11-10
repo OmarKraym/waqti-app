@@ -1079,6 +1079,35 @@ exception when others then
 end
 $tests$;
 
+-- ================================================================ Final review: a kind name that already starts with «إجازة» is not prefixed twice
+-- (the panel and the app already do this - ruling R4; the notification text must read the same way)
+do $tests$
+declare
+  v_admin uuid; a uuid; v_comp uuid; k1 uuid; k2 uuid; r jsonb; s1 text; s2 text;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  perform pg_temp.reset_kinds(v_comp);
+  delete from public.employee_work_schedules where employee_id = a;
+  delete from public.approval_steps where company_id = v_comp and request_type in ('leave', 'other');
+  perform pg_temp.as_user(v_admin);
+  k1 := public.admin_save_custom_kind(null, 'leave', 'إجازة حج', true, 10, 'all', false, null, 1);
+  k2 := public.admin_save_custom_kind(null, 'leave', 'حج', true, 10, 'all', false, null, 2);
+  r := pg_temp.sub_leave(a, k1, pg_temp.win(30), pg_temp.win(30));
+  s1 := private.request_summary((r ->> 'id')::uuid);
+  r := pg_temp.sub_leave(a, k2, pg_temp.win(31), pg_temp.win(31));
+  s2 := private.request_summary((r ->> 'id')::uuid);
+  perform pg_temp.ok(left(s1, 8) = 'إجازة حج' and position('إجازة إجازة' in s1) = 0,
+    'summary of a leave whose kind is named «إجازة حج» has one «إجازة» only', s1);
+  perform pg_temp.ok(left(s2, 8) = 'إجازة حج' and position('إجازة إجازة' in s2) = 0,
+    'summary of a leave whose kind is named «حج» is «إجازة حج»', s2);
+  perform pg_temp.as_user(v_admin);
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
+end
+$tests$;
+
 do $report$
 declare v text;
 begin

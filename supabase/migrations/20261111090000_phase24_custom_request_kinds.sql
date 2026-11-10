@@ -795,7 +795,9 @@ set search_path = ''
 as $$
   select case r.request_type
     when 'leave' then
-      'إجازة ' || case r.leave_type when 'annual' then 'سنوية' when 'sick' then 'مرضية' when 'emergency' then 'طارئة'
+      -- a kind named «إجازة حج» reads «إجازة حج», not «إجازة إجازة حج» (the panel and the app do the same)
+      case when r.leave_type = 'custom' and k.name like 'إجازة%' then '' else 'إجازة ' end
+      || case r.leave_type when 'annual' then 'سنوية' when 'sick' then 'مرضية' when 'emergency' then 'طارئة'
                                     when 'marriage' then 'زواج' when 'maternity' then 'أمومة' when 'unpaid' then 'بدون راتب'
                                     when 'custom' then coalesce(k.name, '') else '' end
       || ' · ' || private.days_text(r.days) || ' · '

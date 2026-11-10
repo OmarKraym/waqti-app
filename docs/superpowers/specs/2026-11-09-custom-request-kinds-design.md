@@ -191,7 +191,7 @@ What the build settled that the sections above leave open (each is a ruling in `
 - A bad kind name raises the existing `invalid_name`, not `invalid_input` (R1).
 - `reason_required` of a kind is enforced on a real submit only; a dry run (the balance preview) does not refuse it (R2, spec §3.4 point 4).
 - The kind checks run after the duplicate-key return, so a retry answers even if the kind was switched off in between (R3).
-- A kind name that starts with «إجازة» is not prefixed again in titles (R4).
+- A kind name that starts with «إجازة» is not prefixed again in titles, nor in the notification text (R4).
 - New optional arguments are sent only when set, so new clients work against a database before phase 24 (R5).
 - The HR decision window keeps «days taken» for a custom leave and names the kind (R6); Excel handling of no-date and custom «other» requests (R7); the app's date window for one-day / period kinds is the server's (R8).
 - Transition: an old app prints «إجازة undefined» for a custom leave request it meets (R9).
