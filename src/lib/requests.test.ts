@@ -302,6 +302,13 @@ describe("custom request kinds", () => {
     expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1", start_date: "2026-11-12", end_date: "2026-11-10" }, TZ, kinds)).toEqual({ ok: false, error: "invalid_dates" });
     expect(draftToRequest({ ...emptyDraft(today), custom_kind_id: "k1", start_date: "2026-12-30", end_date: "2027-01-02" }, TZ, kinds)).toEqual({ ok: false, error: "crosses_year" });
   });
+  it("custom leave: «custom» with no kind chosen is never sent", () => {
+    expect(draftToRequest({ ...emptyDraft(today), leave_type: "custom", custom_kind_id: "" }, TZ, kinds)).toEqual({ ok: false, error: "custom_kind_not_found" });
+  });
+  it("custom leave: the earliest allowed day still applies (the form clamps it like any leave)", () => {
+    const d = { ...emptyDraft("2026-11-02"), leave_type: "custom" as const, custom_kind_id: "k1", start_date: "2026-11-02", end_date: "2026-11-03" };
+    expect(clampLeaveDates(d, "2026-11-05")).toMatchObject({ start_date: "2026-11-05", end_date: "2026-11-05", custom_kind_id: "k1" });
+  });
   it("a built-in leave is unchanged: no kind id in the request", () => {
     const r = draftToRequest({ ...emptyDraft(today), start_date: "2026-11-10", end_date: "2026-11-10" }, TZ, kinds);
     expect(r.ok && r.request).not.toHaveProperty("custom_kind_id");

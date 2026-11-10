@@ -291,6 +291,8 @@ export function draftToRequest(d: Draft, timeZone: string, kinds: CustomKind[] =
   // a kind the administration added: it must be one the server offered, of the family of this form
   const kind = d.custom_kind_id ? kinds.find((k) => k.id === d.custom_kind_id && k.family === d.type) : undefined;
   if (d.custom_kind_id && !kind) return { ok: false, error: "custom_kind_not_found" };
+  // «custom» is only meaningful with a kind: never send it alone
+  if (d.type === "leave" && d.leave_type === "custom" && !kind) return { ok: false, error: "custom_kind_not_found" };
   // an «other» kind with one day or no date has no end field on screen: only the start counts
   const oneDay = d.type === "other" && kind !== undefined && kind.date_mode !== "range";
   if (!DATE.test(d.start_date) || (!oneDay && (!DATE.test(d.end_date) || d.end_date < d.start_date))) return { ok: false, error: "invalid_dates" };

@@ -6,6 +6,7 @@ import {
   LEAVE_LABEL,
   STATUS_LABEL,
   addDays,
+  customKindsOf,
   draftToRequest,
   clampLeaveDates,
   emptyDraft,
@@ -27,7 +28,7 @@ import {
   type Draft,
 } from "../lib/requests";
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
-import { annualCard, chargedLine, overBalanceLine } from "../lib/leaveBalance";
+import { annualCard, chargedLine, customUsedTexts, kindBalanceLine, overBalanceLine } from "../lib/leaveBalance";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "./useRequests";
 import { TimeField } from "./TimeField";
@@ -198,7 +199,9 @@ function InboxCard({ item, timeZone, online, onDone }: {
         </div>
         <span className="step-of">الخطوة {visibleSteps(item.steps).findIndex((s) => s.step_order === item.my_step) + 1} من {item.step_count}</span>
       </header>
-      <p className="req-period"><Icon name={TYPE_ICON[item.type]} className="inline-icon" />{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+      {item.date_mode !== "none" && (
+        <p className="req-period"><Icon name={TYPE_ICON[item.type]} className="inline-icon" />{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+      )}
       {item.reason && <p className="req-reason">«{item.reason}»</p>}
       {item.balance && item.balance.entitled !== null && (
         <p className="req-meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
@@ -238,7 +241,11 @@ function InboxCard({ item, timeZone, online, onDone }: {
 
 function Balances({ overview }: { overview: RequestsOverview }) {
   const annual = overview.balances.find((b) => b.leave_type === "annual");
-  const others = overview.balances.filter((b) => b.leave_type !== "annual" && (b.used > 0 || b.pending > 0));
+  const others = [
+    ...overview.balances.filter((b) => b.leave_type !== "annual" && (b.used > 0 || b.pending > 0))
+      .map((b) => `${LEAVE_LABEL[b.leave_type]}: ${formatDays(b.used + b.pending)} هذه السنة`),
+    ...customUsedTexts(overview.custom_kinds ?? []),
+  ];
   if (!(annual && annual.remaining !== null) && others.length === 0) return null;
   const entitled = annual?.entitled ?? 0;
   const pct = (n: number) => (entitled > 0 ? Math.min(100, Math.max(0, (n / entitled) * 100)) : 0);
@@ -263,7 +270,7 @@ function Balances({ overview }: { overview: RequestsOverview }) {
       )}
       {others.length > 0 && (
         <p className="balance-others">
-          {others.map((b) => `${LEAVE_LABEL[b.leave_type]}: ${formatDays(b.used + b.pending)} هذه السنة`).join(" · ")}
+          {others.join(" · ")}
         </p>
       )}
     </section>
@@ -343,7 +350,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
         <span className={`type-ico ${item.type}`} aria-hidden="true"><Icon name={TYPE_ICON[item.type]} /></span>
         <div className="req-head-text">
           <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
-          <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+          {item.date_mode !== "none" && <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>}
         </div>
         <span className={`chip ${item.status}`}>{STATUS_LABEL[item.status]}</span>
       </header>
@@ -392,7 +399,11 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
   const key = useRef<{ sig: string; key: string } | null>(null);
 
   const leaveTypes = useMemo(() => overview.balances.map((b) => b.leave_type), [overview.balances]);
-  const built = draftToRequest(draft, tz);
+  // kinds the administration added (none from an older database: the form is then exactly the built-in one)
+  const leaveKinds = useMemo(() => customKindsOf(overview, "leave"), [overview]);
+  const otherKinds = useMemo(() => customKindsOf(overview, "other"), [overview]);
+  const kind = [...leaveKinds, ...otherKinds].find((k) => k.id === draft.custom_kind_id && k.family === draft.type) ?? null;
+  const built = draftToRequest(draft, tz, overview.custom_kinds ?? []);
   const sig = built.ok ? requestSignature(built.request) : null;
 
   useEffect(() => {
@@ -416,9 +427,18 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
     setSendError(null);
     setDraft((d) => {
       const next = { ...d, ...patch };
+      // A kind belongs to one form: leaving the form forgets it (and a leave goes back to the first built-in type).
+      if (patch.type && patch.type !== d.type && patch.custom_kind_id === undefined) {
+        next.custom_kind_id = "";
+        if (next.leave_type === "custom") next.leave_type = "annual";
+      }
       if (patch.start_date && next.end_date < patch.start_date) next.end_date = patch.start_date;
-      // "Other" request: the employee is not asked for a date; it is today (whatever was picked on the leave form before).
-      if (next.type === "other") { next.start_date = overview.today; next.end_date = overview.today; }
+      if (next.type === "other") {
+        const mode = otherKinds.find((k) => k.id === next.custom_kind_id)?.date_mode ?? null;
+        // "Other" request without a date (plain, or a kind without one): the employee is not asked; it is today.
+        if (mode === null || mode === "none") { next.start_date = overview.today; next.end_date = overview.today; }
+        else if (mode === "single") next.end_date = next.start_date;
+      }
       // Switching to a leave starts from an allowed day; typing a date is never moved under the finger (the message tells why).
       return patch.type ? clampLeaveDates(next, earliest) : next;
     });
@@ -426,7 +446,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
 
   const current = preview && preview.sig === sig ? preview.result : null;
   const problem: AppErrorCode | null = !built.ok
-    ? (draft.type === "permission" && !permissionTimesFilled(draft)) || (draft.type === "other" && built.error === "reason_required")
+    ? (draft.type === "permission" && !permissionTimesFilled(draft)) || built.error === "reason_required"
       ? null // not filled in yet: no red text
       : built.error
     : draft.type === "leave" && draft.start_date < earliest ? "leave_date_not_allowed"
@@ -479,10 +499,35 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
 
       <div className="form card">
         {draft.type === "leave" && (
+          <>
+            <label className="field">
+              <span>نوع الإجازة</span>
+              <select
+                value={draft.custom_kind_id ? `custom:${draft.custom_kind_id}` : draft.leave_type}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith("custom:")) set({ leave_type: "custom", custom_kind_id: v.slice("custom:".length) });
+                  else set({ leave_type: v as LeaveType, custom_kind_id: "" });
+                }}
+              >
+                {leaveTypes.map((t) => <option key={t} value={t}>{LEAVE_LABEL[t]}</option>)}
+                {leaveKinds.length > 0 && (
+                  <optgroup label="إجازات أخرى">
+                    {leaveKinds.map((k) => <option key={k.id} value={`custom:${k.id}`}>{k.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+            {kind && kindBalanceLine(kind.balance) && <p className="hint-line">{kindBalanceLine(kind.balance)}</p>}
+          </>
+        )}
+
+        {draft.type === "other" && otherKinds.length > 0 && (
           <label className="field">
-            <span>نوع الإجازة</span>
-            <select value={draft.leave_type} onChange={(e) => set({ leave_type: e.target.value as LeaveType })}>
-              {leaveTypes.map((t) => <option key={t} value={t}>{LEAVE_LABEL[t]}</option>)}
+            <span>النوع</span>
+            <select value={draft.custom_kind_id} onChange={(e) => set({ custom_kind_id: e.target.value })}>
+              <option value="">طلب آخر</option>
+              {otherKinds.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
             </select>
           </label>
         )}
@@ -541,12 +586,31 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
                      onChange={(e) => set({ end_date: e.target.value })} />
             </label>
           </div>
+        ) : kind && kind.date_mode === "single" ? (
+          <label className="field">
+            <span>التاريخ</span>
+            <input type="date" value={draft.start_date} min={addDays(overview.today, -30)} max={addDays(overview.today, 365)}
+                   onChange={(e) => set({ start_date: e.target.value })} />
+          </label>
+        ) : kind && kind.date_mode === "range" ? (
+          <div className="two">
+            <label className="field">
+              <span>من</span>
+              <input type="date" value={draft.start_date} min={addDays(overview.today, -30)} max={addDays(overview.today, 365)}
+                     onChange={(e) => set({ start_date: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>إلى</span>
+              <input type="date" value={draft.end_date} min={draft.start_date} max={addDays(overview.today, 365)}
+                     onChange={(e) => set({ end_date: e.target.value })} />
+            </label>
+          </div>
         ) : null}
 
         <label className="field">
-          <span>{draft.type === "other" ? "ما الذي تطلبه؟" : over ? "السبب (مطلوب)" : "السبب (اختياري)"}</span>
+          <span>{draft.type === "other" ? (kind ? "تفاصيل الطلب" : "ما الذي تطلبه؟") : over || kind?.reason_required ? "السبب (مطلوب)" : "السبب (اختياري)"}</span>
           <textarea value={draft.reason} maxLength={500} rows={3} onChange={(e) => set({ reason: e.target.value })}
-                    placeholder={draft.type === "other" ? "مثال: شهادة راتب، تعديل بيانات…" : undefined} />
+                    placeholder={draft.type === "other" && !kind ? "مثال: شهادة راتب، تعديل بيانات…" : undefined} />
         </label>
       </div>
 
