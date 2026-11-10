@@ -102,9 +102,10 @@ Changed (each `create or replace`, same grants; the old signature is dropped fir
 | `admin_get_approval_chains`, `admin_set_approval_chain` | accept the kind id next to `p_permission_type_id` |
 | `private.request_json` | adds `custom_kind_id` and `kind_name` (read live, so a rename shows in old requests) |
 | `employee_requests_overview` | adds `custom_kinds`: enabled kinds the employee may use (gender filtered), each leave kind with its balance |
-| notification triggers | the label of a custom request is the kind name |
+| `private.request_summary` (notification text) | the label of a custom request is the kind name |
+| `private.apply_decision` | only the final-approval balance re-check: a request with `leave_type = 'custom'` is checked with `private.custom_leave_balance`. Without this, `private.leave_balance(..., 'custom', ...)` finds no entitlement row and treats the leave as unlimited. |
 
-Unchanged on purpose: `approver_decide`, `admin_decide_request`, `private.apply_decision`, `private.can_decide`, cancel. The chain is frozen into `request_approvals` at submit, so the decision flow does not need to know about kinds.
+Unchanged on purpose: `approver_decide`, `admin_decide_request` (HR may still charge fewer days; `custom` is not `unpaid`), `private.can_decide`, cancel. The chain is frozen into `request_approvals` at submit, so the decision flow does not need to know about kinds.
 
 ### 3.4 Rules (all in the database)
 
@@ -133,7 +134,10 @@ Unchanged on purpose: `approver_decide`, `admin_decide_request`, `private.apply_
 
 **Security:** every admin function checks admin of the same company; a kind id from another company is "not found". Every create/update/delete/days change writes `public.audit_write` (action names copied from the permission-type audit entries). No grants on the two new tables.
 
-**Downstream consumers.** Anything that reads `leave_type` and switches on it must treat `'custom'` like sick leave and read the name from the kind. Known places: notification labels (phase 5), profile leave ordering (phase 16c), `request_json`, phase 22 (punch on a leave day), phase 23 (review queue leave note), holiday handling in `leave_days`, reports and export. The plan starts with a grep of every `leave_type` reader and one task per place found.
+**Downstream consumers (checked against the code on 2026-11-10).**
+- Read the kind name from the kind: `private.request_json` (so the Requests tab, the admin list and the Excel export get it), `private.request_summary` (notification text), `private.apply_decision` (balance re-check, above).
+- Unaffected: profile summary and punch-window profile (phases 8a, 8b, 16c) read `employee_leave_entitlements` only, which custom kinds do not use; `leave_days` and holidays do not look at `leave_type`.
+- Carry `leave_type = 'custom'` and show the generic label «إجازة خاصة» (not the kind name): the leave-conflict and review-queue payloads of phases 15, 22 and 23 and the metadata a punch on a leave day stores. Putting the name there would change the punch function, which is on the hottest path, for a polish gain. A later phase can add it.
 
 ## 4. Admin panel 12.23
 
@@ -144,7 +148,7 @@ Unchanged on purpose: `approver_decide`, `admin_decide_request`, `private.apply_
     - Other: name, date mode (يوم واحد / فترة / بدون تاريخ).
   - Enable/disable switch. Delete shows only for a kind with no requests.
 - **Approvals pane:** one chain editor per custom «other» kind, same editor as permission types.
-- **Employee form:** one days field per enabled custom leave kind, placeholder "الافتراضي: N" (or "غير محدود"); empty = use the default. Saved through `admin_set_employee_kind_days` in the same save action.
+- **Employee form (existing employees):** one days field per enabled custom leave kind, placeholder "الافتراضي: N" (or "غير محدود"); empty = use the default. Saved through `admin_set_employee_kind_days` right after the profile save, only for the values that changed. The create form shows a hint that these days are set after the account exists.
 - **Requests tab, review card, export, `js/lib/leave-text.js`:** show `kind_name` from the server for custom requests.
 - Layout tests keep the three widths used by earlier phases.
 
@@ -178,5 +182,5 @@ Attachments; a custom field builder; parallel, return-for-info or delegated appr
 
 - `employee_submit_request` is long and sits in the hottest path. The change is one new parameter and two new branches; the regression suite and mutation checks are the guard. The balance logic is **not** touched (a new function is used).
 - `private.request_chain` gets a new parameter; the old signature must be dropped in the same migration so no overload remains. The fingerprints in `PHASE24_RUN_LOCALLY.md` catch drift.
-- A reader of `leave_type` that nobody remembers would show an empty label for `'custom'`. Mitigation: the grep task at the start of the plan.
+- A reader of `leave_type` that nobody remembers would show an empty label for `'custom'`. Mitigation: every reader in the migrations, the panel and the app was listed on 2026-11-10 (section 3.4); the plan adds the label `custom` = «خاصة» to both label tables so no screen shows an empty word.
 - Production migration history is missing the 18a/18b names although their functions exist; the apply steps must compare function fingerprints, not migration names.
