@@ -8,7 +8,7 @@ import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, typ
 import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
 import { loadCalendar, offLabel } from "../lib/calendar";
 import type { AttendanceState, ProfileSummary } from "../lib/types";
-import { AppBar, Banner, Icon, Modal, Switch } from "../components";
+import { AppBar, Banner, Icon, Modal, Switch, Button } from "../components";
 
 /** What the profile shows; it comes from the today screen's data (nothing extra is fetched). */
 export type ProfileInfo = Pick<AttendanceState, "employee" | "company" | "biometric">;
@@ -27,8 +27,8 @@ export function ConfirmSignOut({ user, onCancel }: { user: SessionUser; onCancel
           : "هل تريد الخروج من حسابك؟"}
       </p>
       <div className="modal__actions">
-        <button className="btn btn--ghost" onClick={onCancel}>البقاء في التطبيق</button>
-        <button className="btn btn--danger" onClick={() => void api.signOut()}><Icon name="signOut" />تأكيد الخروج</button>
+        <Button variant="ghost" onClick={onCancel}>البقاء في التطبيق</Button>
+        <Button variant="danger" onClick={() => void api.signOut()}><Icon name="signOut" />تأكيد الخروج</Button>
       </div>
     </Modal>
   );
@@ -95,7 +95,7 @@ function MySummary({ userId, online }: { userId: string; online: boolean }) {
       {!data && state === "error" && (
         <div className="group summary__empty">
           <p className="u-muted">{online ? "تعذّر عرض ملخص بياناتك الآن." : "يلزم اتصال بالإنترنت لعرض ملخص بياناتك."}</p>
-          {online && <button className="btn btn--ghost" onClick={() => void load()}>إعادة المحاولة</button>}
+          {online && <Button variant="ghost" onClick={() => void load()}>إعادة المحاولة</Button>}
         </div>
       )}
       {data && state === "error" && savedAt !== null && (
@@ -209,7 +209,7 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged,
 
         <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
 
-        <button className="btn btn--danger-soft btn--block" onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</button>
+        <Button variant="danger-soft" block onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</Button>
 
         {setupMissing && onOpenSetup && (
           <div className="setup-nudge">

@@ -17,7 +17,7 @@ import {
 } from "../lib/overtime";
 import { addDays, formatDay, formatMinutes } from "../lib/requests";
 import type { OvertimeItem, OvertimeOverview, OvertimePreview } from "../lib/types";
-import { TimeField } from "../components";
+import { TimeField, Button, Chip, ConfirmDialog, EmptyState } from "../components";
 import { AppBar, Banner, Icon } from "../components";
 
 type Done = (text: string, kind: "success" | "error") => void;
@@ -67,7 +67,7 @@ function MyOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: 
     <article className={`req-card req-card--overtime req-card--${item.phase}`}>
       <header className="req-card__head">
         <p className="req-card__title">عمل إضافي · {formatMinutes(item.minutes)}</p>
-        <span className={`chip chip--ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
+        <Chip status={`ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</Chip>
       </header>
       <p className="req-card__period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
       {item.task && <p className="req-card__reason">«{item.task}»</p>}
@@ -81,14 +81,14 @@ function MyOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: 
             <textarea value={note} maxLength={500} rows={2} onChange={(e) => setNote(e.target.value)} />
           </label>
           <div className="actions">
-            <button className="btn" onClick={() => setWriting(false)} disabled={busy}>تراجع</button>
-            <button className="btn btn--primary" onClick={send} disabled={busy || !online || !note.trim()} aria-busy={busy}>إرسال الملاحظة</button>
+            <Button onClick={() => setWriting(false)} disabled={busy}>تراجع</Button>
+            <Button variant="primary" onClick={send} disabled={busy || !online || !note.trim()} aria-busy={busy}>إرسال الملاحظة</Button>
           </div>
         </div>
       ) : (
-        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={() => setWriting(true)} disabled={!online}>
+        <Button variant="ghost" size="sm" className="req-card__cancel" onClick={() => setWriting(true)} disabled={!online}>
           {item.employee_note ? "تعديل الملاحظة" : "لا أستطيع / ملاحظة"}
-        </button>
+        </Button>
       ))}
     </article>
   );
@@ -103,10 +103,10 @@ export function TeamOvertime({ data, online, onDone, onAssign }: { data: Overtim
     <section aria-labelledby="ot-team-title">
       <div className="section__head">
         <h2 id="ot-team-title" className="section__title">العمل الإضافي لفريقك</h2>
-        <button className="btn btn--sm" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</button>
+        <Button size="sm" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</Button>
       </div>
       {items.length === 0 ? (
-        <p className="u-muted empty">لم تكلّف أحدًا بعد</p>
+        <EmptyState>لم تكلّف أحدًا بعد</EmptyState>
       ) : (
         <ul className="req-list">
           {items.map((o) => <li key={o.id}><TeamOvertimeCard item={o} tz={data.timezone} online={online} onDone={onDone} /></li>)}
@@ -118,9 +118,10 @@ export function TeamOvertime({ data, online, onDone, onAssign }: { data: Overtim
 
 function TeamOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: string; online: boolean; onDone: Done }) {
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const actual = actualLine(item);
   async function cancel() {
-    if (busy || !window.confirm(`إلغاء تكليف ${item.employee.full_name}؟ سيصله إشعار بالإلغاء.`)) return;
+    if (busy) return;
     setBusy(true);
     try {
       await api.cancelOvertime(item.id);
@@ -129,6 +130,7 @@ function TeamOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz
       onDone(errText(e), "error");
     } finally {
       setBusy(false);
+      setAsking(false);
     }
   }
   return (
@@ -138,14 +140,20 @@ function TeamOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz
           <p className="req-card__who u-truncate">{item.employee.full_name}</p>
           <p className="req-card__title">عمل إضافي · {formatMinutes(item.minutes)}</p>
         </div>
-        <span className={`chip chip--ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
+        <Chip status={`ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</Chip>
       </header>
       <p className="req-card__period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
       {item.task && <p className="req-card__reason">«{item.task}»</p>}
       {item.employee_note && <p className="req-card__note">ملاحظة الموظف: «{item.employee_note}»</p>}
       {actual && <p className="req-card__meta">{actual}</p>}
       {item.phase === "upcoming" && (
-        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={cancel} disabled={busy || !online}>إلغاء التكليف</button>
+        <Button variant="ghost" size="sm" className="req-card__cancel" onClick={() => setAsking(true)} disabled={busy || !online}>إلغاء التكليف</Button>
+      )}
+      {asking && (
+        <ConfirmDialog title="إلغاء التكليف" confirmLabel="إلغاء التكليف" danger busy={busy}
+          onConfirm={() => void cancel()} onCancel={() => setAsking(false)}>
+          إلغاء تكليف {item.employee.full_name}؟ سيصله إشعار بالإلغاء.
+        </ConfirmDialog>
       )}
     </article>
   );
@@ -259,9 +267,9 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
       {sendError && <Banner kind="error">{sendError}</Banner>}
       {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت.</Banner>}
 
-      <button className="btn btn--primary btn--block btn--send" onClick={send} disabled={!canSend} aria-busy={sending}>
+      <Button variant="primary" block send onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "تكليف"}
-      </button>
+      </Button>
     </main>
     </>
   );

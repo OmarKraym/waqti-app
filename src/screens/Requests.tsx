@@ -31,7 +31,7 @@ import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview
 import { annualCard, chargedLine, customUsedTexts, kindBalanceLine, overBalanceLine } from "../lib/leaveBalance";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
 import type { RequestsData } from "../hooks/useRequests";
-import { TimeField } from "../components";
+import { TimeField, Button, Chip, ConfirmDialog, EmptyState } from "../components";
 import { AppBar, Banner, Icon } from "../components";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
@@ -100,7 +100,7 @@ export function Requests({ data, online, compose }: {
           <div className="card pad">
             <Icon name="alert" className="pad__icon" />
             <p className="u-muted">{error?.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[error?.code ?? "unknown"]}</p>
-            <button className="btn btn--primary" onClick={reload}>إعادة المحاولة</button>
+            <Button variant="primary" onClick={reload}>إعادة المحاولة</Button>
           </div>
         )
       ) : (
@@ -221,16 +221,16 @@ function InboxCard({ item, timeZone, online, onDone }: {
             <textarea value={reason} maxLength={500} rows={2} onChange={(e) => setReason(e.target.value)} />
           </label>
           <div className="actions">
-            <button className="btn" onClick={() => setRejecting(false)} disabled={busy}>تراجع</button>
-            <button className="btn btn--danger" onClick={() => decide("reject")} disabled={busy || !online} aria-busy={busy}>تأكيد الرفض</button>
+            <Button onClick={() => setRejecting(false)} disabled={busy}>تراجع</Button>
+            <Button variant="danger" onClick={() => decide("reject")} disabled={busy || !online} aria-busy={busy}>تأكيد الرفض</Button>
           </div>
         </div>
       ) : (
         <div className="actions">
-          <button className="btn btn--danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</button>
-          <button className="btn btn--primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
+          <Button variant="danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</Button>
+          <Button variant="primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
             {busy ? "جارٍ الإرسال…" : "موافقة"}
-          </button>
+          </Button>
         </div>
       )}
     </article>
@@ -314,7 +314,7 @@ function MyRequests({ items, timeZone, online, onChanged }: {
     <section aria-labelledby="mine-title">
       <h2 id="mine-title" className="section__title">طلباتي</h2>
       {items.length === 0 ? (
-        <p className="u-muted empty">لا توجد طلبات بعد</p>
+        <EmptyState>لا توجد طلبات بعد</EmptyState>
       ) : (
         <ul className="req-list">
           {items.map((r) => (
@@ -333,8 +333,9 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
   const period = formatPeriod(item, timeZone);
   const steps = visibleSteps(item.steps);
 
+  const [asking, setAsking] = useState(false);
   async function cancel() {
-    if (busy || !window.confirm("إلغاء هذا الطلب؟ سيُسحب من مسار الموافقة.")) return;
+    if (busy) return;
     setBusy(true);
     try {
       await api.cancelRequest(item.id);
@@ -344,6 +345,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
       onChanged(code === "network" ? "لم يصل رد. حدّث الصفحة لترى حالة الطلب." : ERROR_TEXT[code], "error");
     } finally {
       setBusy(false);
+      setAsking(false);
     }
   }
 
@@ -355,7 +357,7 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
           <p className="req-card__title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
           {item.date_mode !== "none" && <p className="req-card__period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>}
         </div>
-        <span className={`chip chip--${item.status}`}>{STATUS_LABEL[item.status]}</span>
+        <Chip status={item.status}>{STATUS_LABEL[item.status]}</Chip>
       </header>
       {steps.length > 0 && (
         <ol className="steps" aria-label="مسار الموافقة">
@@ -371,7 +373,13 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
       {chargedLine(item) && <p className="req-card__progress">{chargedLine(item)}</p>}
       {visibleNote(item) && <p className="req-card__reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
       {item.status === "pending" && (
-        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
+        <Button variant="ghost" size="sm" className="req-card__cancel" onClick={() => setAsking(true)} disabled={busy || !online}>إلغاء الطلب</Button>
+      )}
+      {asking && (
+        <ConfirmDialog title="إلغاء الطلب" confirmLabel="إلغاء الطلب" danger busy={busy}
+          onConfirm={() => void cancel()} onCancel={() => setAsking(false)}>
+          إلغاء هذا الطلب؟ سيُسحب من مسار الموافقة.
+        </ConfirmDialog>
       )}
     </article>
   );
@@ -625,9 +633,9 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
       )}
       {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت. أرسل الطلب عند عودة الاتصال.</Banner>}
 
-      <button className="btn btn--primary btn--block btn--send" onClick={send} disabled={!canSend} aria-busy={sending}>
+      <Button variant="primary" block send onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "إرسال الطلب"}
-      </button>
+      </Button>
     </main>
     </>
   );

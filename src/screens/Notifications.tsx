@@ -7,7 +7,7 @@ import type { NotificationSettings } from "../lib/types";
 import { holidayItems, loadCalendar, saveCalendar, type Calendar } from "../lib/calendar";
 import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { dayKey } from "../lib/timecard";
-import { AppBar, Banner, Icon, Switch } from "../components";
+import { AppBar, Banner, Icon, Switch, Button } from "../components";
 
 type Note = { kind: "success" | "warning" | "error"; text: string } | null;
 
@@ -189,16 +189,16 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
           <>
             <p className="state-line state-line--on"><Icon name="check" />الإشعارات مفعّلة على هذا الجهاز.</p>
             <div className="actions">
-              <button className="btn" onClick={test} disabled={busy || !online}>إرسال إشعار تجريبي</button>
-              <button className="btn btn--danger-text" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</button>
+              <Button onClick={test} disabled={busy || !online}>إرسال إشعار تجريبي</Button>
+              <Button variant="danger-text" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</Button>
             </div>
           </>
         ) : push === "off" ? (
           <>
             <p className="state-line"><Icon name="bell" />فعّلها لتصلك الطلبات وتذكيرات الدوام حتى والتطبيق مغلق.</p>
-            <button className="btn btn--primary btn--block" onClick={turnOn} disabled={busy || !online} aria-busy={busy}>
+            <Button variant="primary" block onClick={turnOn} disabled={busy || !online} aria-busy={busy}>
               {busy ? "جارٍ التفعيل…" : "تفعيل الإشعارات"}
-            </button>
+            </Button>
           </>
         ) : push === "ios_install" ? (
           <p>على iPhone تصل الإشعارات فقط من التطبيق المثبّت: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من أيقونته ثم ارجع إلى هنا.</p>
@@ -218,7 +218,7 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
         <h2 id="rem-title" className="section__title">تذكير الحضور والانصراف</h2>
         {!settings ? (
           loadError ? (
-            <div className="state-row"><span className="u-muted">تعذّر تحميل الإعدادات.</span><button className="btn btn--sm" onClick={refresh}>إعادة المحاولة</button></div>
+            <div className="state-row"><span className="u-muted">تعذّر تحميل الإعدادات.</span><Button size="sm" onClick={refresh}>إعادة المحاولة</Button></div>
           ) : (
             <p className="u-muted">جارٍ التحميل…</p>
           )

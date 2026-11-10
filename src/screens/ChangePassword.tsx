@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
 import { saveLastEmail } from "../lib/localSettings";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { PasswordInput } from "../components";
+import { PasswordInput, Button } from "../components";
 
 // Same rules as the change-password Edge Function (the server checks them again).
 function localCheck(p: string, confirm: string): string | null {
@@ -74,12 +74,12 @@ export function ChangePassword({ email }: { email: string | null }) {
 
         <p className="form__error" role="alert">{error}</p>
 
-        <button className="btn btn--primary btn--block" type="submit" disabled={busy}>
+        <Button variant="primary" block type="submit" disabled={busy}>
           {busy ? "جارٍ الحفظ…" : "حفظ كلمة المرور"}
-        </button>
-        <button className="btn btn--quiet btn--block" type="button" onClick={() => api.signOut()} disabled={busy}>
+        </Button>
+        <Button variant="quiet" block type="button" onClick={() => api.signOut()} disabled={busy}>
           تسجيل الخروج
-        </button>
+        </Button>
       </form>
     </main>
   );

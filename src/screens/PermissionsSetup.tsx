@@ -7,7 +7,7 @@ import { geoGrantedBefore, readLocation } from "../lib/location";
 import { BIO_HELP, bioReason, chromeTabUrl, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, type BioEnv, type GeoContext } from "../lib/permissions";
 import { readPushState, subscribe, type PushState } from "../lib/push";
 import type { LocationPolicy } from "../lib/types";
-import { Banner, Icon, type IconName } from "../components";
+import { Banner, Icon, type IconName, Button } from "../components";
 
 type Status = "done" | "todo" | "blocked" | "busy";
 
@@ -177,9 +177,9 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
               )}
               {geoDiag && <p className="hint">{geoDiag}</p>}
               {geo !== "done" && (
-                <button className="btn btn--primary btn--block" onClick={askLocation} disabled={geo === "busy"} aria-busy={geo === "busy"}>
+                <Button variant="primary" block onClick={askLocation} disabled={geo === "busy"} aria-busy={geo === "busy"}>
                   {geo === "busy" ? "جارٍ تحديد موقعك…" : "السماح بالموقع"}
-                </button>
+                </Button>
               )}
             </Step>
           )}
@@ -189,16 +189,16 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
                 <>
                   <p className="hint">يُسجَّل هاتف واحد لحسابك. شركتك تطلب هذه الخطوة.</p>
                   {bioError && <Banner kind="error" onClose={() => setBioError(null)}>{bioError}</Banner>}
-                  <button className="btn btn--primary btn--block" onClick={register} disabled={bioBusy} aria-busy={bioBusy}>
+                  <Button variant="primary" block onClick={register} disabled={bioBusy} aria-busy={bioBusy}>
                     {bioBusy ? "جارٍ التسجيل…" : os === "ios" ? "تسجيل Face ID" : "تسجيل البصمة"}
-                  </button>
+                  </Button>
                 </>
               )}
               {!hasDevice && canBio === false && env && (
                 <>
                   <Banner kind="warning">{BIO_HELP[bioReason(env)]}</Banner>
                   <p className="setup__diag" dir="auto">{diagLine(env)}</p>
-                  <button className="btn btn--ghost btn--block" onClick={() => void checkBio()}>أعد الفحص</button>
+                  <Button variant="ghost" block onClick={() => void checkBio()}>أعد الفحص</Button>
                   <p className="hint">إن لم ينجح: تستطيع المتابعة، وستُعلَّم بصماتك للمراجعة من الإدارة.</p>
                 </>
               )}
@@ -208,9 +208,9 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
             {push === "off" && (
               <>
                 <p className="hint">يصلك تذكير قبل بداية الدوام بـ 5 دقائق، وعند نهايته.</p>
-                <button className="btn btn--primary btn--block" onClick={askPush} disabled={pushBusy} aria-busy={pushBusy}>
+                <Button variant="primary" block onClick={askPush} disabled={pushBusy} aria-busy={pushBusy}>
                   {pushBusy ? "جارٍ التفعيل…" : "تفعيل الإشعارات"}
-                </button>
+                </Button>
               </>
             )}
             {push === "ios_install" && (
@@ -223,9 +223,9 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
             {pushText && <Banner kind="warning">{pushText}</Banner>}
           </Step>
         </ol>
-        <button className="btn btn--primary btn--block" onClick={finish} disabled={mustRegister}>
+        <Button variant="primary" block onClick={finish} disabled={mustRegister}>
           {allDone ? "ابدأ" : mustRegister ? "سجّل البصمة أولًا" : "متابعة"}
-        </button>
+        </Button>
         {!allDone && !mustRegister && <p className="hint">تستطيع إكمال الباقي لاحقًا من صفحة حسابك.</p>}
       </section>
     </main>

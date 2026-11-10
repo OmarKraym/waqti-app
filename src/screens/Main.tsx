@@ -15,7 +15,7 @@ import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "../hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Banner, Modal } from "../components";
+import { Banner, Modal, Button } from "../components";
 import { useRequests } from "../hooks/useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -200,8 +200,8 @@ export function Main({ user }: { user: SessionUser }) {
             {lateOffer.left !== null && ` المتبقي لك هذا الشهر: ${formatTimes(lateOffer.left)}.`}
           </p>
           <div className="modal__actions">
-            <button className="btn btn--primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</button>
-            <button className="btn btn--ghost" onClick={() => setLateOffer(null)}>ليس الآن</button>
+            <Button variant="primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</Button>
+            <Button variant="ghost" onClick={() => setLateOffer(null)}>ليس الآن</Button>
           </div>
         </Modal>
       )}

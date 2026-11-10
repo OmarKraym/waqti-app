@@ -10,7 +10,7 @@ import { setupGate, setupSeen } from "../lib/permissions";
 import type { AttendanceState } from "../lib/types";
 import { Main } from "./Main";
 import { PermissionsSetup } from "./PermissionsSetup";
-import { Icon } from "../components";
+import { Icon, Button } from "../components";
 
 type Step =
   | { kind: "loading" } | { kind: "error" } | { kind: "ready" } | { kind: "setup"; state: AttendanceState }
@@ -66,7 +66,7 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
           <Icon name="phone" className="pad__icon" />
           <h2 className="pad__title">لا يمكنك الدخول من هاتف آخر.</h2>
           <p className="u-muted">إذا غيّرت هاتفك، اطلب من الإدارة فك ربط الهاتف القديم، ثم سجّل الدخول من جديد.</p>
-          <button className="btn btn--ghost btn--block" onClick={() => api.signOut()}>تسجيل الخروج</button>
+          <Button variant="ghost" block onClick={() => api.signOut()}>تسجيل الخروج</Button>
         </div>
       </main>
     );
@@ -80,7 +80,7 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
           <p className="u-muted">
             في الآيفون يعمل وقتي من أيقونته فقط: {IOS_INSTALL_TEXT}
           </p>
-          <button className="btn btn--ghost btn--block" onClick={() => api.signOut()}>تسجيل الخروج</button>
+          <Button variant="ghost" block onClick={() => api.signOut()}>تسجيل الخروج</Button>
         </div>
       </main>
     );
@@ -93,8 +93,8 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
           <h2 className="pad__title">تعذّر التحقق من إعدادات حسابك</h2>
           <p className="u-muted">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>
           <div className="row">
-            <button className="btn btn--primary" onClick={start}>إعادة المحاولة</button>
-            <button className="btn btn--ghost" onClick={() => api.signOut()}>تسجيل الخروج</button>
+            <Button variant="primary" onClick={start}>إعادة المحاولة</Button>
+            <Button variant="ghost" onClick={() => api.signOut()}>تسجيل الخروج</Button>
           </div>
         </div>
       </main>

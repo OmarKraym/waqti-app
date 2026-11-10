@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 /** The same bar on every screen: optional back arrow, title, one action at the end. */
 export function AppBar({ title, lead, onBack, backDisabled, action, className }: {
@@ -14,9 +14,7 @@ export function AppBar({ title, lead, onBack, backDisabled, action, className }:
     <header className={`appbar${className ? ` ${className}` : ""}`}>
       <div className="appbar__lead">
         {onBack && (
-          <button className="icon-btn" onClick={onBack} disabled={backDisabled} aria-label="رجوع">
-            <Icon name="back" />
-          </button>
+          <IconButton icon="back" label="رجوع" onClick={onBack} disabled={backDisabled} />
         )}
         {lead}
         <h1 className="appbar__title u-truncate">{title}</h1>

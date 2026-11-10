@@ -6,7 +6,7 @@ import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
 import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
 import { useInstall } from "../hooks";
-import { InstallLine } from "../components";
+import { InstallLine, Button } from "../components";
 import { Icon, PasswordInput } from "../components";
 
 export function Login() {
@@ -87,10 +87,10 @@ export function Login() {
 
         {bioReady && (
           <>
-            <button className="btn btn--primary btn--block auth__bio" type="button" onClick={bioLogin} disabled={busy}>
+            <Button variant="primary" block className="auth__bio" type="button" onClick={bioLogin} disabled={busy}>
               <Icon name="fingerprint" />
               {busy ? "جارٍ التحقق…" : "ادخل بالبصمة"}
-            </button>
+            </Button>
             <p className="auth__or"><span>أو بكلمة المرور</span></p>
           </>
         )}
@@ -127,9 +127,9 @@ export function Login() {
 
         <p className="form__error" role="alert">{error}</p>
 
-        <button className={`btn ${bioReady ? "" : "btn--primary "}btn--block`} type="submit" disabled={busy || !email || !password}>
+        <Button variant={bioReady ? "default" : "primary"} block type="submit" disabled={busy || !email || !password}>
           {busy ? "جارٍ الدخول…" : "تسجيل الدخول"}
-        </button>
+        </Button>
         <p className="auth__foot">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
         {install.view !== "hidden" && <InstallLine kind={install.view} onInstall={install.install} onClose={install.close} />}
       </form>

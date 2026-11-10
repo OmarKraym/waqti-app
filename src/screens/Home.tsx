@@ -41,7 +41,7 @@ import { clockParts } from "../lib/time12";
 import { useOnline } from "../hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
-import { Banner, Icon, Modal } from "../components";
+import { Banner, Icon, Modal, Button } from "../components";
 
 const SYNC_EVERY_MS = 30_000;
 const OFFLINE_PUNCHES = false;
@@ -344,8 +344,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
             {state.error.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[state.error.code]}
           </p>
           <div className="row">
-            <button className="btn btn--primary" onClick={refresh}>إعادة المحاولة</button>
-            <button className="btn btn--ghost" onClick={() => setConfirmOut(true)}>تسجيل الخروج</button>
+            <Button variant="primary" onClick={refresh}>إعادة المحاولة</Button>
+            <Button variant="ghost" onClick={() => setConfirmOut(true)}>تسجيل الخروج</Button>
           </div>
         </div>
         {confirmOut && <ConfirmSignOut user={user} onCancel={() => setConfirmOut(false)} />}
@@ -446,8 +446,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
           <div className="unconfirmed" role="alert">
             <p><Icon name="alert" className="icon--inline" />{ERROR_TEXT.network}</p>
             <div className="row">
-              <button className="btn btn--primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
-              <button className="btn btn--ghost" onClick={refresh}>تحديث الحالة</button>
+              <Button variant="primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</Button>
+              <Button variant="ghost" onClick={refresh}>تحديث الحالة</Button>
             </div>
           </div>
         ) : (
@@ -483,16 +483,16 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
 
 
         {state.phase === "ready" && online && fromCache === null && data.can_check_out_without_in && !forgot && waiting.length === 0 && !setupNeeded && (
-          <button className="btn btn--ghost forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
+          <Button variant="ghost" className="forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
             نسيت تسجيل الحضور؟ سجّل الانصراف فقط
-          </button>
+          </Button>
         )}
         {confirmNoIn && (
           <Modal title="تسجيل انصراف بدون حضور" onClose={() => setConfirmNoIn(false)}>
             <p>لم يُسجَّل حضورك. سيُسجَّل الانصراف فقط، وتظهر الحركة للإدارة للمراجعة.</p>
             <div className="row">
-              <button className="btn btn--primary" onClick={() => { setConfirmNoIn(false); void onTap(data, false, "check_out"); }}>تسجيل الانصراف</button>
-              <button className="btn btn--ghost" onClick={() => setConfirmNoIn(false)}>إلغاء</button>
+              <Button variant="primary" onClick={() => { setConfirmNoIn(false); void onTap(data, false, "check_out"); }}>تسجيل الانصراف</Button>
+              <Button variant="ghost" onClick={() => setConfirmNoIn(false)}>إلغاء</Button>
             </div>
           </Modal>
         )}
@@ -533,7 +533,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
               ))}
             </ul>
             <p className="hint">هذه التسجيلات لم تُحسب. تواصل مع إدارة شركتك لتصحيحها.</p>
-            <button className="btn btn--ghost btn--block" onClick={dismissFailed}>فهمت، إخفاء</button>
+            <Button variant="ghost" block onClick={dismissFailed}>فهمت، إخفاء</Button>
           </section>
         )}
 
