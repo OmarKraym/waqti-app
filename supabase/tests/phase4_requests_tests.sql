@@ -215,7 +215,7 @@ begin
   perform pg_temp.ok(s = 'request_not_found', 'other company employee cannot decide our requests', s);
 
   -- ---------------------------------------------------------------- grants
-  perform pg_temp.ok(not has_function_privilege('anon', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid)', 'execute'),
+  perform pg_temp.ok(not has_function_privilege('anon', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)', 'execute'),
     'anonymous users cannot submit');
   perform pg_temp.ok(not has_table_privilege('authenticated', 'public.request_approvals', 'select')
     and not has_table_privilege('authenticated', 'public.requests', 'insert'), 'no direct table access for approvals / inserts');

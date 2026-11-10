@@ -476,3 +476,267 @@ revoke all on function public.admin_set_approval_chain(text, jsonb, uuid, uuid) 
 revoke all on function public.admin_get_approval_chains() from public, anon;
 grant execute on function public.admin_set_approval_chain(text, jsonb, uuid, uuid) to authenticated;
 grant execute on function public.admin_get_approval_chains() to authenticated;
+
+-- ================================================================ E. employee: submit (phase 24: a custom leave)
+-- The phase 18a function with one more parameter. Only the lines for the custom kind are new; the old 10-argument
+-- calls still resolve to this function (the new parameter has a default).
+drop function public.employee_submit_request(uuid, text, text, date, date, timestamptz, timestamptz, text, boolean, uuid);
+create function public.employee_submit_request(p_request_key uuid, p_type text, p_leave_type text DEFAULT NULL::text, p_start_date date DEFAULT NULL::date, p_end_date date DEFAULT NULL::date, p_start_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reason text DEFAULT NULL::text, p_dry_run boolean DEFAULT false, p_permission_type_id uuid DEFAULT NULL::uuid, p_custom_kind_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  me record;
+  v_emp public.employees;
+  v_today date;
+  v_type public.request_type;
+  v_start timestamptz;
+  v_end timestamptz;
+  v_days numeric;
+  v_minutes int;
+  v_bal jsonb;
+  v_perm jsonb;
+  v_pt public.permission_types;
+  v_day date;
+  v_shift_start timestamptz;
+  v_shift_end timestamptz;
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_id uuid;
+  v_step record;
+  v_approver uuid;
+  v_prev uuid;
+  v_kept int := 0;
+  v_first smallint;
+  v_status text;
+  v_over boolean := false;
+  v_kind public.custom_request_kinds;
+begin
+  select * into me from public.require_active_employee();
+  select * into v_emp from public.employees where id = me.employee_id;
+  v_today := (now() at time zone me.timezone)::date;
+
+  if p_request_key is null or p_type is null or p_type not in ('leave', 'permission', 'other') then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+  v_type := p_type::public.request_type;
+  if v_reason is not null and length(v_reason) > 500 then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+
+  -- Same key again (double tap, retry after a lost reply): return the saved request.
+  if not p_dry_run then
+    select id into v_id from public.requests where employee_id = me.employee_id and request_key = p_request_key;
+    if found then
+      return private.request_json(v_id) || jsonb_build_object('duplicate', true);
+    end if;
+  end if;
+
+  -- One lock per employee: two submissions are handled one after the other (limits stay correct).
+  perform 1 from public.employees where id = me.employee_id for update;
+
+  -- A custom kind (phase 24) of my company: it must exist, fit the request type and be switched on.
+  if p_custom_kind_id is not null then
+    if v_type not in ('leave', 'other') then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+    select * into v_kind from public.custom_request_kinds where id = p_custom_kind_id and company_id = me.company_id;
+    if not found then
+      raise exception 'custom_kind_not_found' using errcode = '22023';
+    end if;
+    if v_kind.family <> p_type then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+    if not v_kind.enabled then
+      raise exception 'custom_kind_disabled' using errcode = '22023';
+    end if;
+  end if;
+
+  if v_type = 'leave' then
+    if v_kind.id is not null then
+      p_leave_type := 'custom';  -- the kind decides; whatever leave type the app sent is ignored
+    end if;
+    if (v_kind.id is null and (p_leave_type is null or p_leave_type not in ('annual', 'sick', 'emergency', 'marriage', 'maternity', 'unpaid')))
+       or p_start_date is null or p_end_date is null or p_end_date < p_start_date then
+      raise exception 'invalid_dates' using errcode = '22023';
+    end if;
+    if p_end_date - p_start_date > 365 or p_start_date < v_today - 30 or p_start_date > v_today + 365 then
+      raise exception 'invalid_dates' using errcode = '22023';
+    end if;
+    if extract(year from p_start_date) <> extract(year from p_end_date) then
+      raise exception 'crosses_year' using errcode = 'P0001';
+    end if;
+    if p_leave_type = 'maternity' and coalesce(v_emp.gender, '') <> 'female' then
+      raise exception 'maternity_female_only' using errcode = '22023';
+    end if;
+    if v_kind.id is not null and (
+         (v_kind.gender = 'female' and coalesce(v_emp.gender, '') <> 'female')
+         or (v_kind.gender = 'male' and coalesce(v_emp.gender, '') <> 'male')) then
+      raise exception 'kind_gender_mismatch' using errcode = '22023';
+    end if;
+    if v_kind.id is not null and v_kind.reason_required and v_reason is null and not p_dry_run then
+      raise exception 'reason_required' using errcode = '22023';
+    end if;
+    v_days := private.leave_days(me.employee_id, p_start_date, p_end_date);
+    if v_days = 0 then
+      raise exception 'no_working_days' using errcode = 'P0001';
+    end if;
+    -- Annual leave: what was earned up to the first day of the leave. More than the balance needs a reason (HR decides).
+    if v_kind.id is not null then
+      v_bal := private.custom_leave_balance(me.employee_id, v_kind.id, extract(year from p_start_date)::int);
+    else
+      v_bal := private.leave_balance(me.employee_id, p_leave_type, extract(year from p_start_date)::int, null, p_start_date);
+    end if;
+    if (v_bal ->> 'remaining') is not null and (v_bal ->> 'remaining')::numeric < v_days then
+      v_over := true;
+      if v_reason is null and not p_dry_run then
+        raise exception 'insufficient_balance' using errcode = 'P0001';
+      end if;
+    end if;
+    v_start := p_start_date::timestamp at time zone me.timezone;
+    v_end := (p_end_date + 1)::timestamp at time zone me.timezone;  -- exclusive end
+
+  elsif v_type = 'permission' then
+    select * into v_pt from public.permission_types
+    where id = p_permission_type_id and company_id = me.company_id and is_active;
+    if not found then
+      raise exception 'permission_type_not_found' using errcode = '22023';
+    end if;
+
+    if v_pt.mode = 'range' then
+      if p_start_at is null or p_end_at is null or p_end_at <= p_start_at
+         or (p_start_at at time zone me.timezone)::date <> ((p_end_at - interval '1 second') at time zone me.timezone)::date then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_start := p_start_at;
+      v_end := p_end_at;
+      v_day := (p_start_at at time zone me.timezone)::date;
+    elsif v_pt.mode = 'late_arrival' then
+      -- The employee gives his arrival time; the permission starts at his shift start.
+      if p_end_at is null then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_day := (p_end_at at time zone me.timezone)::date;
+      select s.shift_start, s.shift_end into v_shift_start, v_shift_end from private.shift_bounds(me.employee_id, v_day, me.timezone) s;
+      if v_shift_start is null then
+        raise exception 'no_working_days' using errcode = 'P0001';
+      end if;
+      if p_end_at <= v_shift_start then
+        raise exception 'not_late' using errcode = '22023';
+      end if;
+      if p_end_at > v_shift_end then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_start := v_shift_start;
+      v_end := p_end_at;
+    else -- early_leave
+      -- The employee gives his exit time; the permission ends at his shift end.
+      if p_start_at is null then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_day := (p_start_at at time zone me.timezone)::date;
+      select s.shift_start, s.shift_end into v_shift_start, v_shift_end from private.shift_bounds(me.employee_id, v_day, me.timezone) s;
+      if v_shift_start is null then
+        raise exception 'no_working_days' using errcode = 'P0001';
+      end if;
+      if p_start_at >= v_shift_end or p_start_at < v_shift_start then
+        raise exception 'invalid_dates' using errcode = '22023';
+      end if;
+      v_start := p_start_at;
+      v_end := v_shift_end;
+    end if;
+
+    v_minutes := ceil(extract(epoch from (v_end - v_start)) / 60)::int;
+    if v_minutes < 1 or v_minutes > 1440 then
+      raise exception 'invalid_duration' using errcode = '22023';
+    end if;
+    if v_pt.max_minutes is not null and v_minutes > v_pt.max_minutes then
+      raise exception 'permission_too_long' using errcode = 'P0001';
+    end if;
+    if v_day < v_today - v_pt.days_back or v_day > v_today + v_pt.days_ahead then
+      raise exception 'outside_window' using errcode = 'P0001';
+    end if;
+    v_perm := private.permission_usage(me.employee_id, v_pt.id, date_trunc('month', v_day)::date);
+    if v_pt.max_per_month is not null
+       and (v_perm ->> 'used')::int + (v_perm ->> 'pending')::int >= v_pt.max_per_month then
+      raise exception 'permission_limit' using errcode = 'P0001';
+    end if;
+
+  else -- other
+    if v_reason is null then
+      raise exception 'reason_required' using errcode = '22023';
+    end if;
+    if p_start_date is null or p_end_date is null or p_end_date < p_start_date
+       or p_end_date - p_start_date > 365 or p_start_date < v_today - 30 or p_start_date > v_today + 365 then
+      raise exception 'invalid_dates' using errcode = '22023';
+    end if;
+    v_start := p_start_date::timestamp at time zone me.timezone;
+    v_end := (p_end_date + 1)::timestamp at time zone me.timezone;
+  end if;
+
+  -- No overlap with my own pending/approved leave or permission.
+  if v_type in ('leave', 'permission') and exists (
+       select 1 from public.requests r
+       where r.employee_id = me.employee_id and r.status in ('pending', 'approved')
+         and r.request_type in ('leave', 'permission')
+         and tstzrange(r.start_at, r.end_at, '[)') && tstzrange(v_start, v_end, '[)')) then
+    raise exception 'overlapping_request' using errcode = 'P0001';
+  end if;
+
+  if p_dry_run then
+    return jsonb_build_object('dry_run', true, 'type', v_type, 'leave_type', p_leave_type,
+      'permission_type_id', v_pt.id, 'start_at', v_start, 'end_at', v_end, 'days', v_days, 'minutes', v_minutes,
+      'balance', v_bal, 'permission', v_perm, 'over_balance', v_over, 'custom_kind_id', v_kind.id);
+  end if;
+
+  insert into public.requests (employee_id, request_type, leave_type, permission_type_id, status, start_at, end_at,
+                               reason, days, minutes, request_key, custom_kind_id)
+  values (me.employee_id, v_type, case when v_type = 'leave' then p_leave_type end, v_pt.id, 'pending',
+          v_start, v_end, v_reason, v_days, v_minutes, p_request_key, v_kind.id)
+  returning id into v_id;
+
+  -- Resolve and freeze the approvers.
+  for v_step in select * from private.request_chain(me.company_id, v_type, v_pt.id) loop
+    v_approver := case v_step.approver_kind
+      when 'direct_manager' then v_emp.manager_id
+      when 'second_manager' then (select m.manager_id from public.employees m where m.id = v_emp.manager_id)
+      when 'specific_employee' then v_step.approver_employee_id
+      else null end;
+    if v_step.approver_kind <> 'hr' and (
+         v_approver is null
+         or v_approver = me.employee_id
+         or not exists (select 1 from public.employees a where a.id = v_approver and a.is_active and a.company_id = me.company_id)
+         or v_approver is not distinct from v_prev) then
+      v_status := 'skipped';
+    else
+      v_status := 'waiting';
+      v_kept := v_kept + 1;
+      v_prev := v_approver;
+    end if;
+    insert into public.request_approvals (company_id, request_id, step_order, approver_kind, approver_employee_id, status)
+    values (me.company_id, v_id, v_step.step_order, v_step.approver_kind, v_approver, v_status);
+  end loop;
+
+  if v_kept = 0 then
+    insert into public.request_approvals (company_id, request_id, step_order, approver_kind, status)
+    values (me.company_id, v_id,
+            coalesce((select max(step_order) from public.request_approvals where request_id = v_id), 0) + 1,
+            'hr', 'waiting');
+  end if;
+
+  select min(step_order) into v_first from public.request_approvals where request_id = v_id and status = 'waiting';
+  update public.request_approvals set status = 'pending' where request_id = v_id and step_order = v_first;
+  update public.requests set current_step = v_first where id = v_id;
+
+  return private.request_json(v_id) || jsonb_build_object('duplicate', false);
+exception
+  when unique_violation then
+    -- Two identical submissions at the same instant: the other one won; return it.
+    select id into v_id from public.requests where employee_id = me.employee_id and request_key = p_request_key;
+    if v_id is null then raise; end if;
+    return private.request_json(v_id) || jsonb_build_object('duplicate', true);
+end;
+$function$;
+revoke all on function public.employee_submit_request(uuid, text, text, date, date, timestamptz, timestamptz, text, boolean, uuid, uuid) from public, anon;
+grant execute on function public.employee_submit_request(uuid, text, text, date, date, timestamptz, timestamptz, text, boolean, uuid, uuid) to authenticated;

@@ -199,6 +199,8 @@ begin
   delete from public.custom_request_kinds where id = k_leave;
   select count(*) into n from public.custom_kind_entitlements where kind_id = k_leave;
   perform pg_temp.ok(n = 0, 'deleting a kind deletes its employee overrides', n::text);
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
 end
 $tests$;
 
@@ -335,6 +337,8 @@ begin
     and not has_function_privilege('anon', 'public.admin_list_custom_kinds()', 'execute')
     and not has_function_privilege('anon', 'public.admin_save_custom_kind(uuid,text,text,boolean,numeric,text,boolean,text,integer)', 'execute')
     and not has_function_privilege('anon', 'public.admin_delete_custom_kind(uuid)', 'execute'), 'authenticated may execute the three functions, anon may not');
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
 end
 $tests$;
 
@@ -462,6 +466,8 @@ begin
     and not has_function_privilege('anon', 'public.admin_get_employee_kind_days(uuid)', 'execute')
     and not has_function_privilege('authenticated', 'private.custom_leave_balance(uuid,uuid,integer,uuid)', 'execute')
     and not has_function_privilege('anon', 'private.custom_leave_balance(uuid,uuid,integer,uuid)', 'execute'), 'grants: admin RPCs for authenticated only, the balance for nobody');
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
 end
 $tests$;
 
@@ -591,6 +597,195 @@ begin
     and not has_function_privilege('authenticated', 'private.request_chain(uuid,public.request_type,uuid,uuid)', 'execute')
     and not has_function_privilege('anon', 'private.request_chain(uuid,public.request_type,uuid,uuid)', 'execute'),
     'grants: admin RPCs for authenticated only, request_chain for nobody');
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
+end
+$tests$;
+
+-- ================================================================ Task 5: submit a custom leave
+-- Submits as an employee. Returns the result, or {"error": "<message>"} so a test can read the refusal.
+create function pg_temp.sub_leave(p_emp uuid, p_kind uuid, p_from date, p_to date, p_reason text default null, p_dry boolean default false,
+                                  p_key uuid default null, p_leave text default null, p_type text default 'leave')
+  returns jsonb language plpgsql as $f$
+begin
+  perform pg_temp.as_user(p_emp);
+  return public.employee_submit_request(coalesce(p_key, gen_random_uuid()), p_type, p_leave, p_from, p_to, null, null, p_reason, p_dry, null, p_kind);
+exception when others then return jsonb_build_object('error', sqlerrm);
+end $f$;
+-- three-day windows that never touch each other: win(0) is 1-3 Nov 2026, win(1) is 5-7 Nov, ...
+create function pg_temp.win(n int) returns date language sql as $$ select date '2026-11-01' + n * 4 $$;
+-- the part of a result that shows who approves: kind and status of every step, in order
+create function pg_temp.steps_of(r jsonb) returns jsonb language sql as $$
+  select coalesce(jsonb_agg(jsonb_build_object('k', st ->> 'kind', 's', st ->> 'status') order by i), '[]'::jsonb)
+  from jsonb_array_elements(r -> 'steps') with ordinality as t (st, i) $$;
+
+do $tests$
+declare
+  v_admin uuid; a uuid; b uuid; c uuid; d uuid; v_comp uuid; v_comp2 uuid;
+  kd uuid; k3 uuid; ku uuid; kz uuid; kf uuid; km uuid; kr uuid; koff uuid; kdel uuid; ko uuid; kx uuid;
+  r jsonb; r2 jsonb; s text; v_key uuid := gen_random_uuid(); bal_before jsonb; bal_after jsonb; n int;
+begin
+  select u.id into v_admin from auth.users u where lower(u.email) = lower(current_setting('waqti.admin_email'));
+  select company_id into v_comp from public.employees where id = v_admin;
+  select id into a from public.employees e where e.is_active and e.id <> v_admin and e.company_id = v_comp order by employee_number limit 1;
+  select id into b from public.employees e where e.is_active and e.id not in (v_admin, a) and e.company_id = v_comp order by employee_number limit 1;
+  select id into c from public.employees e where e.is_active and e.id not in (v_admin, a, b) and e.company_id = v_comp order by employee_number limit 1;
+  select id into d from public.employees e where e.is_active and e.id not in (v_admin, a, b, c) and e.company_id = v_comp order by employee_number limit 1;
+  select id into v_comp2 from public.companies where name = 'شركة اختبار 24';
+  perform pg_temp.reset_kinds(v_comp);
+  perform pg_temp.ok(to_regprocedure('public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)') is not null
+    and to_regprocedure('public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid)') is null,
+    'employee_submit_request has the custom kind parameter (the 10-argument function is replaced)');
+  if to_regprocedure('public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)') is null then return; end if;
+
+  -- the cast: a male with manager d, b female, c without a gender; every day is a working day for them
+  update public.employees set gender = 'male' where id = a;
+  update public.employees set gender = 'female' where id = b;
+  update public.employees set gender = null where id = c;
+  delete from public.employee_work_schedules where employee_id in (a, b, c, d);
+  delete from public.approval_steps where company_id = v_comp and request_type = 'leave';
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_employee_manager(a, d);
+  kd := public.admin_save_custom_kind(null, 'leave', 'عشرة أيام', true, 10, 'all', false, null, 0);
+  k3 := public.admin_save_custom_kind(null, 'leave', 'ثلاثة أيام', true, 3, 'all', false, null, 0);
+  ku := public.admin_save_custom_kind(null, 'leave', 'بلا حد', true, null, 'all', false, null, 0);
+  kz := public.admin_save_custom_kind(null, 'leave', 'صفر', true, 0, 'all', false, null, 0);
+  kf := public.admin_save_custom_kind(null, 'leave', 'للنساء', true, null, 'female', false, null, 0);
+  km := public.admin_save_custom_kind(null, 'leave', 'للرجال', true, null, 'male', false, null, 0);
+  kr := public.admin_save_custom_kind(null, 'leave', 'بسبب مطلوب', true, null, 'all', true, null, 0);
+  koff := public.admin_save_custom_kind(null, 'leave', 'سيُعطَّل', true, null, 'all', false, null, 0);
+  kdel := public.admin_save_custom_kind(null, 'leave', 'سيُحذف', true, null, 'all', false, null, 0);
+  ko := public.admin_save_custom_kind(null, 'other', 'نوع طلب آخر', true, null, 'all', false, 'single', 0);
+  insert into public.custom_request_kinds (company_id, family, name) values (v_comp2, 'leave', 'إجازة الشركة الثانية 5') returning id into kx;
+
+  -- dry run: shows the balance, saves nothing
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(0), pg_temp.win(0) + 2, null, true);
+  perform pg_temp.ok((r ->> 'dry_run')::boolean and r ->> 'leave_type' = 'custom' and r ->> 'custom_kind_id' = kd::text
+    and (r ->> 'days')::numeric = 3 and (r -> 'balance' ->> 'remaining')::numeric = 10 and not (r ->> 'over_balance')::boolean,
+    'dry run: 3 days on a kind of 10 -> remaining 10, custom, with the kind id', r::text);
+  perform pg_temp.ok(not exists (select 1 from public.requests where employee_id = a and custom_kind_id = kd), 'a dry run saves nothing');
+
+  -- a real submit, the same path as a built-in leave of the same employee
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(0), pg_temp.win(0) + 2, null, false);
+  perform pg_temp.ok(r ->> 'error' is null and not (r ->> 'duplicate')::boolean and r ->> 'status' = 'pending'
+    and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.leave_type = 'custom' and q.custom_kind_id = kd and q.days = 3),
+    'saved: leave_type custom, the kind id, 3 days, pending', r::text);
+  r2 := pg_temp.sub_leave(a, null, pg_temp.win(1), pg_temp.win(1) + 2, null, false, null, 'unpaid');
+  perform pg_temp.ok(r2 ->> 'error' is null and pg_temp.steps_of(r) = pg_temp.steps_of(r2) and jsonb_array_length(r -> 'steps') >= 2,
+    'a custom leave has the same approver steps as a built-in leave', pg_temp.steps_of(r)::text || ' / ' || pg_temp.steps_of(r2)::text);
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(2), pg_temp.win(2) + 2, null, true);
+  perform pg_temp.ok((r -> 'balance' ->> 'remaining')::numeric = 7, 'the pending request counts: remaining 7', r::text);
+
+  -- over the balance needs a reason
+  r := pg_temp.sub_leave(b, k3, pg_temp.win(0), pg_temp.win(0) + 3);
+  perform pg_temp.ok(r ->> 'error' = 'insufficient_balance', '4 days on a kind of 3, no reason -> insufficient_balance', r::text);
+  r := pg_temp.sub_leave(b, k3, pg_temp.win(0), pg_temp.win(0) + 3, null, true);
+  perform pg_temp.ok(r ->> 'error' is null and (r ->> 'over_balance')::boolean, 'its dry run shows over_balance', r::text);
+  r := pg_temp.sub_leave(b, k3, pg_temp.win(0), pg_temp.win(0) + 3, 'ظرف خاص');
+  perform pg_temp.ok(r ->> 'error' is null and r ->> 'status' = 'pending' and (r ->> 'days')::numeric = 4, '...with a reason it is saved', r::text);
+
+  -- unlimited, and 0 days is not unlimited
+  r := pg_temp.sub_leave(d, ku, date '2026-11-02', date '2026-12-01');
+  perform pg_temp.ok(r ->> 'error' is null and (r ->> 'days')::numeric = 30, 'an unlimited kind accepts 30 days', r::text);
+  r := pg_temp.sub_leave(c, kz, pg_temp.win(0), pg_temp.win(0), null, true);
+  perform pg_temp.ok((r -> 'balance' ->> 'remaining')::numeric = 0 and (r ->> 'over_balance')::boolean, 'a kind of 0 days: remaining 0, over balance', r::text);
+  r := pg_temp.sub_leave(c, kz, pg_temp.win(0), pg_temp.win(0));
+  perform pg_temp.ok(r ->> 'error' = 'insufficient_balance', 'a kind of 0 days refuses 1 day without a reason', r::text);
+
+  -- the per-employee days
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_set_employee_kind_days(c, jsonb_build_object(kd::text, 2));
+  r := pg_temp.sub_leave(c, kd, pg_temp.win(1), pg_temp.win(1) + 2);
+  perform pg_temp.ok(r ->> 'error' = 'insufficient_balance', 'an override of 2 days refuses 3 days', r::text);
+  r := pg_temp.sub_leave(c, kd, pg_temp.win(1), pg_temp.win(1) + 1);
+  perform pg_temp.ok(r ->> 'error' is null and (r ->> 'days')::numeric = 2, '...and accepts 2 days', r::text);
+
+  -- gender
+  r := pg_temp.sub_leave(a, kf, pg_temp.win(3), pg_temp.win(3));
+  perform pg_temp.ok(r ->> 'error' = 'kind_gender_mismatch', 'a female kind refuses a man', r::text);
+  r := pg_temp.sub_leave(c, kf, pg_temp.win(3), pg_temp.win(3));
+  perform pg_temp.ok(r ->> 'error' = 'kind_gender_mismatch', 'a female kind refuses an employee without a gender', r::text);
+  r := pg_temp.sub_leave(b, kf, pg_temp.win(1), pg_temp.win(1));
+  perform pg_temp.ok(r ->> 'error' is null, 'a female kind accepts a woman', r::text);
+  r := pg_temp.sub_leave(b, km, pg_temp.win(2), pg_temp.win(2));
+  perform pg_temp.ok(r ->> 'error' = 'kind_gender_mismatch', 'a male kind refuses a woman', r::text);
+  r := pg_temp.sub_leave(c, km, pg_temp.win(3), pg_temp.win(3));
+  perform pg_temp.ok(r ->> 'error' = 'kind_gender_mismatch', 'a male kind refuses an employee without a gender', r::text);
+  r := pg_temp.sub_leave(a, km, pg_temp.win(3), pg_temp.win(3));
+  perform pg_temp.ok(r ->> 'error' is null, 'a male kind accepts a man', r::text);
+
+  -- reason required by the kind
+  r := pg_temp.sub_leave(a, kr, pg_temp.win(4), pg_temp.win(4));
+  perform pg_temp.ok(r ->> 'error' = 'reason_required', 'a kind that needs a reason refuses none', r::text);
+  r := pg_temp.sub_leave(a, kr, pg_temp.win(4), pg_temp.win(4), 'مرفق بسبب');
+  perform pg_temp.ok(r ->> 'error' is null, '...and accepts one', r::text);
+
+  -- disabled, deleted, foreign, wrong family, wrong type
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_save_custom_kind(koff, 'leave', 'سيُعطَّل', false, null, 'all', false, null, 0);
+  perform public.admin_delete_custom_kind(kdel);
+  r := pg_temp.sub_leave(a, koff, pg_temp.win(5), pg_temp.win(5));
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_disabled', 'a kind disabled after the overview is refused', r::text);
+  r := pg_temp.sub_leave(a, kdel, pg_temp.win(5), pg_temp.win(5));
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_not_found', 'a deleted kind is refused', r::text);
+  r := pg_temp.sub_leave(a, kx, pg_temp.win(5), pg_temp.win(5));
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_not_found', 'a kind of another company is refused', r::text);
+  r := pg_temp.sub_leave(a, gen_random_uuid(), pg_temp.win(5), pg_temp.win(5));
+  perform pg_temp.ok(r ->> 'error' = 'custom_kind_not_found', 'an unknown kind id is refused', r::text);
+  r := pg_temp.sub_leave(a, ko, pg_temp.win(5), pg_temp.win(5));
+  perform pg_temp.ok(r ->> 'error' = 'invalid_input', 'an other-family kind with type leave is refused', r::text);
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(5), pg_temp.win(5), null, false, null, null, 'permission');
+  perform pg_temp.ok(r ->> 'error' = 'invalid_input', 'type permission with a kind is refused', r::text);
+
+  -- the date rules of a built-in leave still hold
+  r := pg_temp.sub_leave(a, kd, date '2026-12-30', date '2027-01-02');
+  perform pg_temp.ok(r ->> 'error' = 'crosses_year', 'crosses_year', r::text);
+  r := pg_temp.sub_leave(a, kd, date '2026-11-10', date '2026-11-09');
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'invalid_dates: end before start', r::text);
+  r := pg_temp.sub_leave(a, kd, date '2026-09-01', date '2026-09-02');
+  perform pg_temp.ok(r ->> 'error' = 'invalid_dates', 'invalid_dates: too far in the past', r::text);
+  insert into public.employee_work_schedules (employee_id, weekday, is_workday, company_id)
+    select b, g, false, v_comp from generate_series(0, 6) g;
+  r := pg_temp.sub_leave(b, kd, pg_temp.win(8), pg_temp.win(8) + 2);
+  perform pg_temp.ok(r ->> 'error' = 'no_working_days', 'no_working_days', r::text);
+  delete from public.employee_work_schedules where employee_id = b;
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(1), pg_temp.win(1) + 1);
+  perform pg_temp.ok(r ->> 'error' = 'overlapping_request', 'overlap with my own pending built-in leave', r::text);
+
+  -- the leave_type argument is ignored when a kind is given; the built-in balances do not move
+  bal_before := jsonb_build_object('annual', private.leave_balance(a, 'annual', 2026, null, pg_temp.win(6)),
+                                   'unpaid', private.leave_balance(a, 'unpaid', 2026, null, pg_temp.win(6)));
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(6), pg_temp.win(6) + 1, null, false, null, 'annual');
+  bal_after := jsonb_build_object('annual', private.leave_balance(a, 'annual', 2026, null, pg_temp.win(6)),
+                                  'unpaid', private.leave_balance(a, 'unpaid', 2026, null, pg_temp.win(6)));
+  perform pg_temp.ok(r ->> 'error' is null and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.leave_type = 'custom' and q.custom_kind_id = kd),
+    'p_leave_type annual together with a kind is stored as custom', r::text);
+  perform pg_temp.ok(bal_before = bal_after, 'the annual and unpaid balances are unchanged by a custom request', bal_before::text || ' / ' || bal_after::text);
+
+  -- the same request key twice: one row
+  r := pg_temp.sub_leave(a, kd, pg_temp.win(7), pg_temp.win(7), null, false, v_key);
+  r2 := pg_temp.sub_leave(a, kd, pg_temp.win(7), pg_temp.win(7), null, false, v_key);
+  select count(*) into n from public.requests where employee_id = a and request_key = v_key;
+  perform pg_temp.ok(r ->> 'error' is null and r2 ->> 'error' is null and not (r ->> 'duplicate')::boolean and (r2 ->> 'duplicate')::boolean
+    and r ->> 'id' = r2 ->> 'id' and n = 1, 'the same request key twice saves one row; the second answer says duplicate', r2::text);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_save_custom_kind(kd, 'leave', 'عشرة أيام', false, 10, 'all', false, null, 0);
+  r2 := pg_temp.sub_leave(a, kd, pg_temp.win(7), pg_temp.win(7), null, false, v_key);
+  perform pg_temp.ok((r2 ->> 'duplicate')::boolean and r2 ->> 'id' = r ->> 'id', 'a retry of a saved request still answers after the kind is disabled', r2::text);
+  perform pg_temp.as_user(v_admin);
+  perform public.admin_save_custom_kind(kd, 'leave', 'عشرة أيام', true, 10, 'all', false, null, 0);
+
+  -- the old 10-argument call of a built-in leave
+  perform pg_temp.as_user(a);
+  r := public.employee_submit_request(gen_random_uuid(), 'leave', 'unpaid', pg_temp.win(9), pg_temp.win(9) + 1, null, null, null, false, null);
+  perform pg_temp.ok(r ->> 'status' = 'pending' and r ->> 'leave_type' = 'unpaid'
+    and exists (select 1 from public.requests q where q.id = (r ->> 'id')::uuid and q.custom_kind_id is null), 'an old 10-argument call of a built-in leave still works', r::text);
+  perform pg_temp.ok(has_function_privilege('authenticated', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.employee_submit_request(uuid,text,text,date,date,timestamptz,timestamptz,text,boolean,uuid,uuid)', 'execute'),
+    'grants: authenticated only');
+  perform pg_temp.as_user(v_admin);
+exception when others then
+  insert into t_res (name, ok, detail) values ('a test block stopped on an error', false, sqlerrm);
 end
 $tests$;
 
