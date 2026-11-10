@@ -38,10 +38,10 @@ import { holidayBanner, loadCalendar, offLabel, saveCalendar, type Calendar } fr
 import { earlierDays, formatDuration, todayRows, workedToday, type CardRow, type DayRow } from "../lib/timecard";
 import type { AttendanceAction, AttendanceState, LocationStatus, PunchResult, RequestType } from "../lib/types";
 import { clockParts } from "../lib/time12";
-import { useOnline } from "./hooks";
+import { useOnline } from "../hooks";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
-import { Banner, Icon, Modal } from "./ui";
+import { Banner, Icon, Modal } from "../components";
 
 const SYNC_EVERY_MS = 30_000;
 const OFFLINE_PUNCHES = false;

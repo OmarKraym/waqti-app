@@ -7,7 +7,7 @@ import type { NotificationSettings } from "../lib/types";
 import { holidayItems, loadCalendar, saveCalendar, type Calendar } from "../lib/calendar";
 import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { dayKey } from "../lib/timecard";
-import { AppBar, Banner, Icon, Switch } from "./ui";
+import { AppBar, Banner, Icon, Switch } from "../components";
 
 type Note = { kind: "success" | "warning" | "error"; text: string } | null;
 

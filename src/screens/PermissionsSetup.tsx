@@ -7,7 +7,7 @@ import { geoGrantedBefore, readLocation } from "../lib/location";
 import { BIO_HELP, bioReason, chromeTabUrl, deviceInfo, diagLine, geoHelp, geoPermission, markSetupSeen, type BioEnv, type GeoContext } from "../lib/permissions";
 import { readPushState, subscribe, type PushState } from "../lib/push";
 import type { LocationPolicy } from "../lib/types";
-import { Banner, Icon, type IconName } from "./ui";
+import { Banner, Icon, type IconName } from "../components";
 
 type Status = "done" | "todo" | "blocked" | "busy";
 

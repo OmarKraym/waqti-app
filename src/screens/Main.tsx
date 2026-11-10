@@ -12,11 +12,11 @@ import { browserStorage, loadCachedState } from "../lib/offlineQueue";
 import { PermissionsSetup } from "./PermissionsSetup";
 import { Home } from "./Home";
 import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
-import { useOnline } from "./hooks";
+import { useOnline } from "../hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Banner, Modal } from "./ui";
-import { useRequests } from "./useRequests";
+import { Banner, Modal } from "../components";
+import { useRequests } from "../hooks/useRequests";
 
 type Tab = "today" | "requests" | "notifications";
 

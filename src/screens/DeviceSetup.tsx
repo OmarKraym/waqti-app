@@ -2,7 +2,7 @@ import { useState } from "react";
 import { registerDevice } from "../lib/biometric";
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { Banner, Icon } from "./ui";
+import { Banner, Icon } from "../components";
 
 /** Shown in place of the punch button until this phone is registered (company requires the fingerprint). */
 export function DeviceSetup({ onDone, onSignOut }: { onDone: () => void; onSignOut?: () => void }) {

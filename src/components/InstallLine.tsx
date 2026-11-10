@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { IOS_INSTALL_TEXT } from "../lib/install";
-import { Icon } from "./ui";
+import { Icon } from "./Icon";
 
 /**
  * A calm line on the login screen (the only place; inside the app it never shows) that offers installing the app. Android / Chrome: «تثبيت» shows the browser's own dialog.

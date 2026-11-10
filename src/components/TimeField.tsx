@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { format12, from12, to12, wheelIndex, type Period } from "../lib/time12";
-import { Modal } from "./ui";
+import { Modal } from "./Modal";
 
-const ROW = 44; // keep in step with --wheel-row in styles.css
+const ROW = 44; // keep in step with --wheel-row in styles/components/field.css
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const PERIODS: Period[] = ["ص", "م"];
 

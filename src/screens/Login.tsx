@@ -5,9 +5,9 @@ import { takeSignoutReason } from "../lib/signoutReason";
 import { clearDeviceHint, readDeviceHint } from "../lib/bioDevice";
 import { readLastEmail, saveLastEmail } from "../lib/localSettings";
 import { loginWithFingerprint, supportsPlatformAuthenticator } from "../lib/biometric";
-import { useInstall } from "./hooks";
-import { InstallLine } from "./InstallLine";
-import { Icon, PasswordInput } from "./ui";
+import { useInstall } from "../hooks";
+import { InstallLine } from "../components";
+import { Icon, PasswordInput } from "../components";
 
 export function Login() {
   const [email, setEmail] = useState(() => readLastEmail() ?? "");

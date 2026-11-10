@@ -17,8 +17,8 @@ import {
 } from "../lib/overtime";
 import { addDays, formatDay, formatMinutes } from "../lib/requests";
 import type { OvertimeItem, OvertimeOverview, OvertimePreview } from "../lib/types";
-import { TimeField } from "./TimeField";
-import { AppBar, Banner, Icon } from "./ui";
+import { TimeField } from "../components";
+import { AppBar, Banner, Icon } from "../components";
 
 type Done = (text: string, kind: "success" | "error") => void;
 

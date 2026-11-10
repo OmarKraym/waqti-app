@@ -10,7 +10,7 @@ import { setupGate, setupSeen } from "../lib/permissions";
 import type { AttendanceState } from "../lib/types";
 import { Main } from "./Main";
 import { PermissionsSetup } from "./PermissionsSetup";
-import { Icon } from "./ui";
+import { Icon } from "../components";
 
 type Step =
   | { kind: "loading" } | { kind: "error" } | { kind: "ready" } | { kind: "setup"; state: AttendanceState }

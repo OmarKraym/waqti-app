@@ -1,0 +1,32 @@
+/** Line icons, 24 px grid, stroke = currentColor. */
+const PATHS = {
+  back: <path d="M9 5l7 7-7 7" />, // RTL: "back" points to the right
+  plus: <path d="M12 5v14M5 12h14" />,
+  signOut: <><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M14 8l-4 4 4 4M10 12h10" /></>,
+  pin: <><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z" /><circle cx="12" cy="10" r="2.3" /></>,
+  check: <><circle cx="12" cy="12" r="9" /><path d="M8.2 12.3l2.6 2.6 5-5.4" /></>,
+  phone: <><rect x="7" y="3" width="10" height="18" rx="2.2" /><path d="M11 17.5h2" /></>,
+  alert: <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4v.1" /></>,
+  bell: <><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
+  close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>,
+  clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
+  doc: <><path d="M7 3.5h7l4 4v13H7z" /><path d="M14 3.5v4h4M10 12.5h5M10 16h5" /></>,
+  arrive: <><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /><path d="M9 8l-4 4 4 4M5 12h10" /></>,
+  leave: <><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M15 8l4 4-4 4M19 12H9" /></>,
+  contrast: <><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" /></>,
+  user: <><circle cx="12" cy="8.5" r="3.6" /><path d="M4.8 20c.9-3.6 3.7-5.6 7.2-5.6s6.3 2 7.2 5.6" /></>,
+  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></>,
+  eyeOff: <><path d="M3 3l18 18" /><path d="M10.6 6A9.7 9.7 0 0 1 12 5.5C18 5.5 21.5 12 21.5 12a17 17 0 0 1-3 3.8M6.6 6.6A16.6 16.6 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.4-1.1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>,
+  fingerprint: <><path d="M5 9.2a8 8 0 0 1 14 0" /><path d="M7.5 20c-.6-1.4-.9-2.9-.9-4.6a5.4 5.4 0 0 1 10.8 0c0 1.3.2 2.5.6 3.6" /><path d="M12 11.8c-2 0-3.4 1.5-3.4 3.4 0 1.8.4 3.2 1.1 4.6" /><path d="M12 11.8c2 0 3.4 1.5 3.4 3.4 0 1.2.2 2.1.5 3" /><path d="M12 15.2c0 1.7.4 3.1 1.1 4.4" /></>,
+} as const;
+
+export type IconName = keyof typeof PATHS;
+
+export function Icon({ name, className }: { name: IconName; className?: string }) {
+  return (
+    <svg className={`icon${className ? ` ${className}` : ""}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {PATHS[name]}
+    </svg>
+  );
+}

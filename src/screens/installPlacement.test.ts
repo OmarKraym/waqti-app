@@ -6,7 +6,7 @@ const screensDir = new URL("./", import.meta.url);
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const screenFiles = readdirSync(screensDir).filter((f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts"));
 const USES_INSTALL_UI = /\b(InstallLine|useInstall|installStore|installView|installState|createInstallStore|startInstallCapture)\b/;
-const ALLOWED = ["Login.tsx", "InstallLine.tsx", "hooks.ts"];
+const ALLOWED = ["Login.tsx"]; // InstallLine lives in components/, useInstall in hooks/
 
 describe("where the install line lives", () => {
   it("no screen inside the app uses it (Home, Main, Profile, Requests, ...)", () => {
@@ -35,7 +35,7 @@ describe("where the install line lives", () => {
   });
 
   it("no button of the line can submit the login form it sits in", () => {
-    const src = read("./InstallLine.tsx");
+    const src = read("../components/InstallLine.tsx");
     const buttons = src.match(/<button\b[^>]*>/g) ?? [];
     expect(buttons.length).toBe(3);
     for (const b of buttons) expect(b).toContain('type="button"');

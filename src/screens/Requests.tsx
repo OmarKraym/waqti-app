@@ -30,9 +30,9 @@ import {
 import type { InboxItem, LeaveType, PermissionUsage, RequestItem, RequestPreview, RequestType, RequestsOverview } from "../lib/types";
 import { annualCard, chargedLine, customUsedTexts, kindBalanceLine, overBalanceLine } from "../lib/leaveBalance";
 import { AssignOvertimeForm, MyOvertime, TeamOvertime } from "./Overtime";
-import type { RequestsData } from "./useRequests";
-import { TimeField } from "./TimeField";
-import { AppBar, Banner, Icon } from "./ui";
+import type { RequestsData } from "../hooks/useRequests";
+import { TimeField } from "../components";
+import { AppBar, Banner, Icon } from "../components";
 
 type Note = { kind: "success" | "warning" | "error"; text: string };
 const TYPE_ICON = { leave: "calendar", permission: "clock", other: "doc" } as const;

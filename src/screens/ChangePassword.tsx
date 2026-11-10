@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../lib/client";
 import { saveLastEmail } from "../lib/localSettings";
 import { AppError, ERROR_TEXT } from "../lib/errors";
-import { PasswordInput } from "./ui";
+import { PasswordInput } from "../components";
 
 // Same rules as the change-password Edge Function (the server checks them again).
 function localCheck(p: string, confirm: string): string | null {

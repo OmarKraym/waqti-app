@@ -8,7 +8,7 @@ import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, typ
 import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
 import { loadCalendar, offLabel } from "../lib/calendar";
 import type { AttendanceState, ProfileSummary } from "../lib/types";
-import { AppBar, Banner, Icon, Modal, Switch } from "./ui";
+import { AppBar, Banner, Icon, Modal, Switch } from "../components";
 
 /** What the profile shows; it comes from the today screen's data (nothing extra is fetched). */
 export type ProfileInfo = Pick<AttendanceState, "employee" | "company" | "biometric">;
