@@ -29,11 +29,11 @@
   .chip::before {
     content: ""; width: 6px; height: 6px; border-radius: var(--radius-round); background: currentColor;
   }
-  .chip.pending { background: var(--color-warning-tint); color: var(--color-warning-text); }
-  .chip.approved { background: var(--color-success-tint); color: var(--color-success-text); }
-  .chip.rejected { background: var(--color-danger-tint); color: var(--color-danger-text); }
-  .chip.cancelled, .chip.ot-done, .chip.ot-cancelled { background: var(--color-surface-sunken); color: var(--color-text-muted); }
-  .chip.ot-cancelled { text-decoration: line-through; }
-  .chip.ot-upcoming { background: var(--color-accent-tint); color: var(--color-accent-text); }
-  .chip.ot-now { background: var(--color-accent); color: var(--color-on-accent); }
+  .chip.chip--pending { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  .chip.chip--approved { background: var(--color-success-tint); color: var(--color-success-text); }
+  .chip.chip--rejected { background: var(--color-danger-tint); color: var(--color-danger-text); }
+  .chip.chip--cancelled, .chip.chip--ot-done, .chip.chip--ot-cancelled { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+  .chip.chip--ot-cancelled { text-decoration: line-through; }
+  .chip.chip--ot-upcoming { background: var(--color-accent-tint); color: var(--color-accent-text); }
+  .chip.chip--ot-now { background: var(--color-accent); color: var(--color-on-accent); }
 }

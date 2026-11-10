@@ -62,11 +62,11 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
   if (step.kind === "locked") {
     return (
       <main className="center-screen">
-        <div className="card pad gate-locked">
-          <Icon name="phone" className="pad-icon" />
-          <h2 className="pad-title">لا يمكنك الدخول من هاتف آخر.</h2>
-          <p className="muted">إذا غيّرت هاتفك، اطلب من الإدارة فك ربط الهاتف القديم، ثم سجّل الدخول من جديد.</p>
-          <button className="btn ghost block" onClick={() => api.signOut()}>تسجيل الخروج</button>
+        <div className="card pad">
+          <Icon name="phone" className="pad__icon" />
+          <h2 className="pad__title">لا يمكنك الدخول من هاتف آخر.</h2>
+          <p className="u-muted">إذا غيّرت هاتفك، اطلب من الإدارة فك ربط الهاتف القديم، ثم سجّل الدخول من جديد.</p>
+          <button className="btn btn--ghost btn--block" onClick={() => api.signOut()}>تسجيل الخروج</button>
         </div>
       </main>
     );
@@ -74,13 +74,13 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
   if (step.kind === "install") {
     return (
       <main className="center-screen">
-        <div className="card pad gate-install">
-          <Icon name="phone" className="pad-icon" />
-          <h2 className="pad-title">ثبّت التطبيق أولًا</h2>
-          <p className="muted">
+        <div className="card pad">
+          <Icon name="phone" className="pad__icon" />
+          <h2 className="pad__title">ثبّت التطبيق أولًا</h2>
+          <p className="u-muted">
             في الآيفون يعمل وقتي من أيقونته فقط: {IOS_INSTALL_TEXT}
           </p>
-          <button className="btn ghost block" onClick={() => api.signOut()}>تسجيل الخروج</button>
+          <button className="btn btn--ghost btn--block" onClick={() => api.signOut()}>تسجيل الخروج</button>
         </div>
       </main>
     );
@@ -89,12 +89,12 @@ export function GateAfterPassword({ user }: { user: SessionUser }) {
     return (
       <main className="center-screen">
         <div className="card pad">
-          <Icon name="alert" className="pad-icon" />
-          <h2 className="pad-title">تعذّر التحقق من إعدادات حسابك</h2>
-          <p className="muted">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>
+          <Icon name="alert" className="pad__icon" />
+          <h2 className="pad__title">تعذّر التحقق من إعدادات حسابك</h2>
+          <p className="u-muted">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>
           <div className="row">
-            <button className="btn primary" onClick={start}>إعادة المحاولة</button>
-            <button className="btn ghost" onClick={() => api.signOut()}>تسجيل الخروج</button>
+            <button className="btn btn--primary" onClick={start}>إعادة المحاولة</button>
+            <button className="btn btn--ghost" onClick={() => api.signOut()}>تسجيل الخروج</button>
           </div>
         </div>
       </main>

@@ -78,20 +78,20 @@ export function Login() {
   }
 
   return (
-    <main className="auth-wrap">
-      <form className="auth-card" onSubmit={submit} autoComplete="on" noValidate>
-        <div className="auth-head">
-          <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" className="auth-logo" width={64} height={64} />
+    <main className="auth">
+      <form className="auth__card" onSubmit={submit} autoComplete="on" noValidate>
+        <div className="auth__head">
+          <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" className="auth__logo" width={64} height={64} />
           <h1>وقتي</h1>
         </div>
 
         {bioReady && (
           <>
-            <button className="btn primary block bio-login" type="button" onClick={bioLogin} disabled={busy}>
+            <button className="btn btn--primary btn--block auth__bio" type="button" onClick={bioLogin} disabled={busy}>
               <Icon name="fingerprint" />
               {busy ? "جارٍ التحقق…" : "ادخل بالبصمة"}
             </button>
-            <p className="auth-or"><span>أو بكلمة المرور</span></p>
+            <p className="auth__or"><span>أو بكلمة المرور</span></p>
           </>
         )}
 
@@ -125,12 +125,12 @@ export function Login() {
           />
         </label>
 
-        <p className="form-error" role="alert">{error}</p>
+        <p className="form__error" role="alert">{error}</p>
 
-        <button className={`btn ${bioReady ? "" : "primary "}block`} type="submit" disabled={busy || !email || !password}>
+        <button className={`btn ${bioReady ? "" : "btn--primary "}btn--block`} type="submit" disabled={busy || !email || !password}>
           {busy ? "جارٍ الدخول…" : "تسجيل الدخول"}
         </button>
-        <p className="auth-foot">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
+        <p className="auth__foot">ستبقى مسجّلًا على هذا الجهاز حتى تسجّل الخروج.</p>
         {install.view !== "hidden" && <InstallLine kind={install.view} onInstall={install.install} onClose={install.close} />}
       </form>
     </main>

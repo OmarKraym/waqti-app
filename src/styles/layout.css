@@ -22,13 +22,12 @@
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
   }
-  .appbar-lead { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-  .appbar-title {
+  .appbar__lead { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+  .appbar__title {
     font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 700; color: var(--color-text);
   }
   .brand-mark { border-radius: var(--radius-sm); flex: none; }
   .appbar > .btn { flex: none; }
-  .brand-bar .appbar-title { font-size: var(--font-size-lg); }
   /* Home header: logo (opens the profile) at the start, company name in the middle */
   .topbar {
     position: sticky; top: 0; z-index: var(--z-sticky);
@@ -39,7 +38,7 @@
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
   }
-  .topbar-title {
+  .topbar__title {
     text-align: center;
     font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 700; color: var(--color-text);
   }
@@ -54,15 +53,15 @@
 .with-tabs .container.has-fab {
     padding-bottom: calc(var(--size-tabbar) + var(--size-float) + var(--space-8) + var(--space-4) + env(safe-area-inset-bottom));
   }
-  .section-title {
+  .section__title {
     display: flex; align-items: center; gap: var(--space-2);
     font-size: var(--font-size-lg); font-weight: 700;
     margin: 0 0 var(--space-3);
   }
-  .section-head {
+  .section__head {
     display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3);
   }
-  .section-head .section-title { margin: 0; }
+  .section__head .section__title { margin: 0; }
   /* ---------------------------------------------------------------- tab bar */
   .tabbar {
     position: fixed; inset-inline: 0; bottom: 0; z-index: var(--z-nav);
@@ -83,14 +82,14 @@
     fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
     transition: background-color var(--motion-base);
   }
-  .tab.on { color: var(--color-accent-text); font-weight: 700; }
-  .tab.on svg { background: var(--color-accent-tint); stroke-width: 2; }
+  .tab.is-active { color: var(--color-accent-text); font-weight: 700; }
+  .tab.is-active svg { background: var(--color-accent-tint); stroke-width: 2; }
   .tab:focus-visible {
     outline: 2px solid var(--color-focus); outline-offset: -6px; border-radius: var(--radius-md);
   }
   /* ---------------------------------------------------------------- requests: more colour and hierarchy */
   /* A small rust marker before every section title */
-  .section-title::before {
+  .section__title::before {
     content: ""; flex: none; width: 4px; height: 18px; border-radius: var(--radius-xs); background: var(--color-warning);
   }
 }

@@ -25,17 +25,17 @@ export function DeviceSetup({ onDone, onSignOut }: { onDone: () => void; onSignO
 
   return (
     <section className="card pad device-setup" aria-labelledby="device-setup-title">
-      <Icon name="phone" className="pad-icon" />
-      <h2 id="device-setup-title" className="pad-title">سجّل بصمتك لهذا الجهاز</h2>
-      <p className="muted">
+      <Icon name="phone" className="pad__icon" />
+      <h2 id="device-setup-title" className="pad__title">سجّل بصمتك لهذا الجهاز</h2>
+      <p className="u-muted">
         يُسجَّل هاتف واحد فقط لحسابك. لتغييره لاحقًا اطلب من الإدارة إلغاء القديم.
       </p>
       {error && <Banner kind="error" onClose={() => setError(null)}>{error}</Banner>}
-      <button className="btn primary block" onClick={register} disabled={busy} aria-busy={busy}>
+      <button className="btn btn--primary btn--block" onClick={register} disabled={busy} aria-busy={busy}>
         {busy ? "جارٍ التسجيل…" : "تسجيل البصمة"}
       </button>
       {onSignOut && (
-        <button className="btn quiet block" onClick={onSignOut} disabled={busy}>تسجيل الخروج</button>
+        <button className="btn btn--quiet btn--block" onClick={onSignOut} disabled={busy}>تسجيل الخروج</button>
       )}
     </section>
   );

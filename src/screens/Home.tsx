@@ -329,7 +329,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     return (
       <div className="center-screen" aria-busy="true">
         <div className="spinner" />
-        <p className="muted">جارٍ تحميل حالتك…</p>
+        <p className="u-muted">جارٍ تحميل حالتك…</p>
       </div>
     );
   }
@@ -338,14 +338,14 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
     return (
       <main className="center-screen">
         <div className="card pad">
-          <Icon name="alert" className="pad-icon" />
-          <h2 className="pad-title">تعذّر تحميل حالة الحضور</h2>
-          <p className="muted">
+          <Icon name="alert" className="pad__icon" />
+          <h2 className="pad__title">تعذّر تحميل حالة الحضور</h2>
+          <p className="u-muted">
             {state.error.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[state.error.code]}
           </p>
           <div className="row">
-            <button className="btn primary" onClick={refresh}>إعادة المحاولة</button>
-            <button className="btn ghost" onClick={() => setConfirmOut(true)}>تسجيل الخروج</button>
+            <button className="btn btn--primary" onClick={refresh}>إعادة المحاولة</button>
+            <button className="btn btn--ghost" onClick={() => setConfirmOut(true)}>تسجيل الخروج</button>
           </div>
         </div>
         {confirmOut && <ConfirmSignOut user={user} onCancel={() => setConfirmOut(false)} />}
@@ -377,8 +377,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
         <button className="logo-btn" onClick={onOpenProfile} aria-label="حسابي">
           <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={36} height={36} />
         </button>
-        <h1 className="topbar-title truncate">{data.company.name}</h1>
-        <span className="topbar-end" aria-hidden="true" />
+        <h1 className="topbar__title u-truncate">{data.company.name}</h1>
+        <span  aria-hidden="true" />
       </header>
 
       <main className="container has-punch">
@@ -391,41 +391,41 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
           </Banner>
         )}
 
-        <section className={`status${data.open_session ? " present" : ""}`}>
-          <p className="who">
-            <span className="truncate">{data.employee.full_name}</span>
-            {data.employee.employee_number && <span className="who-number" dir="ltr">{data.employee.employee_number}</span>}
+        <section className={`status${data.open_session ? " status--present" : ""}`}>
+          <p className="status__who">
+            <span className="u-truncate">{data.employee.full_name}</span>
+            {data.employee.employee_number && <span className="status__number" dir="ltr">{data.employee.employee_number}</span>}
           </p>
           <ServerClock offsetMs={offsetMs} timeZone={tz} rows={rows} openStart={data.open_session?.started_at ?? null} />
-          <h2 className="status-head" aria-live="polite">
-            <span className="status-dot" aria-hidden="true" />
+          <h2 className="status__head" aria-live="polite">
+            <span className="status__dot" aria-hidden="true" />
             {statusHeadline(data, rows, nowMs, tz)}
           </h2>
           {data.leave_today && !rows.some((r) => r.kind !== "empty") && (
-            <p className="status-note">لا يُطلب منك البصم اليوم. وإن سجّلت حضورك يُلغى هذا اليوم من إجازتك.</p>
+            <p className="status__note">لا يُطلب منك البصم اليوم. وإن سجّلت حضورك يُلغى هذا اليوم من إجازتك.</p>
           )}
         </section>
 
         <section className="timecard" aria-label="بطاقة اليوم">
-          <h3 className="timecard-day">سجل اليوم</h3>
-          <ol className="slots">
+          <h3 className="timecard__day">سجل اليوم</h3>
+          <ol className="timecard__slots">
             {rows.map((r, i) => (
-              <li key={r.key} className={`slot ${r.action === "check_in" ? "in" : "out"}`}>
-                <span className="slot-label">{r.action === "check_in" ? "حضور" : "انصراف"}</span>
+              <li key={r.key} className={`slot slot--${r.action === "check_in" ? "in" : "out"}`}>
+                <span className="slot__label">{r.action === "check_in" ? "حضور" : "انصراف"}</span>
                 {r.kind === "empty" ? (
-                  <span className="slot-empty" role="img" aria-label="لم يُسجَّل بعد" />
+                  <span className="slot__empty" role="img" aria-label="لم يُسجَّل بعد" />
                 ) : (
-                  <span className="slot-mark">
+                  <span className="slot__mark">
                     <span
-                      className={`${r.kind === "stamped" ? "stamp" : "pencil"} ${r.action === "check_in" ? "in" : "out"}${r.key === freshId ? " fresh" : ""}`}
+                      className={`${r.kind === "stamped" ? `stamp stamp--${r.action === "check_in" ? "in" : "out"}` : "pencil"}${r.key === freshId ? " is-fresh" : ""}`}
                       dir="ltr"
                     >
                       {formatTime(r.time!, tz)}
                     </span>
-                    {r.kind === "pencil" && <span className="slot-note"><Icon name="phone" />لم يُرسل بعد</span>}
-                    {r.kind === "stamped" && r.byAdmin && <span className="slot-note">أضافه المدير</span>}
+                    {r.kind === "pencil" && <span className="slot__note"><Icon name="phone" />لم يُرسل بعد</span>}
+                    {r.kind === "stamped" && r.byAdmin && <span className="slot__note">أضافه المدير</span>}
                     {r.kind === "stamped" && r.needsReview && (
-                      <span className="slot-note review"><Icon name="alert" />{noCheckIn(rows, i) ? "بدون حضور مسجّل" : STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
+                      <span className="slot__note slot__note--review"><Icon name="alert" />{noCheckIn(rows, i) ? "بدون حضور مسجّل" : STATUS_TEXT[r.event!.location_status] ?? "للمراجعة"}</span>
                     )}
                   </span>
                 )}
@@ -444,25 +444,25 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
           />
         ) : state.phase === "unconfirmed" ? (
           <div className="unconfirmed" role="alert">
-            <p><Icon name="alert" className="inline-icon" />{ERROR_TEXT.network}</p>
+            <p><Icon name="alert" className="icon--inline" />{ERROR_TEXT.network}</p>
             <div className="row">
-              <button className="btn primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
-              <button className="btn ghost" onClick={refresh}>تحديث الحالة</button>
+              <button className="btn btn--primary" onClick={() => onRetry(state.pending)}>إعادة المحاولة</button>
+              <button className="btn btn--ghost" onClick={refresh}>تحديث الحالة</button>
             </div>
           </div>
         ) : (
           <button
-            className={`punch ${action === "check_in" ? "in" : "out"}`}
+            className={`punch punch--${action === "check_in" ? "in" : "out"}`}
             onClick={() => onTap(data, allowQueue)}
             disabled={!canTap /* a stale tap is still safe: the server checks expected_action */}
             aria-busy={working}
           >
-            <span className="punch-icon" aria-hidden="true">
+            <span className="punch__icon" aria-hidden="true">
               <Icon name={data.biometric?.policy === "required" ? "fingerprint" : action === "check_in" ? "arrive" : "leave"} />
             </span>
-            <span className="punch-text">
-            <span className="punch-label">{actionLabel(action)}</span>
-            <span className="punch-sub">
+            <span className="punch__text">
+            <span className="punch__label">{actionLabel(action)}</span>
+            <span className="punch__sub">
               {bioBusy
                 ? "أكّد بصمتك…"
                 : blocked
@@ -483,7 +483,7 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
 
 
         {state.phase === "ready" && online && fromCache === null && data.can_check_out_without_in && !forgot && waiting.length === 0 && !setupNeeded && (
-          <button className="btn ghost forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
+          <button className="btn btn--ghost forgot-in" onClick={() => setConfirmNoIn(true)} disabled={working || bioBusy}>
             نسيت تسجيل الحضور؟ سجّل الانصراف فقط
           </button>
         )}
@@ -491,8 +491,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
           <Modal title="تسجيل انصراف بدون حضور" onClose={() => setConfirmNoIn(false)}>
             <p>لم يُسجَّل حضورك. سيُسجَّل الانصراف فقط، وتظهر الحركة للإدارة للمراجعة.</p>
             <div className="row">
-              <button className="btn primary" onClick={() => { setConfirmNoIn(false); void onTap(data, false, "check_out"); }}>تسجيل الانصراف</button>
-              <button className="btn ghost" onClick={() => setConfirmNoIn(false)}>إلغاء</button>
+              <button className="btn btn--primary" onClick={() => { setConfirmNoIn(false); void onTap(data, false, "check_out"); }}>تسجيل الانصراف</button>
+              <button className="btn btn--ghost" onClick={() => setConfirmNoIn(false)}>إلغاء</button>
             </div>
           </Modal>
         )}
@@ -500,53 +500,53 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
           <Banner kind={state.notice.kind} onClose={() => dispatch({ type: "DISMISS_NOTICE" })}>{state.notice.text}</Banner>
         )}
         {gpsNote && (
-          <Banner kind="error" className="gps-note" onClose={() => setGpsNote(null)}>{gpsNote}</Banner>
+          <Banner kind="error"  onClose={() => setGpsNote(null)}>{gpsNote}</Banner>
         )}
         {bioNote && (
-          <Banner kind={bioNote.kind} className="bio-note" onClose={() => setBioNote(null)}>{bioNote.text}</Banner>
+          <Banner kind={bioNote.kind} className="bio-card__note" onClose={() => setBioNote(null)}>{bioNote.text}</Banner>
         )}
         {data.biometric?.policy === "required" && !data.biometric.has_device && !setupNeeded && unsupportedNote && (
-          <p className="hint-line">هذا الجهاز لا يدعم البصمة؛ ستُعلَّم بصماتك للمراجعة</p>
+          <p className="hint">هذا الجهاز لا يدعم البصمة؛ ستُعلَّم بصماتك للمراجعة</p>
         )}
         {syncNote && (
-          <Banner kind={syncNote.kind} className="sync-note" onClose={() => setSyncNote(null)}>{syncNote.text}</Banner>
+          <Banner kind={syncNote.kind}  onClose={() => setSyncNote(null)}>{syncNote.text}</Banner>
         )}
         {waiting.length > 0 && (
           <p className="queue-count" role="status">
-            <Icon name="phone" className="inline-icon" />
+            <Icon name="phone" className="icon--inline" />
             بانتظار الإرسال: {waiting.length} {online ? "— جارٍ الإرسال…" : ""}
           </p>
         )}
 
         {failed.length > 0 && (
-          <section className="failed-card" role="alert">
-            <h3 className="section-title"><Icon name="alert" className="inline-icon" />تسجيلات لم يقبلها الخادم</h3>
-            <ul className="failed-list">
+          <section className="failed" role="alert">
+            <h3 className="section__title"><Icon name="alert" className="icon--inline" />تسجيلات لم يقبلها الخادم</h3>
+            <ul className="failed__list">
               {failed.map((q) => (
-                <li key={q.request_id} className="failed-item">
-                  <span className="failed-what">
+                <li key={q.request_id} className="failed__item">
+                  <span className="failed__what">
                     {q.action === "check_in" ? "حضور" : "انصراف"} {formatDate(q.offline_at, tz)}{" "}
                     <span dir="ltr">{formatTime(q.offline_at, tz)}</span>
                   </span>
-                  <span className="failed-reason">{ERROR_TEXT[q.error_code ?? "unknown"]}</span>
+                  <span className="failed__reason">{ERROR_TEXT[q.error_code ?? "unknown"]}</span>
                 </li>
               ))}
             </ul>
-            <p className="hint-line">هذه التسجيلات لم تُحسب. تواصل مع إدارة شركتك لتصحيحها.</p>
-            <button className="btn ghost block" onClick={dismissFailed}>فهمت، إخفاء</button>
+            <p className="hint">هذه التسجيلات لم تُحسب. تواصل مع إدارة شركتك لتصحيحها.</p>
+            <button className="btn btn--ghost btn--block" onClick={dismissFailed}>فهمت، إخفاء</button>
           </section>
         )}
 
         <section className="quick" aria-labelledby="quick-title">
-          <h3 id="quick-title" className="section-title">طلب جديد</h3>
-          <div className="quick-row">
-            <button className="quick-btn" onClick={() => onNewRequest("leave")} disabled={!online}>
+          <h3 id="quick-title" className="section__title">طلب جديد</h3>
+          <div className="quick__row">
+            <button className="quick__btn" onClick={() => onNewRequest("leave")} disabled={!online}>
               <Icon name="calendar" />إجازة
             </button>
-            <button className="quick-btn" onClick={() => onNewRequest("permission")} disabled={!online}>
+            <button className="quick__btn" onClick={() => onNewRequest("permission")} disabled={!online}>
               <Icon name="clock" />إذن
             </button>
-            <button className="quick-btn" onClick={() => onNewRequest("other")} disabled={!online}>
+            <button className="quick__btn" onClick={() => onNewRequest("other")} disabled={!online}>
               <Icon name="doc" />طلب آخر
             </button>
           </div>
@@ -585,18 +585,18 @@ function ServerClock({ offsetMs, timeZone, rows, openStart }: {
   const c = clockParts(iso, timeZone);
   const worked = workedToday(rows, openStart, now);
   return (
-    <div className="clock-block">
-      <p className="clock">
-        <span className="sr-only">الساعة الآن {formatClock(iso, timeZone)}</span>
+    <div className="clock">
+      <p className="clock__time">
+        <span className="u-sr-only">الساعة الآن {formatClock(iso, timeZone)}</span>
         <span dir="ltr" aria-hidden="true">
-          <span className="clock-hm">{c.hm}</span>
-          <span className="clock-s">:{c.ss}</span>
-          <span className="clock-ap">{c.period}</span>
+          <span className="clock__hm">{c.hm}</span>
+          <span className="clock__s">:{c.ss}</span>
+          <span className="clock__ap">{c.period}</span>
         </span>
       </p>
-      <p className="clock-date">{formatDate(iso, timeZone)}</p>
+      <p className="clock__date">{formatDate(iso, timeZone)}</p>
       {worked > 0 && (
-        <p className="worked">مدة العمل اليوم <span>{formatDuration(worked)}</span></p>
+        <p className="status__worked">مدة العمل اليوم <span>{formatDuration(worked)}</span></p>
       )}
     </div>
   );
@@ -612,7 +612,7 @@ function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
   if (days.length === 0) return null;
   return (
     <section className="earlier" aria-labelledby="earlier-title">
-      <h3 id="earlier-title" className="section-title">الأيام السابقة</h3>
+      <h3 id="earlier-title" className="section__title">الأيام السابقة</h3>
       <div className="group">
       <table className="days">
         <thead>
@@ -628,8 +628,8 @@ function EarlierDays({ days, timeZone }: { days: DayRow[]; timeZone: string }) {
             <tr key={d.day}>
               <th scope="row">
                 {formatDate(`${d.day}T12:00:00Z`, timeZone)}
-                {d.needsReview && <span className="day-flag">للمراجعة</span>}
-                {d.byAdmin && <span className="day-flag by-admin">أضافه المدير</span>}
+                {d.needsReview && <span className="days__flag">للمراجعة</span>}
+                {d.byAdmin && <span className="days__flag days__flag--by-admin">أضافه المدير</span>}
               </th>
               <td dir="ltr">{d.firstIn ? formatTime(d.firstIn, timeZone) : "—"}</td>
               <td dir="ltr">{d.lastOut ? formatTime(d.lastOut, timeZone) : "—"}</td>

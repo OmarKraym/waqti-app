@@ -8,13 +8,13 @@
     background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
   }
-  .notif-card .section-title { margin: 0; font-size: var(--font-size-md); }
+  .notif-card .section__title { margin: 0; font-size: var(--font-size-md); }
   .state-line {
     display: flex; align-items: flex-start; gap: var(--space-2-5); font-size: var(--font-size-sm); line-height: 1.7;
   }
   .state-line .icon { margin-top: var(--space-0-5); color: var(--color-text-muted); }
-  .state-line.on { color: var(--color-success-text); font-weight: 600; }
-  .state-line.on .icon, .alert-text .icon { color: inherit; }
+  .state-line.state-line--on { color: var(--color-success-text); font-weight: 600; }
+  .state-line.state-line--on .icon, .alert-text .icon { color: inherit; }
   .alert-text { color: var(--color-danger-text); }
   .state-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
   .rem-row {
@@ -23,20 +23,20 @@
     border: 1px solid var(--color-border); border-radius: var(--radius-md);
     background: var(--color-bg);
   }
-  .rem-ico {
+  .rem-row__icon {
     flex: none; width: 44px; height: 44px; border-radius: var(--radius-md);
     display: grid; place-items: center;
   }
-  .rem-ico .icon { width: 22px; height: 22px; }
-  .rem-ico.in { background: var(--color-success-tint); color: var(--color-success-text); }
-  .rem-ico.out { background: var(--color-danger-tint); color: var(--color-danger-text); }
-  .rem-when { display: grid; gap: var(--space-2); }
-  .rem-when > span { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-muted); }
+  .rem-row__icon .icon { width: 22px; height: 22px; }
+  .rem-row__icon.rem-row__icon--in { background: var(--color-success-tint); color: var(--color-success-text); }
+  .rem-row__icon.rem-row__icon--out { background: var(--color-danger-tint); color: var(--color-danger-text); }
+  .rem-row__when { display: grid; gap: var(--space-2); }
+  .rem-row__when > span { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-muted); }
   .rem-row select {
     width: 100%; min-height: 48px; padding: 0 var(--space-4);
     border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
     background-color: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--font-size-md);
   }
   .rem-row select:disabled { opacity: .5; cursor: not-allowed; }
-  .rem-row.off .rem-ico { background: var(--color-surface-sunken); color: var(--color-text-faint); }
+  .rem-row.is-off .rem-row__icon { background: var(--color-surface-sunken); color: var(--color-text-faint); }
 }

@@ -14,13 +14,13 @@ type Status = "done" | "todo" | "blocked" | "busy";
 function Step({ icon, title, status, children }: { icon: IconName; title: string; status: Status; children?: React.ReactNode }) {
   const label = status === "done" ? "تم" : status === "blocked" ? "يحتاج إجراء" : status === "busy" ? "…" : "مطلوب";
   return (
-    <li className={`perm-step ${status}`}>
-      <div className="perm-head">
-        <span className="perm-ico" aria-hidden="true"><Icon name={status === "done" ? "check" : icon} /></span>
-        <span className="perm-title">{title}</span>
-        <span className={`perm-chip ${status}`}>{label}</span>
+    <li className={`setup__step setup__step--${status}`}>
+      <div className="setup__head">
+        <span className="setup__icon" aria-hidden="true"><Icon name={status === "done" ? "check" : icon} /></span>
+        <span className="setup__title">{title}</span>
+        <span className={`setup__chip setup__chip--${status}`}>{label}</span>
       </div>
-      {children && <div className="perm-body">{children}</div>}
+      {children && <div className="setup__body">{children}</div>}
     </li>
   );
 }
@@ -164,20 +164,20 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
 
   return (
     <main className="center-screen">
-      <section className="card perm-card" aria-labelledby="perm-title">
-        <h2 id="perm-title" className="pad-title">جهّز هاتفك للبصمة</h2>
-        <p className="hint-line">اضغط كل زر، واختر «سماح» عندما يسألك الهاتف. هذا مرة واحدة فقط.</p>
-        <ol className="perm-list">
+      <section className="card setup" aria-labelledby="perm-title">
+        <h2 id="perm-title" className="pad__title">جهّز هاتفك للبصمة</h2>
+        <p className="hint">اضغط كل زر، واختر «سماح» عندما يسألك الهاتف. هذا مرة واحدة فقط.</p>
+        <ol className="setup__list">
           {needLocation && (
             <Step icon="pin" title="الموقع (GPS)" status={geo}>
-              {geo !== "done" && <p className="hint-line">نحتاج موقعك عند تسجيل الحضور والانصراف فقط.</p>}
-              {geoText && <Banner kind="warning" className="steps-text">{geoText}</Banner>}
+              {geo !== "done" && <p className="hint">نحتاج موقعك عند تسجيل الحضور والانصراف فقط.</p>}
+              {geoText && <Banner kind="warning" className="u-pre-line">{geoText}</Banner>}
               {geo === "blocked" && os === "android" && isStandalone && (
-                <a className="btn block" href={chromeTabUrl(location.href)}>افتح وقتي في Chrome لتعديل الإذن</a>
+                <a className="btn btn--block" href={chromeTabUrl(location.href)}>افتح وقتي في Chrome لتعديل الإذن</a>
               )}
-              {geoDiag && <p className="hint-line diag">{geoDiag}</p>}
+              {geoDiag && <p className="hint">{geoDiag}</p>}
               {geo !== "done" && (
-                <button className="btn primary block" onClick={askLocation} disabled={geo === "busy"} aria-busy={geo === "busy"}>
+                <button className="btn btn--primary btn--block" onClick={askLocation} disabled={geo === "busy"} aria-busy={geo === "busy"}>
                   {geo === "busy" ? "جارٍ تحديد موقعك…" : "السماح بالموقع"}
                 </button>
               )}
@@ -187,9 +187,9 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
             <Step icon="fingerprint" title={os === "ios" ? "Face ID أو البصمة" : "البصمة"} status={bioStatus}>
               {!hasDevice && canBio && (
                 <>
-                  <p className="hint-line">يُسجَّل هاتف واحد لحسابك. شركتك تطلب هذه الخطوة.</p>
+                  <p className="hint">يُسجَّل هاتف واحد لحسابك. شركتك تطلب هذه الخطوة.</p>
                   {bioError && <Banner kind="error" onClose={() => setBioError(null)}>{bioError}</Banner>}
-                  <button className="btn primary block" onClick={register} disabled={bioBusy} aria-busy={bioBusy}>
+                  <button className="btn btn--primary btn--block" onClick={register} disabled={bioBusy} aria-busy={bioBusy}>
                     {bioBusy ? "جارٍ التسجيل…" : os === "ios" ? "تسجيل Face ID" : "تسجيل البصمة"}
                   </button>
                 </>
@@ -197,9 +197,9 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
               {!hasDevice && canBio === false && env && (
                 <>
                   <Banner kind="warning">{BIO_HELP[bioReason(env)]}</Banner>
-                  <p className="perm-diag" dir="auto">{diagLine(env)}</p>
-                  <button className="btn ghost block" onClick={() => void checkBio()}>أعد الفحص</button>
-                  <p className="hint-line">إن لم ينجح: تستطيع المتابعة، وستُعلَّم بصماتك للمراجعة من الإدارة.</p>
+                  <p className="setup__diag" dir="auto">{diagLine(env)}</p>
+                  <button className="btn btn--ghost btn--block" onClick={() => void checkBio()}>أعد الفحص</button>
+                  <p className="hint">إن لم ينجح: تستطيع المتابعة، وستُعلَّم بصماتك للمراجعة من الإدارة.</p>
                 </>
               )}
             </Step>
@@ -207,8 +207,8 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
           <Step icon="bell" title="الإشعارات (تذكير البصمة)" status={pushStatus}>
             {push === "off" && (
               <>
-                <p className="hint-line">يصلك تذكير قبل بداية الدوام بـ 5 دقائق، وعند نهايته.</p>
-                <button className="btn primary block" onClick={askPush} disabled={pushBusy} aria-busy={pushBusy}>
+                <p className="hint">يصلك تذكير قبل بداية الدوام بـ 5 دقائق، وعند نهايته.</p>
+                <button className="btn btn--primary btn--block" onClick={askPush} disabled={pushBusy} aria-busy={pushBusy}>
                   {pushBusy ? "جارٍ التفعيل…" : "تفعيل الإشعارات"}
                 </button>
               </>
@@ -219,14 +219,14 @@ export function PermissionsSetup({ user, locationPolicy, biometric, onDone }: {
             {push === "denied" && (
               <Banner kind="warning">الإشعارات ممنوعة لهذا التطبيق. فعّلها من إعدادات الهاتف ← التطبيقات ← المتصفح (أو وقتي) ← الإشعارات.</Banner>
             )}
-            {push === "unsupported" && <p className="hint-line">هذا المتصفح لا يدعم الإشعارات. جرّب Chrome في الأندرويد.</p>}
+            {push === "unsupported" && <p className="hint">هذا المتصفح لا يدعم الإشعارات. جرّب Chrome في الأندرويد.</p>}
             {pushText && <Banner kind="warning">{pushText}</Banner>}
           </Step>
         </ol>
-        <button className="btn primary block" onClick={finish} disabled={mustRegister}>
+        <button className="btn btn--primary btn--block" onClick={finish} disabled={mustRegister}>
           {allDone ? "ابدأ" : mustRegister ? "سجّل البصمة أولًا" : "متابعة"}
         </button>
-        {!allDone && !mustRegister && <p className="hint-line">تستطيع إكمال الباقي لاحقًا من صفحة حسابك.</p>}
+        {!allDone && !mustRegister && <p className="hint">تستطيع إكمال الباقي لاحقًا من صفحة حسابك.</p>}
       </section>
     </main>
   );

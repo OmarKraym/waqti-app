@@ -34,7 +34,7 @@ export function MyOvertime({ data, online, onDone }: { data: OvertimeOverview; o
   if (items.length === 0) return null;
   return (
     <section aria-labelledby="ot-mine-title">
-      <h2 id="ot-mine-title" className="section-title">العمل الإضافي المكلَّف به</h2>
+      <h2 id="ot-mine-title" className="section__title">العمل الإضافي المكلَّف به</h2>
       <ul className="req-list">
         {items.map((o) => <li key={o.id}><MyOvertimeCard item={o} tz={data.timezone} online={online} onDone={onDone} /></li>)}
       </ul>
@@ -64,29 +64,29 @@ function MyOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz: 
   }
 
   return (
-    <article className={`req-card ot-card ${item.phase}`}>
-      <header className="req-card-head">
-        <p className="req-title">عمل إضافي · {formatMinutes(item.minutes)}</p>
-        <span className={`chip ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
+    <article className={`req-card req-card--overtime req-card--${item.phase}`}>
+      <header className="req-card__head">
+        <p className="req-card__title">عمل إضافي · {formatMinutes(item.minutes)}</p>
+        <span className={`chip chip--ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
       </header>
-      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
-      {item.task && <p className="req-reason">«{item.task}»</p>}
-      <p className="req-progress">كلّفك: {item.assigned_by.full_name}{item.phase === "cancelled" && item.cancelled_by_name ? ` · ألغاه: ${item.cancelled_by_name}` : ""}</p>
-      {actual && <p className="req-meta">{actual}</p>}
-      {item.employee_note && !writing && <p className="ot-note">ملاحظتك: «{item.employee_note}»</p>}
+      <p className="req-card__period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
+      {item.task && <p className="req-card__reason">«{item.task}»</p>}
+      <p className="req-card__progress">كلّفك: {item.assigned_by.full_name}{item.phase === "cancelled" && item.cancelled_by_name ? ` · ألغاه: ${item.cancelled_by_name}` : ""}</p>
+      {actual && <p className="req-card__meta">{actual}</p>}
+      {item.employee_note && !writing && <p className="req-card__note">ملاحظتك: «{item.employee_note}»</p>}
       {open && (writing ? (
-        <div className="reject-box">
+        <div className="req-card__reject">
           <label className="field">
             <span>ملاحظة لمن كلّفك (مثلًا: لا أستطيع الحضور ولماذا)</span>
             <textarea value={note} maxLength={500} rows={2} onChange={(e) => setNote(e.target.value)} />
           </label>
           <div className="actions">
             <button className="btn" onClick={() => setWriting(false)} disabled={busy}>تراجع</button>
-            <button className="btn primary" onClick={send} disabled={busy || !online || !note.trim()} aria-busy={busy}>إرسال الملاحظة</button>
+            <button className="btn btn--primary" onClick={send} disabled={busy || !online || !note.trim()} aria-busy={busy}>إرسال الملاحظة</button>
           </div>
         </div>
       ) : (
-        <button className="btn ghost small cancel" onClick={() => setWriting(true)} disabled={!online}>
+        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={() => setWriting(true)} disabled={!online}>
           {item.employee_note ? "تعديل الملاحظة" : "لا أستطيع / ملاحظة"}
         </button>
       ))}
@@ -101,12 +101,12 @@ export function TeamOvertime({ data, online, onDone, onAssign }: { data: Overtim
   const items = sortOvertime(data.assigned_by_me);
   return (
     <section aria-labelledby="ot-team-title">
-      <div className="section-head">
-        <h2 id="ot-team-title" className="section-title">العمل الإضافي لفريقك</h2>
-        <button className="btn small" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</button>
+      <div className="section__head">
+        <h2 id="ot-team-title" className="section__title">العمل الإضافي لفريقك</h2>
+        <button className="btn btn--sm" onClick={onAssign} disabled={!online}><Icon name="plus" />تكليف بعمل إضافي</button>
       </div>
       {items.length === 0 ? (
-        <p className="muted empty">لم تكلّف أحدًا بعد</p>
+        <p className="u-muted empty">لم تكلّف أحدًا بعد</p>
       ) : (
         <ul className="req-list">
           {items.map((o) => <li key={o.id}><TeamOvertimeCard item={o} tz={data.timezone} online={online} onDone={onDone} /></li>)}
@@ -132,20 +132,20 @@ function TeamOvertimeCard({ item, tz, online, onDone }: { item: OvertimeItem; tz
     }
   }
   return (
-    <article className={`req-card ot-card ${item.phase}${item.employee_note && item.phase !== "cancelled" ? " has-note" : ""}`}>
-      <header className="req-card-head">
-        <div className="min-w-0">
-          <p className="req-who truncate">{item.employee.full_name}</p>
-          <p className="req-title">عمل إضافي · {formatMinutes(item.minutes)}</p>
+    <article className={`req-card req-card--overtime req-card--${item.phase}${item.employee_note && item.phase !== "cancelled" ? " has-note" : ""}`}>
+      <header className="req-card__head">
+        <div className="u-min-w-0">
+          <p className="req-card__who u-truncate">{item.employee.full_name}</p>
+          <p className="req-card__title">عمل إضافي · {formatMinutes(item.minutes)}</p>
         </div>
-        <span className={`chip ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
+        <span className={`chip chip--ot-${item.phase}`}>{PHASE_LABEL[item.phase]}</span>
       </header>
-      <p className="req-period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
-      {item.task && <p className="req-reason">«{item.task}»</p>}
-      {item.employee_note && <p className="ot-note">ملاحظة الموظف: «{item.employee_note}»</p>}
-      {actual && <p className="req-meta">{actual}</p>}
+      <p className="req-card__period">{formatDay(overtimeDay(item, tz))}{" · "}<span>{overtimeHours(item, tz)}</span></p>
+      {item.task && <p className="req-card__reason">«{item.task}»</p>}
+      {item.employee_note && <p className="req-card__note">ملاحظة الموظف: «{item.employee_note}»</p>}
+      {actual && <p className="req-card__meta">{actual}</p>}
       {item.phase === "upcoming" && (
-        <button className="btn ghost small cancel" onClick={cancel} disabled={busy || !online}>إلغاء التكليف</button>
+        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={cancel} disabled={busy || !online}>إلغاء التكليف</button>
       )}
     </article>
   );
@@ -246,20 +246,20 @@ export function AssignOvertimeForm({ data, online, onClose, onSent }: {
       </div>
 
       {problem ? (
-        <p className="preview bad" role="alert">{problem}</p>
+        <p className="preview preview--bad" role="alert">{problem}</p>
       ) : built.ok && online && !current ? (
-        <p className="preview muted" aria-live="polite">جارٍ التحقق…</p>
+        <p className="preview preview--muted" aria-live="polite">جارٍ التحقق…</p>
       ) : current ? (
-        <div className="preview ok" aria-live="polite">
+        <div className="preview preview--ok" aria-live="polite">
           <p><strong>{formatMinutes(current.minutes)}</strong> · {shiftLine(current, tz)}</p>
-          <p className="small">{limitsLine(current)}</p>
+          <p className="u-small">{limitsLine(current)}</p>
         </div>
       ) : null}
 
       {sendError && <Banner kind="error">{sendError}</Banner>}
       {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت.</Banner>}
 
-      <button className="btn primary block send" onClick={send} disabled={!canSend} aria-busy={sending}>
+      <button className="btn btn--primary btn--block btn--send" onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "تكليف"}
       </button>
     </main>

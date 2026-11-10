@@ -21,14 +21,14 @@ export function ConfirmSignOut({ user, onCancel }: { user: SessionUser; onCancel
   }, [user.id]);
   return (
     <Modal title="تسجيل الخروج" onClose={onCancel}>
-      <p className="modal-text">
+      <p className="modal__text">
         {waiting > 0
           ? `لديك ${waiting} تسجيل لم يُرسل بعد. سيبقى محفوظًا على هذا الجهاز ويُرسل عند دخولك مرة أخرى. هل تريد الخروج من حسابك؟`
           : "هل تريد الخروج من حسابك؟"}
       </p>
-      <div className="modal-actions">
-        <button className="btn ghost" onClick={onCancel}>البقاء في التطبيق</button>
-        <button className="btn danger" onClick={() => void api.signOut()}><Icon name="signOut" />تأكيد الخروج</button>
+      <div className="modal__actions">
+        <button className="btn btn--ghost" onClick={onCancel}>البقاء في التطبيق</button>
+        <button className="btn btn--danger" onClick={() => void api.signOut()}><Icon name="signOut" />تأكيد الخروج</button>
       </div>
     </Modal>
   );
@@ -43,16 +43,16 @@ function ThemeCard() {
   };
   return (
     <section className="group theme-card" aria-labelledby="theme-title">
-      <div className="theme-head">
-        <span className="theme-ico" aria-hidden="true"><Icon name="contrast" /></span>
-        <div className="bio-text">
-          <span className="bio-title" id="theme-title">المظهر</span>
-          <span className="theme-note">{THEME_HINT[choice]}</span>
+      <div className="theme-card__head">
+        <span className="theme-card__icon" aria-hidden="true"><Icon name="contrast" /></span>
+        <div className="bio-card__text">
+          <span className="bio-card__title" id="theme-title">المظهر</span>
+          <span className="theme-card__note">{THEME_HINT[choice]}</span>
         </div>
       </div>
       <div className="seg" role="radiogroup" aria-labelledby="theme-title">
         {THEME_CHOICES.map((c) => (
-          <button key={c} type="button" role="radio" aria-checked={choice === c} className={`seg-btn${choice === c ? " on" : ""}`} onClick={() => pick(c)}>
+          <button key={c} type="button" role="radio" aria-checked={choice === c} className={`seg__btn${choice === c ? " is-active" : ""}`} onClick={() => pick(c)}>
             {THEME_LABEL[c]}
           </button>
         ))}
@@ -90,27 +90,27 @@ function MySummary({ userId, online }: { userId: string; online: boolean }) {
   if (data && groups.length === 0 && state !== "error") return null; // nothing allowed: no section at all
   return (
     <section className="summary" aria-labelledby="summary-title" aria-busy={state === "loading"}>
-      <h3 id="summary-title" className="summary-title">ملخص بياناتي</h3>
-      {!data && state === "loading" && <div className="group summary-skeleton" aria-hidden="true"><div /><div /><div /></div>}
+      <h3 id="summary-title" className="summary__title">ملخص بياناتي</h3>
+      {!data && state === "loading" && <div className="group summary__skeleton" aria-hidden="true"><div /><div /><div /></div>}
       {!data && state === "error" && (
-        <div className="group summary-empty">
-          <p className="muted">{online ? "تعذّر عرض ملخص بياناتك الآن." : "يلزم اتصال بالإنترنت لعرض ملخص بياناتك."}</p>
-          {online && <button className="btn ghost" onClick={() => void load()}>إعادة المحاولة</button>}
+        <div className="group summary__empty">
+          <p className="u-muted">{online ? "تعذّر عرض ملخص بياناتك الآن." : "يلزم اتصال بالإنترنت لعرض ملخص بياناتك."}</p>
+          {online && <button className="btn btn--ghost" onClick={() => void load()}>إعادة المحاولة</button>}
         </div>
       )}
       {data && state === "error" && savedAt !== null && (
-        <p className="summary-stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
+        <p className="summary__stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
       )}
       {groups.map((g) => (
         <section key={g.title} className="group" aria-label={g.title}>
-          <h4 className="summary-group">{g.title}</h4>
+          <h4 className="summary__group">{g.title}</h4>
           <dl className="info-list">
             {g.rows.map((r) => (
               <div key={r.label}>
                 <dt>{r.label}</dt>
-                <dd className={r.strong ? "strong" : undefined}>
+                <dd className={r.strong ? "info-list__strong" : undefined}>
                   <span dir={r.ltr ? "ltr" : undefined}>{r.value}</span>
-                  {r.note && <span className="summary-note">{r.note}</span>}
+                  {r.note && <span className="summary__note">{r.note}</span>}
                 </dd>
               </div>
             ))}
@@ -155,11 +155,11 @@ function BiometricLogin({ biometric, online, onChanged }: {
     : "الدخول بكلمة المرور فقط.";
   return (
     <section className="group bio-card" aria-label="الدخول بالبصمة">
-      <div className="bio-row">
-        <span className="bio-ico" aria-hidden="true"><Icon name="fingerprint" /></span>
-        <div className="bio-text">
-          <span className="bio-title" id="bio-title">الدخول بالبصمة</span>
-          <span className="bio-detail">{detail}</span>
+      <div className="bio-card__row">
+        <span className="bio-card__icon" aria-hidden="true"><Icon name="fingerprint" /></span>
+        <div className="bio-card__text">
+          <span className="bio-card__title" id="bio-title">الدخول بالبصمة</span>
+          <span className="bio-card__detail">{detail}</span>
         </div>
         {toggle.kind === "switch" && (
           <Switch
@@ -169,11 +169,11 @@ function BiometricLogin({ biometric, online, onChanged }: {
         )}
       </div>
       {toggle.kind === "switch" && !toggle.on && !toggle.canTurnOn && (
-        <p className="bio-note">هذا الهاتف لا يدعم البصمة، فلا يمكن تشغيلها منه.</p>
+        <p className="bio-card__note">هذا الهاتف لا يدعم البصمة، فلا يمكن تشغيلها منه.</p>
       )}
-      {toggle.kind === "switch" && !online && <p className="bio-note">يلزم اتصال بالإنترنت لتغيير هذا الإعداد.</p>}
-      {busy && toggle.kind === "switch" && !toggle.on && <p className="bio-note" role="status">أكّد بصمتك على هذا الهاتف…</p>}
-      {message && <p className={`bio-note ${message.kind}`} role={message.kind === "error" ? "alert" : "status"}>{message.text}</p>}
+      {toggle.kind === "switch" && !online && <p className="bio-card__note">يلزم اتصال بالإنترنت لتغيير هذا الإعداد.</p>}
+      {busy && toggle.kind === "switch" && !toggle.on && <p className="bio-card__note" role="status">أكّد بصمتك على هذا الهاتف…</p>}
+      {message && <p className={`bio-card__note bio-card__note--${message.kind}`} role={message.kind === "error" ? "alert" : "status"}>{message.text}</p>}
     </section>
   );
 }
@@ -189,11 +189,11 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged,
   return (
     <div className="app">
       <AppBar title="حسابي" onBack={onBack} />
-      <main className="container profile">
+      <main className="container">
         <section className="profile-head">
           <span className="avatar" aria-hidden="true"><Icon name="user" /></span>
-          <h2 className="profile-name">{name}</h2>
-          {info?.employee.employee_number && <p className="profile-sub">رقم الموظف <span dir="ltr">{info.employee.employee_number}</span></p>}
+          <h2 className="profile-head__name">{name}</h2>
+          {info?.employee.employee_number && <p className="profile-head__sub">رقم الموظف <span dir="ltr">{info.employee.employee_number}</span></p>}
         </section>
 
         <section className="group" aria-label="بيانات الحساب">
@@ -209,7 +209,7 @@ export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged,
 
         <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
 
-        <button className="btn danger-soft block" onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</button>
+        <button className="btn btn--danger-soft btn--block" onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</button>
 
         {setupMissing && onOpenSetup && (
           <div className="setup-nudge">

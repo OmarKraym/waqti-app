@@ -25,7 +25,7 @@ function Wheel({ label, items, index, onIndex }: {
   };
   return (
     <div
-      className="wheel" role="listbox" aria-label={label} tabIndex={0} ref={box}
+      className="wheels__wheel" role="listbox" aria-label={label} tabIndex={0} ref={box}
       aria-activedescendant={`${label}-${index}`}
       onScroll={(e) => {
         const i = wheelIndex(e.currentTarget.scrollTop, ROW, items.length);
@@ -37,7 +37,7 @@ function Wheel({ label, items, index, onIndex }: {
       }}
     >
       {items.map((t, i) => (
-        <div key={t} id={`${label}-${i}`} role="option" aria-selected={i === index} className={`wheel-row${i === index ? " on" : ""}`} onClick={() => go(i)}>
+        <div key={t} id={`${label}-${i}`} role="option" aria-selected={i === index} className={`wheels__row${i === index ? " is-active" : ""}`} onClick={() => go(i)}>
           {t}
         </div>
       ))}
@@ -72,15 +72,15 @@ function Picker({ title, value, step, onDone, onClose }: {
   return (
     <Modal title={title} onClose={onClose} sheet>
       <div className="wheels" dir="ltr">
-        <div className="wheel-band" aria-hidden="true" />
+        <div className="wheels__band" aria-hidden="true" />
         <Wheel label={`${title}: الساعة`} items={HOURS} index={h} onIndex={setH} />
-        <span className="wheel-colon" aria-hidden="true">:</span>
+        <span className="wheels__colon" aria-hidden="true">:</span>
         <Wheel label={`${title}: الدقائق`} items={minutes} index={m} onIndex={setM} />
         <Wheel label={`${title}: صباحاً أو مساءً`} items={PERIODS} index={p} onIndex={setP} />
       </div>
-      <div className="modal-actions">
-        <button type="button" className="btn primary block" onClick={done}>تم</button>
-        <button type="button" className="btn block" onClick={onClose}>إلغاء</button>
+      <div className="modal__actions">
+        <button type="button" className="btn btn--primary btn--block" onClick={done}>تم</button>
+        <button type="button" className="btn btn--block" onClick={onClose}>إلغاء</button>
       </div>
     </Modal>
   );
@@ -104,7 +104,7 @@ export function TimeField({ label, value, onChange, step = 5, disabled }: {
   return (
     <div className="field time-field">
       <span id={`tf-${label}`}>{label}</span>
-      <button type="button" className={`time-btn${shown ? "" : " unset"}`} aria-labelledby={`tf-${label}`} aria-haspopup="dialog"
+      <button type="button" className={`time-field__button${shown ? "" : " time-field__button--unset"}`} aria-labelledby={`tf-${label}`} aria-haspopup="dialog"
               disabled={disabled} onClick={() => setOpen(true)}>
         <span dir="ltr">{shown || "اختر الوقت"}</span>
       </button>

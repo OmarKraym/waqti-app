@@ -88,7 +88,7 @@ export function Requests({ data, online, compose }: {
 
   return (
     <>
-    <AppBar className="req-head" title="الطلبات" />
+    <AppBar  title="الطلبات" />
     <main className="container requests has-fab">
       {!online && <Banner kind="warning">الطلبات تحتاج اتصالًا بالإنترنت.</Banner>}
       {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}
@@ -98,15 +98,15 @@ export function Requests({ data, online, compose }: {
           <div className="center-block" aria-busy="true"><div className="spinner" /></div>
         ) : (
           <div className="card pad">
-            <Icon name="alert" className="pad-icon" />
-            <p className="muted">{error?.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[error?.code ?? "unknown"]}</p>
-            <button className="btn primary" onClick={reload}>إعادة المحاولة</button>
+            <Icon name="alert" className="pad__icon" />
+            <p className="u-muted">{error?.code === "network" ? "تحقق من اتصالك بالإنترنت." : ERROR_TEXT[error?.code ?? "unknown"]}</p>
+            <button className="btn btn--primary" onClick={reload}>إعادة المحاولة</button>
           </div>
         )
       ) : (
         <>
           {savedAt !== null && (
-            <p className="summary-stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
+            <p className="summary__stale">آخر تحديث {new Date(savedAt).toLocaleDateString("en-GB")} {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {online ? "تعذّر التحديث الآن." : "لا يوجد اتصال."}</p>
           )}
           <Balances overview={overview} />
           {inbox.length > 0 && (
@@ -125,9 +125,9 @@ export function Requests({ data, online, compose }: {
       )}
     </main>
     {/* The main action of this tab floats where the punch button floats on the today tab. */}
-    <button className="fab new-req" onClick={() => { setNote(null); setComposing({ type: "leave" }); }} disabled={!overview || !online}>
-      <span className="fab-icon" aria-hidden="true"><Icon name="plus" /></span>
-      <span className="fab-label">طلب جديد</span>
+    <button className="fab" onClick={() => { setNote(null); setComposing({ type: "leave" }); }} disabled={!overview || !online}>
+      <span className="fab__icon" aria-hidden="true"><Icon name="plus" /></span>
+      <span className="fab__label">طلب جديد</span>
     </button>
     </>
   );
@@ -145,8 +145,8 @@ function Inbox({ items, timeZone, online, onDone }: {
   items: InboxItem[]; timeZone: string; online: boolean; onDone: (text: string, kind: "success" | "error") => void;
 }) {
   return (
-    <section className="inbox" aria-labelledby="inbox-title">
-      <h2 id="inbox-title" className="section-title">بانتظار موافقتك <span className="count">{items.length}</span></h2>
+    <section  aria-labelledby="inbox-title">
+      <h2 id="inbox-title" className="section__title">بانتظار موافقتك <span className="count">{items.length}</span></h2>
       <ul className="req-list">
         {items.map((it) => (
           <li key={it.approval_id}><InboxCard item={it} timeZone={timeZone} online={online} onDone={onDone} /></li>
@@ -190,45 +190,45 @@ function InboxCard({ item, timeZone, online, onDone }: {
   }
 
   return (
-    <article className="req-card approve-card">
-      <header className="req-card-head">
-        <span className="avatar-sm" aria-hidden="true">{item.employee.full_name.trim().charAt(0)}</span>
-        <div className="req-head-text">
-          <p className="req-who truncate">{item.employee.full_name}</p>
-          <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
+    <article className="req-card req-card--approve">
+      <header className="req-card__head">
+        <span className="mini-avatar" aria-hidden="true">{item.employee.full_name.trim().charAt(0)}</span>
+        <div className="req-card__head-text">
+          <p className="req-card__who u-truncate">{item.employee.full_name}</p>
+          <p className="req-card__title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
         </div>
-        <span className="step-of">الخطوة {visibleSteps(item.steps).findIndex((s) => s.step_order === item.my_step) + 1} من {item.step_count}</span>
+        <span className="req-card__step-of">الخطوة {visibleSteps(item.steps).findIndex((s) => s.step_order === item.my_step) + 1} من {item.step_count}</span>
       </header>
       {item.date_mode !== "none" && (
-        <p className="req-period"><Icon name={TYPE_ICON[item.type]} className="inline-icon" />{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
+        <p className="req-card__period"><Icon name={TYPE_ICON[item.type]} className="icon--inline" />{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>
       )}
-      {item.reason && <p className="req-reason">«{item.reason}»</p>}
+      {item.reason && <p className="req-card__reason">«{item.reason}»</p>}
       {item.balance && item.balance.entitled !== null && (
-        <p className="req-meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
+        <p className="req-card__meta">رصيده المتبقي بعد الموافقة: <strong>{formatDays(Math.max(after ?? 0, 0))}</strong> من {formatDays(item.balance.entitled)}</p>
       )}
       {item.permission && (
-        <p className="req-meta">
+        <p className="req-card__meta">
           {item.permission.max_per_month === null
             ? `هذا النوع بلا حد لعدد المرات (طلب ${formatTimes(item.permission.used + item.permission.pending + 1)} هذا الشهر).`
             : <>استخدم هذا الشهر <strong>{item.permission.used + item.permission.pending}</strong> من {item.permission.max_per_month} قبل هذا الطلب.</>}
         </p>
       )}
-      {err && <p className="form-error" role="alert">{err === "network" ? "لم يصل رد. حاول مرة أخرى؛ لن يُسجّل القرار مرتين." : ERROR_TEXT[err]}</p>}
+      {err && <p className="form__error" role="alert">{err === "network" ? "لم يصل رد. حاول مرة أخرى؛ لن يُسجّل القرار مرتين." : ERROR_TEXT[err]}</p>}
       {rejecting ? (
-        <div className="reject-box">
+        <div className="req-card__reject">
           <label className="field">
             <span>سبب الرفض (يراه الموظف، اختياري)</span>
             <textarea value={reason} maxLength={500} rows={2} onChange={(e) => setReason(e.target.value)} />
           </label>
           <div className="actions">
             <button className="btn" onClick={() => setRejecting(false)} disabled={busy}>تراجع</button>
-            <button className="btn danger" onClick={() => decide("reject")} disabled={busy || !online} aria-busy={busy}>تأكيد الرفض</button>
+            <button className="btn btn--danger" onClick={() => decide("reject")} disabled={busy || !online} aria-busy={busy}>تأكيد الرفض</button>
           </div>
         </div>
       ) : (
         <div className="actions">
-          <button className="btn danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</button>
-          <button className="btn primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
+          <button className="btn btn--danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</button>
+          <button className="btn btn--primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
             {busy ? "جارٍ الإرسال…" : "موافقة"}
           </button>
         </div>
@@ -253,23 +253,26 @@ function Balances({ overview }: { overview: RequestsOverview }) {
   return (
     <section className="balances" aria-label="أرصدتي">
       {annual && annual.remaining !== null && card && (
-        <div className="balance annual">
-          <span className="balance-label">الإجازة السنوية</span>
-          <span className="balance-value">{formatDays(card.value)}</span>
-          <span className="balance-sub">{card.sub}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
+        <div className="balance balance--annual">
+          <span className="balance__label">الإجازة السنوية</span>
+          <span className="balance__value">{formatDays(card.value)}</span>
+          <span className="balance__sub">{card.sub}{annual.pending > 0 && ` · ${formatDays(annual.pending)} قيد الموافقة`}</span>
           {entitled > 0 && (
-            <div className="balance-bar" role="img" aria-label={`مستخدم ${formatDays(annual.used)} وقيد الموافقة ${formatDays(annual.pending)} من ${formatDays(entitled)}`}>
-              <span className="used" style={{ width: `${pct(annual.used)}%` }} />
-              <span className="pend" style={{ width: `${pct(annual.pending)}%` }} />
-            </div>
+            // An SVG bar: the widths are attributes, not inline styles. x runs left to right, so the used part is drawn
+            // from the right edge (the start of the line in Arabic), then the pending part next to it.
+            <svg className="balance__bar" viewBox="0 0 100 8" preserveAspectRatio="none" role="img"
+              aria-label={`مستخدم ${formatDays(annual.used)} وقيد الموافقة ${formatDays(annual.pending)} من ${formatDays(entitled)}`}>
+              <rect className="balance__used" x={100 - pct(annual.used)} width={pct(annual.used)} height="8" />
+              <rect className="balance__pending" x={100 - pct(annual.used) - pct(annual.pending)} width={pct(annual.pending)} height="8" />
+            </svg>
           )}
-          <dl className="balance-stats">
+          <dl className="balance__stats">
             {card.stats.map((st) => <div key={st.label}><dt>{st.label}</dt><dd>{st.value}</dd></div>)}
           </dl>
         </div>
       )}
       {others.length > 0 && (
-        <p className="balance-others">
+        <p className="balances__others">
           {others.join(" · ")}
         </p>
       )}
@@ -281,7 +284,7 @@ function PermissionUsage({ overview }: { overview: RequestsOverview }) {
   if (overview.permission_types.length === 0) return null;
   return (
     <section className="perms" aria-labelledby="perm-title">
-      <h2 id="perm-title" className="section-title">الأذونات هذا الشهر</h2>
+      <h2 id="perm-title" className="section__title">الأذونات هذا الشهر</h2>
       <div className="balance">
         <ul className="perm-usage">
           {overview.permission_types.map((p) => {
@@ -289,8 +292,8 @@ function PermissionUsage({ overview }: { overview: RequestsOverview }) {
             const share = left === null || !p.max_per_month ? 1 : left / p.max_per_month;
             return (
               <li key={p.id}>
-                <span className="perm-name">{p.name}</span>
-                <span className={`perm-left${left === 0 ? " none" : share < 0.5 ? " low" : ""}`}>
+                <span className="perm-usage__name">{p.name}</span>
+                <span className={`perm-usage__left${left === 0 ? " perm-usage__left--none" : share < 0.5 ? " perm-usage__left--low" : ""}`}>
                   {left === null ? "بلا حد" : left === 0 ? "استُنفد" : `متبقٍ ${left} من ${p.max_per_month}`}
                 </span>
               </li>
@@ -309,9 +312,9 @@ function MyRequests({ items, timeZone, online, onChanged }: {
 }) {
   return (
     <section aria-labelledby="mine-title">
-      <h2 id="mine-title" className="section-title">طلباتي</h2>
+      <h2 id="mine-title" className="section__title">طلباتي</h2>
       {items.length === 0 ? (
-        <p className="muted empty">لا توجد طلبات بعد</p>
+        <p className="u-muted empty">لا توجد طلبات بعد</p>
       ) : (
         <ul className="req-list">
           {items.map((r) => (
@@ -345,30 +348,30 @@ function MyRequestCard({ item, timeZone, online, onChanged }: {
   }
 
   return (
-    <article className={`req-card mine ${item.status}`}>
-      <header className="req-card-head">
-        <span className={`type-ico ${item.type}`} aria-hidden="true"><Icon name={TYPE_ICON[item.type]} /></span>
-        <div className="req-head-text">
-          <p className="req-title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
-          {item.date_mode !== "none" && <p className="req-period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>}
+    <article className={`req-card req-card--mine req-card--${item.status}`}>
+      <header className="req-card__head">
+        <span className={`type-ico type-ico--${item.type}`} aria-hidden="true"><Icon name={TYPE_ICON[item.type]} /></span>
+        <div className="req-card__head-text">
+          <p className="req-card__title">{requestTitle(item)}{item.days !== null && ` · ${formatDays(item.days)}`}{item.minutes !== null && ` · ${formatMinutes(item.minutes)}`}</p>
+          {item.date_mode !== "none" && <p className="req-card__period">{period.day}{period.time && <>{" · "}<span>{period.time}</span></>}</p>}
         </div>
-        <span className={`chip ${item.status}`}>{STATUS_LABEL[item.status]}</span>
+        <span className={`chip chip--${item.status}`}>{STATUS_LABEL[item.status]}</span>
       </header>
       {steps.length > 0 && (
         <ol className="steps" aria-label="مسار الموافقة">
           {steps.map((s) => (
-            <li key={s.step_order} className={`step ${s.status}`} title={KIND_LABEL[s.kind]}>
-              <span className="step-dot" aria-hidden="true" />
-              <span className="step-name">{s.kind === "hr" ? KIND_LABEL.hr : s.approver_name ?? KIND_LABEL[s.kind]}</span>
+            <li key={s.step_order} className={`steps__step steps__step--${s.status}`} title={KIND_LABEL[s.kind]}>
+              <span className="steps__dot" aria-hidden="true" />
+              <span className="steps__name">{s.kind === "hr" ? KIND_LABEL.hr : s.approver_name ?? KIND_LABEL[s.kind]}</span>
             </li>
           ))}
         </ol>
       )}
-      <p className="req-progress">{progressLine(item)}</p>
-      {chargedLine(item) && <p className="req-progress">{chargedLine(item)}</p>}
-      {visibleNote(item) && <p className="req-reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
+      <p className="req-card__progress">{progressLine(item)}</p>
+      {chargedLine(item) && <p className="req-card__progress">{chargedLine(item)}</p>}
+      {visibleNote(item) && <p className="req-card__reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
       {item.status === "pending" && (
-        <button className="btn ghost small cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
+        <button className="btn btn--ghost btn--sm req-card__cancel" onClick={cancel} disabled={busy || !online}>إلغاء الطلب</button>
       )}
     </article>
   );
@@ -489,7 +492,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
             key={t.id}
             role="radio"
             aria-checked={draft.type === t.id}
-            className={`seg-btn${draft.type === t.id ? " on" : ""}`}
+            className={`seg__btn${draft.type === t.id ? " is-active" : ""}`}
             onClick={() => set({ type: t.id })}
           >
             {t.label}
@@ -518,7 +521,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
                 )}
               </select>
             </label>
-            {kind && kindBalanceLine(kind.balance) && <p className="hint-line">{kindBalanceLine(kind.balance)}</p>}
+            {kind && kindBalanceLine(kind.balance) && <p className="hint">{kindBalanceLine(kind.balance)}</p>}
           </>
         )}
 
@@ -534,7 +537,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
 
         {draft.type === "permission" ? (
           ptypes.length === 0 ? (
-            <p className="muted">لا توجد أنواع أذونات متاحة. تواصل مع إدارة شركتك.</p>
+            <p className="u-muted">لا توجد أنواع أذونات متاحة. تواصل مع إدارة شركتك.</p>
           ) : (
           <>
             <label className="field">
@@ -552,7 +555,7 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
               </select>
             </label>
             {ptype && ptype.days_back === 0 && ptype.days_ahead === 0 ? (
-              <p className="field-static"><span>اليوم</span> {formatDay(overview.today)}</p>
+              <p className="field--static"><span>اليوم</span> {formatDay(overview.today)}</p>
             ) : (
               <label className="field">
                 <span>اليوم</span>
@@ -615,14 +618,14 @@ function NewRequestForm({ initialType, initialDraft, overview, online, onClose, 
       </div>
 
       {problem && <ProblemLine problem={problem} draft={draft} ptype={ptype} earliest={earliest} />}
-      {!problem && over && <p className="preview warn" role="status">{over}</p>}
+      {!problem && over && <p className="preview preview--warn" role="status">{over}</p>}
 
       {sendError && (
         <Banner kind="error">{sendError === "network" ? "لم يصل رد من الخادم. اضغط «إرسال الطلب» مرة أخرى — لن يُقدَّم الطلب مرتين." : ERROR_TEXT[sendError]}</Banner>
       )}
       {!online && <Banner kind="warning">لا يوجد اتصال بالإنترنت. أرسل الطلب عند عودة الاتصال.</Banner>}
 
-      <button className="btn primary block send" onClick={send} disabled={!canSend} aria-busy={sending}>
+      <button className="btn btn--primary btn--block btn--send" onClick={send} disabled={!canSend} aria-busy={sending}>
         {sending ? "جارٍ الإرسال…" : "إرسال الطلب"}
       </button>
     </main>
@@ -646,5 +649,5 @@ function ProblemLine({ problem, draft, ptype, earliest }: { problem: AppErrorCod
   const text = problem === "leave_date_not_allowed" ? `لا يمكن طلب إجازة تبدأ قبل ${formatDay(earliest)} حسب قواعد الشركة.`
     : problem === "network" ? "تعذّر التحقق من الطلب الآن. تحقق من الاتصال."
     : draft.type === "permission" ? permissionErrorText(problem, ptype) : ERROR_TEXT[problem];
-  return <p className="preview bad" role="alert">{text}</p>;
+  return <p className="preview preview--bad" role="alert">{text}</p>;
 }

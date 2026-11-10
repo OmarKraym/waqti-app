@@ -23,13 +23,13 @@ function ReminderRow({ kind, id, title, selectLabel, on, value, options, atLabel
   onToggle: (next: boolean) => void; onValue: (minutes: number) => void;
 }) {
   return (
-    <div className={`rem-row${on ? "" : " off"}`}>
+    <div className={`rem-row${on ? "" : " is-off"}`}>
       <div className="switch-row">
-        <span className={`rem-ico ${kind}`} aria-hidden="true"><Icon name={kind === "in" ? "arrive" : "leave"} /></span>
-        <span className="switch-label" id={`${id}-label`}>{title}</span>
+        <span className={`rem-row__icon rem-row__icon--${kind}`} aria-hidden="true"><Icon name={kind === "in" ? "arrive" : "leave"} /></span>
+        <span className="switch-row__label" id={`${id}-label`}>{title}</span>
         <Switch checked={on} labelledBy={`${id}-label`} disabled={!online} onChange={onToggle} />
       </div>
-      <label className="rem-when">
+      <label className="rem-row__when">
         <span>متى يصلك التذكير؟</span>
         <select aria-label={selectLabel} value={value} disabled={!online || !on} onChange={(e) => onValue(Number(e.target.value))}>
           {options.map((m) => <option key={m} value={m}>{minutesLabel(m, atLabel)}</option>)}
@@ -50,17 +50,17 @@ function HolidaysCard({ userId }: { userId: string }) {
   const tz = loadCachedState(browserStorage(), userId)?.data.company.timezone ?? "Africa/Tripoli";
   const items = holidayItems(calendar, dayKey(Date.now(), tz));
   return (
-    <section className="notif-card holidays-card" aria-labelledby="holidays-title">
-      <h2 id="holidays-title" className="section-title">العطل الرسمية</h2>
+    <section className="notif-card" aria-labelledby="holidays-title">
+      <h2 id="holidays-title" className="section__title">العطل الرسمية</h2>
       {items.length === 0 ? (
-        <p className="muted">لا توجد عطل رسمية قادمة.</p>
+        <p className="u-muted">لا توجد عطل رسمية قادمة.</p>
       ) : (
-        <ul className="holidays-list">
+        <ul className="holidays">
           {items.map((h) => (
-            <li key={`${h.name}-${h.when}`} className={[h.cancelled ? "cancelled" : "", h.kind === "annual_leave" ? "leave-day" : ""].join(" ").trim() || undefined}>
-              <span className="holiday-name">{h.name}{h.kind === "annual_leave" && <span className="holiday-tag">إجازة سنوية</span>}</span>
-              <span className="holiday-when" dir="auto">{h.when}</span>
-              {h.note && <span className="holiday-note">{h.note}</span>}
+            <li key={`${h.name}-${h.when}`} className={[h.cancelled ? "is-cancelled" : "", h.kind === "annual_leave" ? "holidays__item--leave" : ""].join(" ").trim() || undefined}>
+              <span className="holidays__name">{h.name}{h.kind === "annual_leave" && <span className="holidays__tag">إجازة سنوية</span>}</span>
+              <span className="holidays__when" dir="auto">{h.when}</span>
+              {h.note && <span className="holidays__note">{h.note}</span>}
             </li>
           ))}
         </ul>
@@ -182,21 +182,21 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
       <HolidaysCard userId={userId} />
 
       <section className="notif-card" aria-labelledby="device-title">
-        <h2 id="device-title" className="section-title">هذا الجهاز</h2>
+        <h2 id="device-title" className="section__title">هذا الجهاز</h2>
         {push === null ? (
-          <p className="muted">جارٍ التحقق…</p>
+          <p className="u-muted">جارٍ التحقق…</p>
         ) : push === "on" ? (
           <>
-            <p className="state-line on"><Icon name="check" />الإشعارات مفعّلة على هذا الجهاز.</p>
+            <p className="state-line state-line--on"><Icon name="check" />الإشعارات مفعّلة على هذا الجهاز.</p>
             <div className="actions">
               <button className="btn" onClick={test} disabled={busy || !online}>إرسال إشعار تجريبي</button>
-              <button className="btn danger-text" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</button>
+              <button className="btn btn--danger-text" onClick={turnOff} disabled={busy || !online}>إيقاف على هذا الجهاز</button>
             </div>
           </>
         ) : push === "off" ? (
           <>
             <p className="state-line"><Icon name="bell" />فعّلها لتصلك الطلبات وتذكيرات الدوام حتى والتطبيق مغلق.</p>
-            <button className="btn primary block" onClick={turnOn} disabled={busy || !online} aria-busy={busy}>
+            <button className="btn btn--primary btn--block" onClick={turnOn} disabled={busy || !online} aria-busy={busy}>
               {busy ? "جارٍ التفعيل…" : "تفعيل الإشعارات"}
             </button>
           </>
@@ -210,17 +210,17 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
       </section>
 
       <section className="notif-card" aria-labelledby="req-n-title">
-        <h2 id="req-n-title" className="section-title">الطلبات</h2>
-        <p className="card-text">تصلك تلقائيًا: كل طلب ينتظر موافقتك عندما يصل دورك في مسار الموافقات، ونتيجة طلباتك (موافقة أو رفض).</p>
+        <h2 id="req-n-title" className="section__title">الطلبات</h2>
+        <p className="notif-card__text">تصلك تلقائيًا: كل طلب ينتظر موافقتك عندما يصل دورك في مسار الموافقات، ونتيجة طلباتك (موافقة أو رفض).</p>
       </section>
 
       <section className="notif-card" aria-labelledby="rem-title">
-        <h2 id="rem-title" className="section-title">تذكير الحضور والانصراف</h2>
+        <h2 id="rem-title" className="section__title">تذكير الحضور والانصراف</h2>
         {!settings ? (
           loadError ? (
-            <div className="state-row"><span className="muted">تعذّر تحميل الإعدادات.</span><button className="btn small" onClick={refresh}>إعادة المحاولة</button></div>
+            <div className="state-row"><span className="u-muted">تعذّر تحميل الإعدادات.</span><button className="btn btn--sm" onClick={refresh}>إعادة المحاولة</button></div>
           ) : (
-            <p className="muted">جارٍ التحميل…</p>
+            <p className="u-muted">جارٍ التحميل…</p>
           )
         ) : (
           <>
@@ -237,7 +237,7 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
               onValue={(m) => save({ ...settings, check_out_before: m })}
             />
             {(settings.remind_check_in || settings.remind_check_out) && settings.devices === 0 && (
-              <p className="hint-line alert-text">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
+              <p className="hint alert-text">لن تصلك التذكيرات حتى تفعّل الإشعارات على جهاز واحد على الأقل.</p>
             )}
           </>
         )}

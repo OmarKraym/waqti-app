@@ -177,17 +177,17 @@ export function Main({ user }: { user: SessionUser }) {
       {lateInfo && !profile && (
         <div className="late-note"><Banner kind="warning" onClose={() => setLateInfo(null)}>{lateInfo}</Banner></div>
       )}
-      <nav className="tabbar three" aria-label="التنقل" hidden={profile}>
-        <button className={`tab${tab === "today" ? " on" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
+      <nav className="tabbar" aria-label="التنقل" hidden={profile}>
+        <button className={`tab${tab === "today" ? " is-active" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M8 8.5h8M8 12.5h8M8 16.5h4" /></svg>
           <span>اليوم</span>
         </button>
-        <button className={`tab${tab === "requests" ? " on" : ""}`} aria-current={tab === "requests" ? "page" : undefined} onClick={() => go("requests")}>
+        <button className={`tab${tab === "requests" ? " is-active" : ""}`} aria-current={tab === "requests" ? "page" : undefined} onClick={() => go("requests")}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4v13H7z" /><path d="M14 3.5v4h4M10 12.5h5M10 16h5" /></svg>
           <span>الطلبات</span>
           {count > 0 && <span className="badge" aria-label={`${count} بانتظار موافقتك`}>{count}</span>}
         </button>
-        <button className={`tab${tab === "notifications" ? " on" : ""}`} aria-current={tab === "notifications" ? "page" : undefined} onClick={() => go("notifications")}>
+        <button className={`tab${tab === "notifications" ? " is-active" : ""}`} aria-current={tab === "notifications" ? "page" : undefined} onClick={() => go("notifications")}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></svg>
           <span>الإشعارات</span>
         </button>
@@ -195,13 +195,13 @@ export function Main({ user }: { user: SessionUser }) {
 
       {lateOffer && (
         <Modal title="تأخرت اليوم" onClose={() => setLateOffer(null)}>
-          <p className="modal-text">
+          <p className="modal__text">
             وصلت متأخرًا عن بداية دوامك، والمحسوب عليك {formatMinutes(lateOffer.minutes)}. يمكنك تقديم تبرير تأخير الآن.
             {lateOffer.left !== null && ` المتبقي لك هذا الشهر: ${formatTimes(lateOffer.left)}.`}
           </p>
-          <div className="modal-actions">
-            <button className="btn primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</button>
-            <button className="btn ghost" onClick={() => setLateOffer(null)}>ليس الآن</button>
+          <div className="modal__actions">
+            <button className="btn btn--primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</button>
+            <button className="btn btn--ghost" onClick={() => setLateOffer(null)}>ليس الآن</button>
           </div>
         </Modal>
       )}

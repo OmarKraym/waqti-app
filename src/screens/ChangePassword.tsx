@@ -42,11 +42,11 @@ export function ChangePassword({ email }: { email: string | null }) {
   }
 
   return (
-    <main className="auth-wrap">
-      <form className="auth-card" onSubmit={submit} noValidate>
-        <div className="auth-head">
+    <main className="auth">
+      <form className="auth__card" onSubmit={submit} noValidate>
+        <div className="auth__head">
         <h1>تغيير كلمة المرور</h1>
-        <p className="muted">
+        <p className="u-muted">
           هذا أول دخول لك. اختر كلمة مرور جديدة بدل المؤقتة.
           {email && (
             <>
@@ -59,7 +59,7 @@ export function ChangePassword({ email }: { email: string | null }) {
 
         {/* Username for password managers (Android and iPhone) to save the new password for the right account.
             Visually hidden, NOT display:none / hidden: managers may ignore those. */}
-        <input className="sr-only" type="email" name="email" id="email" autoComplete="username" value={email ?? ""}
+        <input className="u-sr-only" type="email" name="email" id="email" autoComplete="username" value={email ?? ""}
                readOnly tabIndex={-1} aria-hidden="true" />
 
         <label className="field">
@@ -70,14 +70,14 @@ export function ChangePassword({ email }: { email: string | null }) {
           <span>تأكيد كلمة المرور</span>
           <PasswordInput autoComplete="new-password" name="confirm-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
-        <p className="hint-line">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
+        <p className="hint">8 أحرف على الأقل، وتحتوي على حرف ورقم.</p>
 
-        <p className="form-error" role="alert">{error}</p>
+        <p className="form__error" role="alert">{error}</p>
 
-        <button className="btn primary block" type="submit" disabled={busy}>
+        <button className="btn btn--primary btn--block" type="submit" disabled={busy}>
           {busy ? "جارٍ الحفظ…" : "حفظ كلمة المرور"}
         </button>
-        <button className="btn quiet block" type="button" onClick={() => api.signOut()} disabled={busy}>
+        <button className="btn btn--quiet btn--block" type="button" onClick={() => api.signOut()} disabled={busy}>
           تسجيل الخروج
         </button>
       </form>

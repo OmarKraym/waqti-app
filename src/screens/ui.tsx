@@ -47,11 +47,11 @@ export function Switch({ checked, onChange, disabled, labelledBy, label }: {
 }) {
   return (
     <button
-      type="button" role="switch" className={`switch${checked ? " on" : ""}`}
+      type="button" role="switch" className={`switch${checked ? " is-active" : ""}`}
       aria-checked={checked} aria-labelledby={labelledBy} aria-label={label}
       disabled={disabled} onClick={() => onChange(!checked)}
     >
-      <span className="switch-knob" aria-hidden="true" />
+      <span className="switch__knob" aria-hidden="true" />
     </button>
   );
 }
@@ -67,14 +67,14 @@ export function AppBar({ title, lead, onBack, backDisabled, action, className }:
 }) {
   return (
     <header className={`appbar${className ? ` ${className}` : ""}`}>
-      <div className="appbar-lead">
+      <div className="appbar__lead">
         {onBack && (
           <button className="icon-btn" onClick={onBack} disabled={backDisabled} aria-label="رجوع">
             <Icon name="back" />
           </button>
         )}
         {lead}
-        <h1 className="appbar-title truncate">{title}</h1>
+        <h1 className="appbar__title u-truncate">{title}</h1>
       </div>
       {action}
     </header>
@@ -89,11 +89,11 @@ export function Banner({ kind, children, onClose, className }: {
   className?: string;
 }) {
   return (
-    <div className={`banner ${kind}${className ? ` ${className}` : ""}`} role={kind === "success" ? "status" : "alert"}>
-      <Icon name={kind === "success" ? "check" : "alert"} className="banner-icon" />
-      <span className="banner-text">{children}</span>
+    <div className={`banner banner--${kind}${className ? ` ${className}` : ""}`} role={kind === "success" ? "status" : "alert"}>
+      <Icon name={kind === "success" ? "check" : "alert"} className="banner__icon" />
+      <span className="banner__text">{children}</span>
       {onClose && (
-        <button className="x" aria-label="إغلاق" onClick={onClose}><Icon name="close" /></button>
+        <button className="banner__close" aria-label="إغلاق" onClick={onClose}><Icon name="close" /></button>
       )}
     </div>
   );
@@ -128,9 +128,9 @@ export function Modal({ title, children, onClose, busy, sheet }: {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
   return (
-    <div className={`modal-backdrop${sheet ? " sheet" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+    <div className={`modal-backdrop${sheet ? " modal-backdrop--sheet" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={box} onKeyDown={onKey}>
-        <h2 id="modal-title" className="modal-title">{title}</h2>
+        <h2 id="modal-title" className="modal__title">{title}</h2>
         {children}
       </div>
     </div>
@@ -141,11 +141,11 @@ export function Modal({ title, children, onClose, busy, sheet }: {
 export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "dir">) {
   const [shown, setShown] = useState(false);
   return (
-    <span className="password-wrap">
+    <span className="password">
       <input {...props} type={shown ? "text" : "password"} dir="ltr" />
       <button
         type="button"
-        className="password-eye"
+        className="password__eye"
         aria-label={shown ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
         aria-pressed={shown}
         onClick={() => setShown((v) => !v)}
