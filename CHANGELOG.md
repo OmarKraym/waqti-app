@@ -1,5 +1,14 @@
 # Changelog
 
+## Design-system refactor — tokens, CSS layers, components, leave words (2026-11-10) — branch `refactor/design-system`, panel 12.24 as a zip; nothing pushed, deployed or applied
+
+- **Leave words** follow the panel everywhere: «اضطرارية» and «وضع» (app, panel, database notifications). One migration replaces `private.request_summary`; its rollback restores the old body. Local only: `docs/LEAVE_LABELS_RUN_LOCALLY.md`.
+- **Tokens** in three tiers with one shared vocabulary; no literal colour, size, radius or z-index outside token files; the panel gets a dark theme through tokens only.
+- **CSS**: `@layer` order, one file per component, BEM, logical properties, no `!important`, no inline styles, stylelint in both.
+- **Components**: app primitives (`Button`, `IconButton`, `Chip`, `Card`, `Field`, `EmptyState`, `ConfirmDialog`), hooks and split screens; panel factories (`button`, `badge`, `emptyState`, `confirmDialog`), one `rpc()` wrapper, ES modules only, pure rules in `js/lib` with tests. No `window.confirm` left.
+- **Copy**: toasts and empty states without a final full stop; form errors inline, row actions as toasts.
+- Report, metrics, visual evidence and decisions: `docs/DESIGN_SYSTEM_REFACTOR.md`. Rules: `docs/CONVENTIONS.md`.
+
 ## Phase 24 — request types the admin adds himself: new leave types and new «طلب آخر» types (2026-11-10) — migration 24 NOT applied; panel 12.23 delivered as a zip (not installed); app changed (not built for release, not deployed)
 
 Omar's request (brainstorming 2026-11-09, «تطوير مرونة لوحة إدارة وقتي»): the admin can add **new leave types** and **new «طلب آخر» types** without a developer; existing requests and types stay unchanged; the audience is everyone; **no** attachments, field builder, advanced workflow or wider rules engine. Spec: `docs/superpowers/specs/2026-11-09-custom-request-kinds-design.md`; plan (13 tasks, executed in one session, TDD, one ledger line per task): `docs/superpowers/plans/2026-11-10-custom-request-kinds.md`.
