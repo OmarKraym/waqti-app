@@ -1,5 +1,20 @@
 # Changelog
 
+## Phase 27 — «إضافة حركة» and a «تعديل» button on every movement (2026-11-15) — branch `feature/punch-mode-company-roles`; migration 27 NOT applied; panel 12.26 delivered as a zip (not installed); app not touched; nothing pushed
+
+Omar's request (2026-11-15, screenshot of the attendance tab): the button «إضافة حضور» becomes «إضافة حركة» and its dialog chooses حضور or انصراف; every movement gets a «تعديل» button. Hand-off, fingerprint, apply order, rollback and rulings: `docs/PHASE27_RUN_LOCALLY.md`.
+
+### What changes for people
+- **«إضافة حركة»** (panel only, no database change): the dialog has a «نوع الحركة» list; the hint, the example reason and the refusal texts follow the kind. It calls the same `admin_add_punch` (phase 20 already accepts both kinds).
+- **«تعديل»** (phase 27 + panel): a button in a new «إجراءات» column of the movements table, owner only. The dialog changes the **time only**: same company day, strictly between the employee's previous and next movement, in the past and at most 62 days back, a session of at most 24 hours; a reason of 3 or more letters is required. Lateness, early leave, deduction and overtime are computed from the time when read, so they follow by themselves. The original time and the reason stay in the event data and in the audit log (`attendance.edit_time`). **Not offered, on purpose:** changing the kind, changing the day, deleting. A limited admin level (phase 26) neither sees the button nor can call the function; one row in `private.admin_role_rpcs` would open it for HR.
+
+### Tests
+Database whole suite **1861 passed, 1 failed** (38 files; phase 27: 50; the one failure is the clock-dependent phase 15 file, as before) · **rollback proven:** 857 lines of functions, columns, constraints and tables identical between a database without phase 27 and one with it rolled back · phase 27 written red-first, and 8 deliberate breaks of the function were all caught · panel unit **185 / 185**, behaviour **649 / 649**, layout **366 + 366 screens (light, dark) and 66 + 66 (levels)**, 0 problems, stylelint clean; unit and behaviour also pass from the extracted zip · two panel mutants (gating removed, reload removed) were caught.
+Note on the proof: a first full run gave 1842 / 2 because the local Postgres had been restarted without `PGHOST`/`PGPORT` in its environment, so the phase 21 test's `dblink` could not connect (identical on a database without phase 27); fixed in the test setup, not in any file of the project.
+
+### Needs Omar's words before anything leaves this machine
+«نعم» for migration 27 (after 25 and 26 if they are applied; it needs only phase 20) · «انشر» for the panel 12.26 (part 1 works on today's database; the «تعديل» button says «غير متاحة بعد» until the migration is applied) · «ارفع» for the push.
+
 ## Phases 25 and 26 — automatic punch button, and admin levels inside a company (2026-11-15) — branch `feature/punch-mode-company-roles`; migrations 25 and 26 NOT applied; panel 12.25 delivered as a zip (not installed); app changed (not deployed); nothing pushed
 
 Omar's request (2026-11-14): the app stays punch-only (security, geofence, saves the punch; no lateness, no overtime); a company can have limited admin levels; the punch button follows each employee's own shift (middle of the shift, back at 00:00); nothing existing changes, requests stay as they are. Hand-off, fingerprints, apply order, rollback and rulings: `docs/PHASE25_26_RUN_LOCALLY.md`.
