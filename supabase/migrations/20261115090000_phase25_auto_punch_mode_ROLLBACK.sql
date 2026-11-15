@@ -1,4 +1,4 @@
--- Rollback of phase 25: restores private.record_punch and public.employee_attendance_state exactly as phase 22 left them,
+-- Rollback of phase 25: restores private.record_punch and public.employee_attendance_state exactly as they were before phase 25 (the text read from a database built from every earlier migration),
 -- drops the new functions and the column. Run it only when the switch is off or after accepting that the mode goes away.
 drop function if exists public.admin_punch_mode_preview(uuid, timestamp with time zone);
 drop function if exists public.admin_set_auto_punch_mode(boolean);
@@ -36,7 +36,6 @@ declare
   v_req public.requests;
   v_res jsonb;
   v_text text;
-  v_auto boolean;
 begin
   if p_request_id is null
      or p_reading is null or p_reading not in ('ok', 'denied', 'unavailable', 'timeout', 'unsupported', 'not_requested')
@@ -71,23 +70,11 @@ begin
   -- Phase 8a: a session whose check-out time has passed is closed as missed, so the next action is check-in.
   perform private.close_missed_checkout(p_employee_id, p_time);
 
-  -- Phase 25: automatic punch mode. Only when the company switched it on (companies.auto_punch_mode, default off).
-  -- A check-in left open on a previous local day is flagged for review and does not block today (see flag_stale_open_session).
-  select c.auto_punch_mode into v_auto from public.employees e join public.companies c on c.id = e.company_id where e.id = p_employee_id;
-  if coalesce(v_auto, false) then
-    perform private.flag_stale_open_session(p_employee_id, p_time);
-  end if;
-
   -- Real next action (server state), compared with what the employee saw.
   select s.id into v_open_id from public.attendance_sessions s
   where s.employee_id = p_employee_id and s.status = 'open'
   order by s.created_at desc limit 1;
   v_action := case when v_open_id is null then 'check_in' else 'check_out' end;
-  -- Phase 25: with the automatic mode on, the server decides what the button is (the middle of the shift, reset at 00:00).
-  -- A punch of the other kind is refused, so the rule cannot be bypassed by calling the function directly.
-  if coalesce(v_auto, false) and p_expected_action <> private.expected_punch_type(p_employee_id, p_time) then
-    raise exception 'mode_mismatch' using errcode = 'P0001';
-  end if;
   -- Phase 13: no open session but the employee asks for a check-out = he forgot to check in. Allowed, flagged for review,
   -- and no session is touched. Refused if his latest punch is already a check-out on the same day (nothing to leave from).
   if v_open_id is null and p_expected_action = 'check_out' then
@@ -273,17 +260,9 @@ declare
   v_can_leave boolean := false;
   v_in_win record;
   v_forgot boolean := false;
-  v_auto boolean;
-  v_mode jsonb;
 begin
   select * into me from public.require_active_employee();
   perform private.close_missed_checkout(me.employee_id, v_now);
-  -- Phase 25: automatic punch mode (off unless the company turned it on).
-  select c.auto_punch_mode into v_auto from public.companies c where c.id = me.company_id;
-  v_auto := coalesce(v_auto, false);
-  if v_auto then
-    perform private.flag_stale_open_session(me.employee_id, v_now);
-  end if;
 
   select * into v_open from public.attendance_sessions s
   where s.employee_id = me.employee_id and s.status = 'open'
@@ -310,23 +289,13 @@ begin
     end if;
   end if;
 
-  if v_auto then
-    v_mode := private.punch_mode(me.employee_id, v_now);
-  end if;
-
   return jsonb_build_object(
     'employee', jsonb_build_object('full_name', me.full_name, 'employee_number', me.employee_number),
     'company', jsonb_build_object('name', me.company_name, 'timezone', me.timezone),
-    'next_action', case when v_auto then v_mode ->> 'expected'
-                        when v_open.id is null and not v_forgot then 'check_in' else 'check_out' end,
+    'next_action', case when v_open.id is null and not v_forgot then 'check_in' else 'check_out' end,
     'open_session', case when v_open.id is null then null else jsonb_build_object('started_at', v_started) end,
-    'can_check_out_without_in', v_can_leave and not v_auto,
-    'forgot_check_in', v_forgot and not v_auto,
-    -- Phase 25: what the button is right now. locked = checked in, and the check-out opens at flips_at.
-    'punch_mode', case when v_auto
-                       then jsonb_build_object('auto', true, 'expected', v_mode ->> 'expected', 'locked', (v_mode ->> 'locked')::boolean,
-                                               'flips_at', v_mode -> 'flips_at', 'reset_at', v_mode -> 'reset_at')
-                       else jsonb_build_object('auto', false, 'locked', false) end,
+    'can_check_out_without_in', v_can_leave,
+    'forgot_check_in', v_forgot,
     -- Phase 22: an approved leave he asked for covers today (a punch today cancels this day of it). null = none.
     'leave_today', (select jsonb_build_object('request_id', r.id, 'leave_type', r.leave_type,
                                               'end_date', ((r.end_at - interval '1 second') at time zone me.timezone)::date)
