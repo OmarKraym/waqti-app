@@ -62,7 +62,7 @@ from (values
   ('viewer', 'admin_get_overtime_settings'), ('viewer', 'admin_get_approval_chains'), ('viewer', 'admin_get_profile_visibility'),
   ('viewer', 'admin_get_auto_punch_mode'), ('viewer', 'admin_punch_mode_preview'),
   ('supervisor', 'admin_review_queue'), ('supervisor', 'admin_decide_request'), ('supervisor', 'admin_decide_leave_day'),
-  ('supervisor', 'admin_cancel_leave_day'), ('supervisor', 'admin_resolve_leave_conflict'), ('supervisor', 'admin_resolve_review'),
+  ('supervisor', 'admin_resolve_leave_conflict'), ('supervisor', 'admin_resolve_review'),
   ('supervisor', 'admin_dismiss_missing_checkin'), ('supervisor', 'admin_get_leave_years'),
   ('supervisor', 'admin_get_employee_kind_days'), ('supervisor', 'admin_get_employee_grace'),
   ('hr_admin', 'admin_get_employee_profile'), ('hr_admin', 'admin_save_employee_profile'), ('hr_admin', 'admin_update_employee'),

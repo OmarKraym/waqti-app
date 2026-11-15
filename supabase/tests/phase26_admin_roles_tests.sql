@@ -49,7 +49,7 @@ declare
     'admin_list_employee_managers', 'admin_list_employees', 'admin_list_holidays', 'admin_list_leave_day_cancellations',
     'admin_list_leave_days', 'admin_list_missing_checkins', 'admin_list_overtime', 'admin_list_permission_types',
     'admin_list_requests', 'admin_list_work_locations', 'admin_punch_mode_preview'];
-  v_super_extra text[] := array['admin_cancel_leave_day', 'admin_decide_leave_day', 'admin_decide_request', 'admin_dismiss_missing_checkin',
+  v_super_extra text[] := array['admin_decide_leave_day', 'admin_decide_request', 'admin_dismiss_missing_checkin',
     'admin_get_employee_grace', 'admin_get_employee_kind_days', 'admin_get_leave_years', 'admin_resolve_leave_conflict',
     'admin_resolve_review', 'admin_review_queue'];
   v_hr_extra text[] := array['admin_add_punch', 'admin_get_employee_profile', 'admin_list_device_bindings', 'admin_remove_device',
@@ -202,6 +202,10 @@ begin
   perform pg_temp.ok(s = 'forbidden', 'supervisor: cannot read a profile', s);
   s := pg_temp.try_as(b, format('select public.admin_add_punch(%L, %L, now(), %L)', d, 'check_in', 'x'));
   perform pg_temp.ok(s = 'forbidden', 'supervisor: cannot add a manual punch', s);
+  s := pg_temp.try_as(b, format('select public.admin_cancel_leave_day(%L)', gen_random_uuid()));
+  perform pg_temp.ok(s = 'forbidden', 'supervisor: cannot cancel a company leave day (it cancels the approved leave of everyone tied to it)', s);
+  s := pg_temp.try_as(a, format('select public.admin_cancel_leave_day(%L)', gen_random_uuid()));
+  perform pg_temp.ok(s = 'forbidden', 'hr_admin: cannot cancel a company leave day either', s);
   s := pg_temp.try_as(b, format('select public.admin_update_employee(%L, %L, null, true, false)', d, 'x'));
   perform pg_temp.ok(s = 'forbidden', 'supervisor: cannot edit an employee', s);
 
@@ -301,9 +305,10 @@ begin
       'admin_save_deduction_policy', 'admin_delete_deduction_policy', 'admin_list_deduction_policies', 'admin_preview_deduction',
       'admin_set_late_rule', 'admin_set_leave_policy', 'admin_set_leave_window', 'admin_set_overtime_settings', 'admin_set_grace_settings',
       'admin_set_holiday_settings', 'admin_set_profile_visibility', 'admin_set_approval_chain', 'admin_add_work_location',
-      'admin_delete_work_location', 'admin_set_location_geofence'])),
+      'admin_delete_work_location', 'admin_set_location_geofence', 'admin_cancel_leave_day', 'admin_save_leave_day',
+      'admin_save_holiday', 'admin_delete_holiday', 'admin_save_permission_type', 'admin_save_custom_kind', 'admin_delete_custom_kind'])),
                      'the owner-only functions are in no limited level',
-                     (select string_agg(r.rpc, ',') from private.admin_role_rpcs r where r.rpc in ('admin_set_company_name', 'admin_add_admin', 'admin_set_admin_role')));
+                     (select string_agg(r.rpc, ',') from private.admin_role_rpcs r where r.rpc in ('admin_set_company_name', 'admin_add_admin', 'admin_set_admin_role', 'admin_cancel_leave_day')));
 
   -- ---------------------------------------------------------------- taking a level away works at once
   perform pg_temp.run_as(v_owner, format('select public.admin_set_admin_role(%L, %L)', c, 'employee'));
