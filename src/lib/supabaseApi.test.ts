@@ -19,6 +19,7 @@ describe("server error mapping", () => {
     expect(fromPostgrest({ code: "22023", message: "location_required" }).code).toBe("location_required");
     expect(fromPostgrest({ code: "22023", message: "geofence_not_configured" }).code).toBe("geofence_not_configured");
     expect(fromPostgrest({ code: "P0001", message: "state_changed" }).code).toBe("state_changed");
+    expect(fromPostgrest({ code: "P0001", message: "mode_mismatch" }).code).toBe("mode_mismatch");
     expect(fromPostgrest({ code: "P0001", message: "rate_limited" }).code).toBe("rate_limited");
   });
 

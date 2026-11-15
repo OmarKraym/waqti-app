@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
-import { lateNote, lateOfferFrom, shouldAskLateStatus, type LateOffer } from "../lib/lateOffer";
-import { formatMinutes, formatTimes, type Draft } from "../lib/requests";
-import type { PunchResult, RequestType } from "../lib/types";
+import { type Draft } from "../lib/requests";
+import type { RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { readPushState } from "../lib/push";
 import { ensureSubscription, geoPermission } from "../lib/permissions";
@@ -15,7 +14,6 @@ import { ConfirmSignOut, Profile, type ProfileInfo } from "./Profile";
 import { useOnline } from "../hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
-import { Banner, Modal, Button } from "../components";
 import { useRequests } from "../hooks/useRequests";
 
 type Tab = "today" | "requests" | "notifications";
@@ -66,30 +64,6 @@ export function Main({ user }: { user: SessionUser }) {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-
-  // After a check-in the SERVER says what to do about a late arrival (employee_late_status): offer a justification in a
-  // dialog, or, when he is late but cannot request one (none left, too long, already requested), say why in a line.
-  // Whatever goes wrong here (offline, an older server, an error) is silent: the punch is already saved.
-  const [lateOffer, setLateOffer] = useState<LateOffer | null>(null);
-  const [lateInfo, setLateInfo] = useState<string | null>(null);
-  const punchSeq = useRef(0);
-  const onPunched = useCallback(async (result: PunchResult) => {
-    const mine = ++punchSeq.current;     // a newer punch makes an older, slower answer obsolete
-    setLateInfo(null);
-    if (!shouldAskLateStatus(result)) return;
-    try {
-      const status = await api.getLateStatus(result.event_id);
-      if (!status || mine !== punchSeq.current) return;
-      // The company clock decides the day and the arrival time on the form. It is in the state saved on this phone
-      // (the punch screen has just loaded it); without it no form is prepared rather than one with a guessed time.
-      const timeZone = loadCachedState(browserStorage(), user.id)?.data.company.timezone;
-      const offer = timeZone ? lateOfferFrom(status, result.server_time, timeZone) : null;
-      if (offer) setLateOffer(offer);
-      else setLateInfo(lateNote(status));
-    } catch {
-      // no decision: offline, the database is older than the app, or an error — he can still request it from the requests tab
-    }
-  }, [user.id]);
 
   const go = (t: Tab) => {
     setTab(t);
@@ -162,7 +136,7 @@ export function Main({ user }: { user: SessionUser }) {
         />
       )}
       <div hidden={profile || tab !== "today"}>
-        <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} onPunched={onPunched} />
+        <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} />
       </div>
       {visited.has("requests") && (
         <div className="app" hidden={profile || tab !== "requests"}>
@@ -173,9 +147,6 @@ export function Main({ user }: { user: SessionUser }) {
         <div className="app" hidden={profile || tab !== "notifications"}>
           <Notifications online={online} userId={user.id} />
         </div>
-      )}
-      {lateInfo && !profile && (
-        <div className="late-note"><Banner kind="warning" onClose={() => setLateInfo(null)}>{lateInfo}</Banner></div>
       )}
       <nav className="tabbar" aria-label="التنقل" hidden={profile}>
         <button className={`tab${tab === "today" ? " is-active" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
@@ -193,18 +164,6 @@ export function Main({ user }: { user: SessionUser }) {
         </button>
       </nav>
 
-      {lateOffer && (
-        <Modal title="تأخرت اليوم" onClose={() => setLateOffer(null)}>
-          <p className="modal__text">
-            وصلت متأخرًا عن بداية دوامك، والمحسوب عليك {formatMinutes(lateOffer.minutes)}. يمكنك تقديم تبرير تأخير الآن.
-            {lateOffer.left !== null && ` المتبقي لك هذا الشهر: ${formatTimes(lateOffer.left)}.`}
-          </p>
-          <div className="modal__actions">
-            <Button variant="primary" onClick={() => { const d = lateOffer.draft; setLateOffer(null); newRequest("permission", d); }}>تقديم تبرير</Button>
-            <Button variant="ghost" onClick={() => setLateOffer(null)}>ليس الآن</Button>
-          </div>
-        </Modal>
-      )}
       {confirmOut && <ConfirmSignOut user={user} onCancel={() => setConfirmOut(false)} />}
     </div>
   );

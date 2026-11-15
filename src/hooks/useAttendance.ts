@@ -4,6 +4,7 @@ import { initialState, newRequestId, reduce, type Pending } from "../lib/attenda
 import { api } from "../lib/client";
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { gpsPrompt, readLocation } from "../lib/location";
+import { nextModeChangeMs } from "../lib/punchMode";
 import {
   anchorFromCache,
   anchorFromServer,
@@ -22,7 +23,7 @@ import {
 import { biometricStep, fingerprintTicket, supportsPlatformAuthenticator } from "../lib/biometric";
 import { nextBoundaryMs } from "../lib/punchWindow";
 import { loadCalendar, saveCalendar, type Calendar } from "../lib/calendar";
-import type { AttendanceAction, AttendanceState, PunchResult } from "../lib/types";
+import type { AttendanceAction, AttendanceState } from "../lib/types";
 import type { ProfileInfo } from "../screens/Profile";
 import { useOnline } from "./index";
 
@@ -35,10 +36,9 @@ export type Note = { kind: "success" | "warning" | "error"; text: string };
  * saved on the phone and its sync loop, the signed server time, the GPS and fingerprint steps of a punch, and the
  * notes those steps leave for the screen.
  */
-export function useAttendance({ user, onInfo, onPunched }: {
+export function useAttendance({ user, onInfo }: {
   user: SessionUser;
   onInfo: (info: ProfileInfo) => void;
-  onPunched: (result: PunchResult) => void;
 }) {
   const [state, dispatch] = useReducer(reduce, initialState);
   const busy = useRef(false); // blocks a second tap while one is being processed
@@ -185,6 +185,16 @@ export function useAttendance({ user, onInfo, onPunched }: {
     return () => { clearTimeout(t1); clearInterval(t2); };
   }, [win?.allowed, win?.opens_at, offsetMs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Phase 25: ask the server again when the button changes (the middle of the shift, then 00:00). The label follows the clock
+  // meanwhile (effectiveAction), but the server decides.
+  const mode = live?.punch_mode;
+  useEffect(() => {
+    const at = nextModeChangeMs(mode, Date.now() + offsetMs);
+    if (at === null) return;
+    const t = setTimeout(() => refreshRef.current(), Math.min(Math.max(at - (Date.now() + offsetMs), 0) + 1000, 2 ** 31 - 1));
+    return () => clearTimeout(t);
+  }, [mode?.auto, mode?.locked, mode?.flips_at, mode?.reset_at, offsetMs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Saves the punch on the phone. Returns false if the phone refused to save it. */
   function enqueue(pending: Pending, tapTime: number, tapPerf: number): boolean {
     if (!anchor.current) return false;
@@ -217,7 +227,6 @@ export function useAttendance({ user, onInfo, onPunched }: {
         if (result.time_token) setAnchor(anchorFromServer(result.time_token, result.server_time));
         setFreshId(result.event_id);
         dispatch({ type: "PUNCH_OK", result });
-        onPunched(result);
         load(); // confirm the new state from the server
       } catch (e) {
         const err = e instanceof AppError ? e : new AppError("unknown", String(e));
@@ -227,12 +236,12 @@ export function useAttendance({ user, onInfo, onPunched }: {
         if (err.code === "network" && allowQueue && enqueue(pending, tapTime, tapPerf)) return;
         dispatch({ type: "PUNCH_FAIL", error: err });
         // The server's state moved on (other device, window closed, device removed): show the current one.
-        if (["state_changed", "outside_punch_window", "day_off", "biometric_required", "device_not_registered"].includes(err.code)) load();
+        if (["state_changed", "mode_mismatch", "outside_punch_window", "day_off", "biometric_required", "device_not_registered"].includes(err.code)) load();
       } finally {
         busy.current = false;
       }
     },
-    [load, setAnchor, onPunched], // enqueue only uses refs and stable setters
+    [load, setAnchor], // enqueue only uses refs and stable setters
   );
 
   /** `override` = record a check-out although there is no check-in (phase 13). It is never queued: the server must stamp it. */

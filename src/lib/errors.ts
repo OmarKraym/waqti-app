@@ -12,6 +12,7 @@ export type AppErrorCode =
   | "forbidden"
   // attendance
   | "state_changed"
+  | "mode_mismatch"
   | "outside_geofence"
   | "location_required"
   | "location_inaccurate"
@@ -88,7 +89,7 @@ export class AppError extends Error {
 
 const KNOWN = new Set<AppErrorCode>([
   "not_authenticated", "invalid_credentials", "employee_inactive", "must_change_password", "forbidden",
-  "state_changed", "outside_geofence", "location_required", "location_inaccurate", "rate_limited",
+  "state_changed", "mode_mismatch", "outside_geofence", "location_required", "location_inaccurate", "rate_limited",
   "geofence_not_configured", "invalid_input", "clock_changed", "time_unverified", "time_order", "offline_too_old",
   "invalid_dates", "invalid_duration", "crosses_year", "no_working_days", "insufficient_balance", "permission_limit",
   "overlapping_request", "reason_required", "maternity_female_only", "request_not_found", "already_decided",
@@ -118,6 +119,7 @@ export const ERROR_TEXT: Record<AppErrorCode, string> = {
   must_change_password: "يجب تغيير كلمة المرور المؤقتة أولًا.",
   forbidden: "ليست لديك صلاحية لهذه العملية.",
   state_changed: "تغيّرت حالة حضورك (ربما من جهاز آخر). تم تحديث الشاشة، تأكد ثم حاول مرة أخرى.",
+  mode_mismatch: "هذا الإجراء غير متاح الآن حسب دوامك. تم تحديث الشاشة.",
   outside_geofence: "أنت خارج نطاق مكان العمل المعتمد. لم يتم التسجيل.",
   location_required: "لم نتمكن من تحديد موقعك، وسياسة شركتك تتطلب الموقع. فعّل خدمة الموقع ثم حاول مرة أخرى.",
   location_inaccurate: "دقة الموقع ضعيفة جدًا للتحقق. انتقل إلى مكان مفتوح وحاول مرة أخرى.",

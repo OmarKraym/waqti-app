@@ -31,6 +31,19 @@ export interface AttendanceEvent {
   by_admin?: boolean;
 }
 
+/**
+ * Phase 25 (automatic punch mode). With `auto` on the server decides the button: check-out only when a check-in is open
+ * today and the middle of the shift (or an earlier approved exit) has come; check-in otherwise. `locked` = checked in,
+ * and the check-out opens at `flips_at`. `reset_at` = 00:00 company time, when the day starts again.
+ */
+export interface PunchMode {
+  auto: boolean;
+  expected?: AttendanceAction;
+  locked: boolean;
+  flips_at?: string | null;
+  reset_at?: string | null;
+}
+
 export interface AttendanceState {
   employee: { full_name: string; employee_number: string | null };
   company: { name: string; timezone: string };
@@ -52,6 +65,8 @@ export interface AttendanceState {
   time_token: string;
   /** When the next punch is allowed (phase 8a). */
   punch_window: PunchWindow;
+  /** Phase 25: what the button is, decided by the server from the employee's shift (absent on an older server). */
+  punch_mode?: PunchMode;
   /** Fingerprint policy of the company and whether this account has a registered device (phase 8b). */
   biometric: BiometricState;
 }

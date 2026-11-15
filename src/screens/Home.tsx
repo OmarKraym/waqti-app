@@ -5,7 +5,8 @@ import { failedOf, isQueuedEvent, pendingOf, withQueue } from "../lib/offlineQue
 import { windowText } from "../lib/punchWindow";
 import { holidayBanner, offLabel } from "../lib/calendar";
 import { earlierDays, todayRows } from "../lib/timecard";
-import type { PunchResult, RequestType } from "../lib/types";
+import { effectiveAction, isPunchLocked, lockedText } from "../lib/punchMode";
+import type { RequestType } from "../lib/types";
 import { useAttendance } from "../hooks/useAttendance";
 import { Banner, Button, Icon, Modal } from "../components";
 import { DeviceSetup } from "./DeviceSetup";
@@ -20,17 +21,15 @@ import { Timecard } from "./home/Timecard";
 const OFFLINE_PUNCHES = false;
 
 /** The today screen: the container. What it does lives in useAttendance; what it shows lives in ./home/. */
-export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
+export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
   user: SessionUser;
   onNewRequest: (type: RequestType) => void;
   /** The app logo at the top opens the profile. */
   onOpenProfile: () => void;
   /** Who the employee is (shown on the profile screen). */
   onInfo: (info: ProfileInfo) => void;
-  /** The server confirmed a punch made just now (not one loaded from history). */
-  onPunched: (result: PunchResult) => void;
 }) {
-  const a = useAttendance({ user, onInfo, onPunched });
+  const a = useAttendance({ user, onInfo });
   const { state, online } = a;
   const [confirmNoIn, setConfirmNoIn] = useState(false); // phase 13: confirm "check out without a check-in"
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
@@ -70,13 +69,15 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
   const allowQueue = OFFLINE_PUNCHES && a.storage !== null && a.anchor.current !== null;
   const waiting = pendingOf(a.queue);
   const working = state.phase === "locating" || state.phase === "submitting";
-  const action = state.phase === "ready" ? data.next_action : state.pending.action;
+  const nowMs = Date.now() + a.offsetMs;
+  const action = state.phase === "ready" ? effectiveAction(data.next_action, data.punch_mode, nowMs) : state.pending.action;
   const forgot = !!data.forgot_check_in; // phase 14: the button is already "check out" (no check-in today)
   // Phase 8a: outside the allowed times the button is off (the server refuses anyway). Old cached states have no window.
   const blocked = !!data.punch_window && !data.punch_window.allowed && a.fromCache === null;
-  const canTap = !working && !a.bioBusy && !blocked && (online || (allowQueue && !data.forgot_check_in));
+  // Phase 25 (automatic punch mode): checked in, and the check-out opens at the middle of the shift: the button waits.
+  const waitingForCheckOut = state.phase === "ready" && isPunchLocked(data.punch_mode, nowMs);
+  const canTap = !working && !a.bioBusy && !blocked && !waitingForCheckOut && (online || (allowQueue && !data.forgot_check_in));
   const tz = data.company.timezone;
-  const nowMs = Date.now() + a.offsetMs;
   const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
   const days = earlierDays(data.recent_events.filter((e) => !isQueuedEvent(e)), nowMs, tz);
   const punchSub = a.bioBusy
@@ -87,11 +88,13 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo, onPunched }: {
         ? "جارٍ تحديد الموقع…"
         : state.phase === "submitting"
           ? "جارٍ الإرسال للخادم…"
-          : !online
-            ? "سيُحفظ على الجهاز"
-            : forgot
-              ? "لم يُسجَّل حضورك — تظهر الحركة للمراجعة"
-              : null;
+          : waitingForCheckOut
+            ? lockedText(data.punch_mode, tz)
+            : !online
+              ? "سيُحفظ على الجهاز"
+              : forgot
+                ? "لم يُسجَّل حضورك — تظهر الحركة للمراجعة"
+                : null;
 
   return (
     <div className="app">
