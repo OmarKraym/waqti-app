@@ -1,5 +1,20 @@
 # Changelog
 
+## Phases 25 and 26 — automatic punch button, and admin levels inside a company (2026-11-15) — branch `feature/punch-mode-company-roles`; migrations 25 and 26 NOT applied; panel 12.25 delivered as a zip (not installed); app changed (not deployed); nothing pushed
+
+Omar's request (2026-11-14): the app stays punch-only (security, geofence, saves the punch; no lateness, no overtime); a company can have limited admin levels; the punch button follows each employee's own shift (middle of the shift, back at 00:00); nothing existing changes, requests stay as they are. Hand-off, fingerprints, apply order, rollback and rulings: `docs/PHASE25_26_RUN_LOCALLY.md`.
+
+### What changes for people
+- **Phase 25 (off by default):** Settings ← البصمة ← «الزر التلقائي». On: the server decides check-in or check-out from the employee's own shift (check-out only from the middle of the shift, and only with an open check-in today); the other kind is refused (`mode_mismatch`); a check-in left open on an earlier day is marked «نسي الانصراف» and goes to review. Employee app: the button follows the server, one line says when the check-out opens, and the lateness question after a check-in is gone.
+- **Phase 26:** three limited admin levels next to the owner: مسؤول الموارد البشرية, مشرف, مشاهدة فقط. The owner picks the level in Settings ← المدراء. The database allows a limited level only the functions listed for it (default deny); the panel hides what the level cannot do. An older database: everything as before.
+
+### Tests
+Database whole suite **1811 passed, 1 failed** (37 files; phase 25: 50, phase 26: 161; the one failure is the clock-dependent phase 15 file, identical on a database without these phases) · **rollback proven:** a database built without 25 and 26 and one built with them and rolled back are identical (842 lines: functions, columns, constraints, tables, grants), assigned levels return to «employee» and the column goes away, and the 35 older test files give the same result on both (1600 passed, 1 clock) · panel unit **176 / 176**, behaviour **600 / 600**, layout **348 + 348 screens (light, dark) and 66 + 66 (levels)**, 0 problems, stylelint clean · app unit **435 / 435**, typecheck, CSS lint and build clean.
+Found while proving it: the first version of the phase 25 rollback would have broken every punch (fixed, commit `fix(db): phase 25 rollback restores the real earlier function text`); the first version of the supervisor list allowed cancelling a company leave day (fixed, commit `fix(db): phase 26 supervisor can no longer cancel a company leave day`).
+
+### Needs Omar's words before anything leaves this machine
+«نعم» for each migration (25, then 26) · «انشر» for the panel and the app · «ارفع» for the push. An edge-function change (so that the HR level can add employees and reset passwords) is not part of this work and would need «انشر».
+
 ## Design-system refactor — tokens, CSS layers, components, leave words (2026-11-10) — branch `refactor/design-system`, panel 12.24 as a zip; nothing pushed, deployed or applied
 
 - **Leave words** follow the panel everywhere: «اضطرارية» and «وضع» (app, panel, database notifications). One migration replaces `private.request_summary`; its rollback restores the old body. Local only: `docs/LEAVE_LABELS_RUN_LOCALLY.md`.
