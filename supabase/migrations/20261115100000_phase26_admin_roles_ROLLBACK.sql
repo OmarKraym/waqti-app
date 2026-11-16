@@ -23,7 +23,9 @@ begin
   ] loop
     v_def := pg_get_functiondef(v_sig::regprocedure);
     if position('private.assert_not_admin_target' in v_def) > 0 then
-      execute replace(v_def, E'  perform private.assert_not_admin_target(p_employee_id);\n', '');
+      -- the line was added with the line-end style of the function (CRLF for admin_set_leave_year in production): take it out with its own line end
+      execute replace(replace(v_def, E'  perform private.assert_not_admin_target(p_employee_id);\r\n', ''),
+                      E'  perform private.assert_not_admin_target(p_employee_id);\n', '');
     end if;
   end loop;
 

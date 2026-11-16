@@ -4,6 +4,8 @@
 
 Omar's request (2026-11-16): different permissions between system admins, chosen by the system manager; the «add company» half of the request was **skipped by him** («تخطى موضوع الشركات»). He chose custom permissions per admin (not only the three fixed levels). Hand-off, fingerprints, rollback proof and how to apply: `docs/PHASE28_RUN_LOCALLY.md`. Design: `docs/superpowers/specs/2026-11-16-admin-custom-permissions-design.md`.
 
+**Found at the first production attempt of phase 26 (2026-11-16, nothing was kept):** `admin_set_leave_year` in production has CRLF line ends, so the patch that adds one line after `begin` found no `LF begin LF` and stopped by design. Phase 26 and its rollback now follow the line-end style of each function (LF functions get exactly the same text as before; checked: fingerprints of an LF build unchanged, phases 26/27/28 tests pass on a CRLF build, rollback gives the identical earlier text). See `docs/PHASE25_26_RUN_LOCALLY.md` §3.2.
+
 ### What changes for people
 - A new level **«مخصص»** next to the three of phase 26. The owner picks it in Settings ← مديرو النظام and ticks groups in a dialog. Every custom admin always has «الاطلاع العام» (read-only lists, no salaries); the groups add to it: **قرارات الطلبات والإجازات**, **ملفات الموظفين (تشمل الرواتب)**, **النطاق الجغرافي والموقع**, **الحركات اليدوية**. At least one group. Leaving the level deletes the groups.
 - Never grantable (owner only): managing admins and levels, company name and settings, deleting an employee, all other settings, new password, adding employees. The other protections of limited levels stay (cannot change an admin's account, password-only sign-in).

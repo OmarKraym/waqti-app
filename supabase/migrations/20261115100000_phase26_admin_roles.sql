@@ -278,11 +278,14 @@ grant execute on function public.admin_set_admin_role(uuid, text) to authenticat
 -- Each body starts with the check "a limited level may not touch an account that holds an admin level". The text of every function is read
 -- from the database and one line is added after the first line that is only "begin"; the run stops (and nothing is kept) when a function
 -- does not have exactly one such line. CREATE OR REPLACE keeps the grants.
+-- A function that was created from a Windows file has CRLF line ends in its body (admin_set_leave_year does in production): the marker and the
+-- added line then use CRLF too, so the function keeps one line-end style. Functions with LF line ends get exactly the same text as before.
 do $patch$
 declare
   v_sig text;
   v_def text;
-  v_marker constant text := E'\nbegin\n';
+  v_nl text;
+  v_marker text;
 begin
   foreach v_sig in array array[
     'public.admin_update_employee(uuid, text, text, boolean, boolean)',
@@ -302,10 +305,12 @@ begin
     if position('private.assert_not_admin_target' in v_def) > 0 then
       continue;
     end if;
+    v_nl := case when position(E'\r\nbegin\r\n' in v_def) > 0 then E'\r\n' else E'\n' end;
+    v_marker := v_nl || 'begin' || v_nl;
     if (length(v_def) - length(replace(v_def, v_marker, ''))) <> length(v_marker) then
       raise exception 'phase26: % does not have exactly one body start', v_sig;
     end if;
-    execute replace(v_def, v_marker, v_marker || E'  perform private.assert_not_admin_target(p_employee_id);\n');
+    execute replace(v_def, v_marker, v_marker || '  perform private.assert_not_admin_target(p_employee_id);' || v_nl);
   end loop;
 end
 $patch$;
