@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 28 — custom permissions for system admins, level «مخصص» (2026-11-16) — branch `feature/punch-mode-company-roles`; migration 28 NOT applied; panel 12.27 delivered as a zip (not installed); app not touched; nothing pushed
+
+Omar's request (2026-11-16): different permissions between system admins, chosen by the system manager; the «add company» half of the request was **skipped by him** («تخطى موضوع الشركات»). He chose custom permissions per admin (not only the three fixed levels). Hand-off, fingerprints, rollback proof and how to apply: `docs/PHASE28_RUN_LOCALLY.md`. Design: `docs/superpowers/specs/2026-11-16-admin-custom-permissions-design.md`.
+
+### What changes for people
+- A new level **«مخصص»** next to the three of phase 26. The owner picks it in Settings ← مديرو النظام and ticks groups in a dialog. Every custom admin always has «الاطلاع العام» (read-only lists, no salaries); the groups add to it: **قرارات الطلبات والإجازات**, **ملفات الموظفين (تشمل الرواتب)**, **النطاق الجغرافي والموقع**, **الحركات اليدوية**. At least one group. Leaving the level deletes the groups.
+- Never grantable (owner only): managing admins and levels, company name and settings, deleting an employee, all other settings, new password, adding employees. The other protections of limited levels stay (cannot change an admin's account, password-only sign-in).
+- Database: `admin_list_admin_grants`, `admin_set_admin_grants` (owner only, audited, one change at a time per company); the gate `require_company_admin` now asks `private.admin_may_call`. `admin_set_admin_role` and `admin_delete_employee` are patched by text; nothing else changes.
+
+### Found while building
+- The first cut of the groups (a «الدوام والنطاق والأجهزة» group) would have left the employee form half refused, because the form calls grace, punch-window and device functions. Found by surveying which functions each screen calls; the groups were re-cut so that each group alone gives working screens, and the panel's strict fake (it refuses any `admin_*` call outside the permission list) opens and saves the employee form with the `employees` group alone.
+- Panel 12.26 does not know the level «مخصص» and refuses to open a custom admin's account: install 12.27 before creating the first custom admin.
+- Not caused by this work: closing the geofence dialog the moment it opens raises a Leaflet script error (also for the owner). Left as it was.
+
+### Tests
+Database whole suite **2000 passed, 1 failed** (39 files; phase 28: 139; the one failure is the clock-dependent phase 15 file, as before; the 38 older files unchanged: 1861 + 139) · **mutation check:** 24 / 24 deliberate breaks of the gate, the set function and the catalogue caught · **rollback proven:** 858 lines identical between a database without 28 and one with 28 then rolled back (the comparison does see the change: 34 lines differ). Panel 12.27: unit 198 / 198, behaviour 733 / 0 (strict fake that refuses calls outside the permission list, run for each group alone, the base alone, and all four), layout levels 96 screens and v12 366 screens, light and dark, 0 problems; 15 / 15 deliberate breaks of the panel code caught; the same unit and behaviour results from the extracted zip.
+Honest notes: one mutation first looked like it survived (23 / 24) because its file was left over from before the groups were re-cut: regenerated and rerun, 24 / 24. A behaviour check failed intermittently because the test read the list a moment before the dialog's close event restored the old level (a race in the test, not in the panel): fixed, then 3 consecutive clean runs. No separate reviewer was used.
+
+### Needs Omar's words before anything leaves this machine
+«نعم» for migrations in this order: 26 (and 25 if wanted), then 28 · the panel 12.27 is installed by Omar from the zip · «ارفع» for the push (the spec commit and the new commits).
+
 ## Phase 27 — «إضافة حركة» and a «تعديل» button on every movement (2026-11-15) — branch `feature/punch-mode-company-roles`; migration 27 NOT applied; panel 12.26 delivered as a zip (not installed); app not touched; nothing pushed
 
 Omar's request (2026-11-15, screenshot of the attendance tab): the button «إضافة حضور» becomes «إضافة حركة» and its dialog chooses حضور or انصراف; every movement gets a «تعديل» button. Hand-off, fingerprint, apply order, rollback and rulings: `docs/PHASE27_RUN_LOCALLY.md`.
