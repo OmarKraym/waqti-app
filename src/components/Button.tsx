@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export type ButtonVariant = "default" | "primary" | "ghost" | "quiet" | "danger" | "danger-soft" | "danger-text";
+export type ButtonVariant = "default" | "primary" | "ghost" | "quiet" | "danger" | "danger-soft" | "danger-text" | "approve";
 export type ButtonSize = "md" | "sm";
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className"> & {

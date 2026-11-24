@@ -1,55 +1,37 @@
-/* components/fab */
+/* components/fab (design 2026-11): the punch button, the main action of Home, a pill above the tab bar.
+   Check in = forest green with an emerald fingerprint; check out = red; not now = grey. Solid colours: content scrolls under it. */
 @layer components {
-  /* ---------------------------------------------------------------- floating actions */
-  /* The main action of the screen: a wide pill at the bottom centre, above the tab bar.
-     Solid colours only, because content scrolls under it. */
-  .punch, .fab {
+  .punch {
     position: fixed; z-index: var(--z-fab);
     inset-inline: 0; margin-inline: auto;
-    bottom: calc(var(--size-tabbar) + var(--space-4) + env(safe-area-inset-bottom));
+    bottom: calc(var(--size-tabbar) + var(--space-3) + env(safe-area-inset-bottom));
     min-height: var(--size-float);
-    display: flex; align-items: center; gap: var(--space-3);
+    display: flex; align-items: center; justify-content: center; gap: var(--space-3);
     padding-block: var(--space-2);
     border: 0; border-radius: var(--radius-pill);
     color: var(--color-on-accent); cursor: pointer; text-align: start;
-    transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base), background-color var(--motion-base);
+    transition: transform var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), background-color var(--motion-base) var(--ease-standard);
   }
-  .punch:active:not(:disabled), .fab:active:not(:disabled) { transform: scale(.97); }
-  .punch:focus-visible, .fab:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+  .punch:active:not(:disabled) { transform: scale(.98); }
+  .punch:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
   .punch {
-    width: min(calc(100vw - 2 * var(--layout-gutter)), 380px);
-    padding-inline: var(--space-2) var(--space-6);
+    width: max-content; max-width: min(calc(100vw - 2 * var(--layout-gutter)), 380px);
+    padding-inline: var(--space-6) var(--space-8);
   }
-  .punch.punch--in { background: var(--color-success); box-shadow: var(--punch-in-shadow); }
+  .punch.punch--in { background: var(--color-accent); box-shadow: var(--punch-in-shadow); }
   .punch.punch--out { background: var(--punch-out-bg); box-shadow: var(--punch-out-shadow); }
-  .punch.punch--in:hover:not(:disabled) { background: var(--color-success-hover); }
+  .punch.punch--in:hover:not(:disabled) { background: var(--color-accent-hover); }
   .punch.punch--out:hover:not(:disabled) { background: var(--punch-out-bg-hover); }
   .punch:disabled { background: var(--color-disabled); box-shadow: none; cursor: not-allowed; }
-  .punch__icon, .fab__icon {
-    flex: none; display: grid; place-items: center;
-    width: 48px; height: 48px; border-radius: var(--radius-round);
-    background: var(--punch-icon-bg);
-  }
-  .punch__icon .icon { width: 26px; height: 26px; stroke-width: 1.9; }
+  .punch__icon { flex: none; display: grid; place-items: center; }
+  .punch__icon .icon { width: 26px; height: 26px; }
+  .punch.punch--in:not(:disabled) .punch__icon { color: var(--color-accent-glow); }
   .punch__text { display: grid; gap: 0; min-width: 0; }
-  .punch__label {
-    font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 700; line-height: 1.35;
-  }
-  .punch__sub { font-size: var(--font-size-sm); line-height: 1.4; }
+  .punch__label { font-size: var(--font-size-title-sm); font-weight: 600; line-height: 1.45; }
+  .punch__sub { font-size: var(--font-size-xs); line-height: 1.4; opacity: .92; }
   .punch__sub:empty { display: none; }
   .punch[aria-busy="true"] .punch__icon { animation: breathe 1.2s ease-in-out infinite; }
-  .fab {
-    width: max-content;
-    padding-inline: var(--space-2) var(--space-6);
-    background: var(--color-accent);
-    box-shadow: var(--fab-shadow);
-  }
-  .fab:hover:not(:disabled) { background: var(--color-accent-hover); }
-  .fab:disabled { opacity: .55; cursor: not-allowed; }
-  .fab__icon { background: var(--color-warning); color: var(--color-on-warning); }
-  .fab__icon .icon { width: 24px; height: 24px; stroke-width: 2.4; }
-  .fab__label { font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 700; }
   @keyframes breathe {
-    50% { background: var(--punch-icon-bg-busy); }
+    50% { opacity: .45; }
   }
 }

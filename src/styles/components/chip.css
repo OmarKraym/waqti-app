@@ -1,39 +1,63 @@
-/* components/chip */
+/* components/chip (design 2026-11: soft tinted pills, no border) */
 @layer components {
   .count {
     display: inline-grid; place-items: center;
-    min-width: 24px; height: 24px; padding: 0 var(--space-2); border-radius: var(--radius-pill);
+    min-width: 20px; height: 20px; padding: 0 var(--space-1-5); border-radius: var(--radius-pill);
     background: var(--color-warning); color: var(--color-on-warning);
-    font-size: var(--font-size-xs); font-weight: 700; font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-2xs); font-weight: 700; font-variant-numeric: tabular-nums;
   }
   .badge {
-    position: absolute; top: 5px; inset-inline-end: calc(50% - 32px);
-    min-width: 20px; height: 20px; padding: 0 var(--space-1); border-radius: var(--radius-pill);
-    background: var(--color-warning); color: var(--color-on-warning); box-shadow: 0 0 0 2px var(--color-surface);
-    font-size: var(--font-size-2xs); font-weight: 700; line-height: 20px; text-align: center;
+    position: absolute; top: 2px; inset-inline-end: calc(50% - 26px);
+    min-width: 18px; height: 18px; padding: 0 var(--space-1); border-radius: var(--radius-pill);
+    background: var(--color-danger); color: var(--color-on-accent); box-shadow: 0 0 0 2px var(--color-surface);
+    font-size: var(--font-size-2xs); font-weight: 700; line-height: 18px; text-align: center;
     font-variant-numeric: tabular-nums;
   }
-  /* Status chips */
-  .chip {
+  /* Status chips (requests and overtime) */
+  .chip, .pill {
     flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1-5);
-    height: 28px;
-    padding: 0 var(--space-3);
+    display: inline-flex; align-items: center; gap: var(--space-1-5);
+    padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-pill);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
+    font-size: var(--font-size-xs); font-weight: 500; line-height: 1.35;
     white-space: nowrap;
   }
-  .chip::before {
-    content: ""; width: 6px; height: 6px; border-radius: var(--radius-round); background: currentColor;
-  }
-  .chip.chip--pending { background: var(--color-warning-tint); color: var(--color-warning-text); }
-  .chip.chip--approved { background: var(--color-success-tint); color: var(--color-success-text); }
-  .chip.chip--rejected { background: var(--color-danger-tint); color: var(--color-danger-text); }
-  .chip.chip--cancelled, .chip.chip--ot-done, .chip.chip--ot-cancelled { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+  .chip.chip--pending, .pill.pill--warning { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  .chip.chip--approved, .pill.pill--success { background: var(--color-success-tint); color: var(--color-success-text); }
+  .chip.chip--rejected, .pill.pill--danger { background: var(--color-danger-tint); color: var(--color-danger-text); }
+  .chip.chip--cancelled, .chip.chip--ot-done, .chip.chip--ot-cancelled, .pill.pill--neutral { background: var(--color-surface-sunken); color: var(--color-text-on-sunken); }
   .chip.chip--ot-cancelled { text-decoration: line-through; }
   .chip.chip--ot-upcoming { background: var(--color-accent-tint); color: var(--color-accent-text); }
   .chip.chip--ot-now { background: var(--color-accent); color: var(--color-on-accent); }
+  /* A status badge with a dot (today's card) */
+  .badge-status {
+    display: inline-flex; align-items: center; gap: var(--space-1-5); min-width: 0;
+    padding: var(--space-1) var(--space-3); border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs); font-weight: 500; line-height: 1.45;
+  }
+  .badge-status__dot { flex: none; width: 6px; height: 6px; border-radius: var(--radius-round); background: currentColor; }
+  .badge-status.badge-status--success { background: var(--color-success-tint); color: var(--color-success-text); }
+  .badge-status.badge-status--success .badge-status__dot { background: var(--color-success-glow); }
+  .badge-status.badge-status--warning { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  .badge-status.badge-status--neutral { background: var(--color-surface-sunken); color: var(--color-text-on-sunken); }
+  /* A small note beside a punch (sent later, added by the admin, to be reviewed) */
+  .note-chip {
+    display: inline-flex; align-items: center; gap: var(--space-1);
+    padding: var(--space-0-5) var(--space-2); border-radius: var(--radius-pill);
+    background: var(--color-surface-sunken); color: var(--color-text-on-sunken);
+    font-size: var(--font-size-2xs); font-weight: 500; line-height: 1.45;
+  }
+  .note-chip .icon { width: 14px; height: 14px; }
+  .note-chip.note-chip--warning { background: var(--color-warning-tint); color: var(--color-warning-text); }
+  /* Status filter: a row of pills that scrolls sideways */
+  .filters { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-1); scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter {
+    flex: none; padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted);
+    font: inherit; font-size: var(--font-size-xs); font-weight: 500; line-height: 1.35; white-space: nowrap; cursor: pointer;
+    transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+  }
+  .filter:hover { background: var(--color-surface-sunken); }
+  .filter.is-active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
 }

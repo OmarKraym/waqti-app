@@ -5,7 +5,7 @@ import { loginToggle, setLoginEnabled, supportsPlatformAuthenticator } from "../
 import { AppError, ERROR_TEXT } from "../lib/errors";
 import { browserStorage, loadQueue, pendingOf } from "../lib/offlineQueue";
 import { THEME_CHOICES, THEME_HINT, THEME_LABEL, chooseTheme, currentChoice, type ThemeChoice } from "../lib/theme";
-import { loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
+import { jobLine, loadSummary, saveSummary, summaryGroups } from "../lib/profileSummary";
 import { loadCalendar, offLabel } from "../lib/calendar";
 import type { AttendanceState, ProfileSummary } from "../lib/types";
 import { AppBar, Banner, Icon, Modal, Switch, Button } from "../components";
@@ -42,12 +42,12 @@ function ThemeCard() {
     chooseTheme(next);
   };
   return (
-    <section className="group theme-card" aria-labelledby="theme-title">
-      <div className="theme-card__head">
-        <span className="theme-card__icon" aria-hidden="true"><Icon name="contrast" /></span>
-        <div className="bio-card__text">
-          <span className="bio-card__title" id="theme-title">المظهر</span>
-          <span className="theme-card__note">{THEME_HINT[choice]}</span>
+    <div className="list-row list-row--stack">
+      <div className="list-row__main">
+        <span className="list-row__icon" aria-hidden="true"><Icon name="contrast" /></span>
+        <div className="list-row__text">
+          <span className="list-row__title" id="theme-title">المظهر</span>
+          <span className="list-row__sub">{THEME_HINT[choice]}</span>
         </div>
       </div>
       <div className="seg" role="radiogroup" aria-labelledby="theme-title">
@@ -57,7 +57,7 @@ function ThemeCard() {
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -154,12 +154,12 @@ function BiometricLogin({ biometric, online, onChanged }: {
     : toggle.on ? "تدخل بالبصمة بدل كلمة المرور بعد تسجيل الخروج."
     : "الدخول بكلمة المرور فقط.";
   return (
-    <section className="group bio-card" aria-label="الدخول بالبصمة">
-      <div className="bio-card__row">
-        <span className="bio-card__icon" aria-hidden="true"><Icon name="fingerprint" /></span>
-        <div className="bio-card__text">
-          <span className="bio-card__title" id="bio-title">الدخول بالبصمة</span>
-          <span className="bio-card__detail">{detail}</span>
+    <div className="list-row list-row--stack bio-card">
+      <div className="list-row__main">
+        <span className="list-row__icon" aria-hidden="true"><Icon name="fingerprint" /></span>
+        <div className="list-row__text">
+          <span className="list-row__title" id="bio-title">الدخول بالبصمة</span>
+          <span className="list-row__sub">{detail}</span>
         </div>
         {toggle.kind === "switch" && (
           <Switch
@@ -174,51 +174,93 @@ function BiometricLogin({ biometric, online, onChanged }: {
       {toggle.kind === "switch" && !online && <p className="bio-card__note">يلزم اتصال بالإنترنت لتغيير هذا الإعداد.</p>}
       {busy && toggle.kind === "switch" && !toggle.on && <p className="bio-card__note" role="status">أكّد بصمتك على هذا الهاتف…</p>}
       {message && <p className={`bio-card__note bio-card__note--${message.kind}`} role={message.kind === "error" ? "alert" : "status"}>{message.text}</p>}
-    </section>
+    </div>
   );
 }
 
-export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged, setupMissing = false, onOpenSetup }: {
+export function Profile({ user, info, online, onBack, onSignOut, onLoginChanged, setupMissing = false, onOpenSetup, onOpenNotifications }: {
   user: SessionUser; info: ProfileInfo | null; online: boolean; onBack: () => void; onSignOut: () => void;
   /** Location or notifications are not set up on this phone (shown at the bottom of the page, never on Home). */
   setupMissing?: boolean; onOpenSetup?: () => void;
+  /** «التنبيهات» row: opens reminders and holidays. */
+  onOpenNotifications?: () => void;
   /** The fingerprint sign-in switch changed on the server. */
   onLoginChanged: (enabled: boolean) => void;
 }) {
   const name = info?.employee.full_name ?? user.email ?? "";
+  const job = jobLine(loadSummary(user.id)?.data);
   return (
     <div className="app">
-      <AppBar title="حسابي" onBack={onBack} />
-      <main className="container">
-        <section className="profile-head">
-          <span className="avatar" aria-hidden="true"><Icon name="user" /></span>
-          <h2 className="profile-head__name">{name}</h2>
-          {info?.employee.employee_number && <p className="profile-head__sub">رقم الموظف <span dir="ltr">{info.employee.employee_number}</span></p>}
+      <AppBar title="الملف الشخصي" onBack={onBack} />
+      <main className="container profile">
+        <section className="card profile-head" aria-label="بيانات الموظف">
+          <span className="avatar avatar--lg" aria-hidden="true">{name.trim().charAt(0) || <Icon name="user" />}</span>
+          <div className="profile-head__text">
+            <h2 className="profile-head__name">{name}</h2>
+            {job && <p className="profile-head__sub">{job}</p>}
+            {info?.employee.employee_number && <span className="code" dir="ltr">{info.employee.employee_number}</span>}
+          </div>
         </section>
 
-        <section className="group" aria-label="بيانات الحساب">
-          <dl className="info-list">
-            {info && (<div><dt>الشركة</dt><dd>{info.company.name}</dd></div>)}
-            {user.email && (<div><dt>البريد</dt><dd dir="ltr">{user.email}</dd></div>)}
-          </dl>
+        <section className="settings" aria-labelledby="account-title">
+          <h3 id="account-title" className="settings__title">الحساب</h3>
+          <div className="group">
+            {info && (
+              <div className="list-row">
+                <div className="list-row__main">
+                  <span className="list-row__icon" aria-hidden="true"><Icon name="work" /></span>
+                  <div className="list-row__text"><span className="list-row__title">الشركة</span><span className="list-row__sub">{info.company.name}</span></div>
+                </div>
+              </div>
+            )}
+            {user.email && (
+              <div className="list-row">
+                <div className="list-row__main">
+                  <span className="list-row__icon" aria-hidden="true"><Icon name="mail" /></span>
+                  <div className="list-row__text"><span className="list-row__title">البريد</span><span className="list-row__sub" dir="ltr">{user.email}</span></div>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         <MySummary userId={user.id} online={online} />
 
-        <ThemeCard />
-
-        <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
-
-        <Button variant="danger-soft" block onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</Button>
+        <section className="settings" aria-labelledby="prefs-title">
+          <h3 id="prefs-title" className="settings__title">تفضيلات التطبيق</h3>
+          <div className="group">
+            <div className="list-row">
+              <div className="list-row__main">
+                <span className="list-row__icon" aria-hidden="true"><Icon name="language" /></span>
+                <div className="list-row__text"><span className="list-row__title">اللغة</span></div>
+              </div>
+              <span className="list-row__value">العربية</span>
+            </div>
+            {onOpenNotifications && (
+              <button type="button" className="list-row list-row--link" onClick={onOpenNotifications}>
+                <span className="list-row__main">
+                  <span className="list-row__icon" aria-hidden="true"><Icon name="bellActive" /></span>
+                  <span className="list-row__text">
+                    <span className="list-row__title">التنبيهات</span>
+                    <span className="list-row__sub">تذكير الحضور والانصراف والعطل الرسمية</span>
+                  </span>
+                </span>
+                <Icon name="chevron" className="list-row__chevron" />
+              </button>
+            )}
+            <ThemeCard />
+            <BiometricLogin biometric={info?.biometric} online={online} onChanged={onLoginChanged} />
+          </div>
+        </section>
 
         {setupMissing && onOpenSetup && (
-          <div className="setup-nudge">
-            <Banner kind="warning">
-              هاتفك لم يُجهَّز بالكامل (الموقع أو الإشعارات). قد لا يصلك تذكير البصمة.{" "}
-              <button className="link-btn" onClick={onOpenSetup}>إكمال الإعداد</button>
-            </Banner>
-          </div>
+          <Banner kind="warning">
+            هاتفك لم يُجهَّز بالكامل (الموقع أو الإشعارات). قد لا يصلك تذكير البصمة.{" "}
+            <button className="link-btn" onClick={onOpenSetup}>إكمال الإعداد</button>
+          </Banner>
         )}
+
+        <Button variant="danger-soft" block className="signout" onClick={onSignOut}><Icon name="signOut" />تسجيل الخروج</Button>
       </main>
     </div>
   );

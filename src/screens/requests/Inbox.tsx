@@ -102,12 +102,12 @@ export function InboxCard({ item, timeZone, online, onDone }: {
           </div>
         </div>
       ) : (
-        <div className="actions">
-          <Button variant="danger-text" onClick={() => setRejecting(true)} disabled={busy || !online}>رفض</Button>
-          <Button variant="primary" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
-            {busy ? "جارٍ الإرسال…" : "موافقة"}
+        <footer className="req-card__decide">
+          <Button variant="danger-soft" size="sm" onClick={() => setRejecting(true)} disabled={busy || !online}><Icon name="close" />رفض</Button>
+          <Button variant="approve" size="sm" onClick={() => decide("approve")} disabled={busy || !online} aria-busy={busy}>
+            <Icon name="tick" />{busy ? "جارٍ الإرسال…" : "موافقة"}
           </Button>
-        </div>
+        </footer>
       )}
     </article>
   );

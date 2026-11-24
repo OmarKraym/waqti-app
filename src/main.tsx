@@ -5,10 +5,9 @@ import "@fontsource/ibm-plex-sans-arabic/400.css";
 import "@fontsource/ibm-plex-sans-arabic/500.css";
 import "@fontsource/ibm-plex-sans-arabic/600.css";
 import "@fontsource/ibm-plex-sans-arabic/700.css";
-import "@fontsource/readex-pro/arabic-500.css";
-import "@fontsource/readex-pro/arabic-700.css";
-import "@fontsource/readex-pro/latin-500.css";
-import "@fontsource/readex-pro/latin-700.css";
+// Clock, times and codes (design 2026-11): IBM Plex Mono, latin digits only.
+import "@fontsource/ibm-plex-mono/latin-500.css";
+import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles/index.css";
 import { startInstallCapture } from "./lib/install";
 import { keepStorage } from "./lib/localSettings";

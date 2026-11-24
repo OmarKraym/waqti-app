@@ -15,6 +15,7 @@ import { useOnline } from "../hooks";
 import { Notifications } from "./Notifications";
 import { Requests } from "./Requests";
 import { useRequests } from "../hooks/useRequests";
+import { Icon } from "../components";
 
 type Tab = "today" | "requests" | "notifications";
 
@@ -36,10 +37,16 @@ export function urlWithTab(href: string, tab: Tab): string {
   return u.pathname + u.search + u.hash;
 }
 
-/** The signed-in app: three tabs. "Today" stays mounted when hidden, so offline punches keep syncing. */
+/**
+ * The signed-in app (design 2026-11): two tabs, «الرئيسية» and «الطلبات». «Notifications» (reminders and holidays) is a screen
+ * opened from the bell on Home or from the profile; it keeps its ?tab=notifications address so a tapped notification still opens it.
+ * "Today" stays mounted when hidden, so offline punches keep syncing.
+ */
 export function Main({ user }: { user: SessionUser }) {
   const [tab, setTab] = useState<Tab>(() => tabFromUrl(window.location.href) ?? "today");
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set([tab]));
+  // Where the back arrow of the notifications screen returns.
+  const [lastTab, setLastTab] = useState<Exclude<Tab, "notifications">>("today");
   const online = useOnline();
   const requests = useRequests(user.id);
   const count = requests.overview?.inbox_count ?? 0;
@@ -66,12 +73,17 @@ export function Main({ user }: { user: SessionUser }) {
   }, []);
 
   const go = (t: Tab) => {
+    if (t !== "notifications") setLastTab(t);
     setTab(t);
     setVisited((v) => (v.has(t) ? v : new Set(v).add(t)));
     // Remember the tab in the address (no new history entry), so a reload stays here.
     window.history.replaceState(window.history.state, "", urlWithTab(window.location.href, t));
     if (t === "requests") requests.reload();
     window.scrollTo(0, 0);
+  };
+  const openNotifications = () => {
+    if (profile) closeProfile();
+    go("notifications");
   };
   const newRequest = (type: RequestType, draft?: Draft) => {
     setCompose((c) => ({ n: (c?.n ?? 0) + 1, type, draft }));
@@ -131,12 +143,15 @@ export function Main({ user }: { user: SessionUser }) {
       {profile && (
         <Profile
           user={user} info={info} online={online} onBack={closeProfile} onSignOut={() => setConfirmOut(true)}
-          setupMissing={missing} onOpenSetup={() => setSetupOpen(true)}
+          setupMissing={missing} onOpenSetup={() => setSetupOpen(true)} onOpenNotifications={openNotifications}
           onLoginChanged={(enabled) => setInfo((i) => (i ? { ...i, biometric: { ...i.biometric, login_enabled: enabled } } : i))}
         />
       )}
       <div hidden={profile || tab !== "today"}>
-        <Home user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo} />
+        <Home
+          user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo}
+          onOpenNotifications={openNotifications} setupMissing={missing}
+        />
       </div>
       {visited.has("requests") && (
         <div className="app" hidden={profile || tab !== "requests"}>
@@ -145,22 +160,18 @@ export function Main({ user }: { user: SessionUser }) {
       )}
       {visited.has("notifications") && (
         <div className="app" hidden={profile || tab !== "notifications"}>
-          <Notifications online={online} userId={user.id} />
+          <Notifications online={online} userId={user.id} onBack={() => go(lastTab)} />
         </div>
       )}
-      <nav className="tabbar" aria-label="التنقل" hidden={profile}>
+      <nav className="tabbar" aria-label="التنقل الرئيسي" hidden={profile || tab === "notifications"}>
         <button className={`tab${tab === "today" ? " is-active" : ""}`} aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M8 8.5h8M8 12.5h8M8 16.5h4" /></svg>
-          <span>اليوم</span>
+          <Icon name={tab === "today" ? "homeFill" : "home"} />
+          <span>الرئيسية</span>
         </button>
         <button className={`tab${tab === "requests" ? " is-active" : ""}`} aria-current={tab === "requests" ? "page" : undefined} onClick={() => go("requests")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4v13H7z" /><path d="M14 3.5v4h4M10 12.5h5M10 16h5" /></svg>
+          <Icon name={tab === "requests" ? "assignmentFill" : "assignment"} />
           <span>الطلبات</span>
           {count > 0 && <span className="badge" aria-label={`${count} بانتظار موافقتك`}>{count}</span>}
-        </button>
-        <button className={`tab${tab === "notifications" ? " is-active" : ""}`} aria-current={tab === "notifications" ? "page" : undefined} onClick={() => go("notifications")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></svg>
-          <span>الإشعارات</span>
         </button>
       </nav>
 

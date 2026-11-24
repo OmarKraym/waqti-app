@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, earlierDays, formatDuration, todayRows, workedToday } from "./timecard";
+import { clockDuration, dayKey, dayLabel, earlierDays, formatDuration, todayEnds, todayRows, workedToday } from "./timecard";
 import type { AttendanceEvent } from "./types";
 
 const TZ = "Africa/Tripoli"; // UTC+2
@@ -134,5 +134,27 @@ describe("minutes worked today (live, shown on the today screen)", () => {
     const start = at("2026-10-29T20:00:00Z");
     const rows = todayRows([ev("a", "check_in", "2026-10-29T20:00:00Z")], start, NOW, TZ);
     expect(workedToday(rows, start, NOW)).toBe(900);
+  });
+});
+
+describe("today card summary and the log rows (redesign 2026-11)", () => {
+  it("first check-in and last check-out of the day; empty slots do not count", () => {
+    const rows = todayRows([ev("a", "check_in", "2026-10-30T06:00:00Z"), ev("b", "check_out", "2026-10-30T08:00:00Z"), ev("c", "check_in", "2026-10-30T09:00:00Z")], null, NOW, TZ);
+    const ends = todayEnds(rows);
+    expect(ends.firstIn?.key).toBe("a");
+    expect(ends.lastOut).toBeUndefined(); // the last movement is a check-in: no check-out yet
+  });
+  it("a closed day: both ends", () => {
+    const rows = todayRows([ev("a", "check_in", "2026-10-30T06:00:00Z"), ev("b", "check_out", "2026-10-30T10:00:00Z")], null, NOW, TZ);
+    expect([todayEnds(rows).firstIn?.key, todayEnds(rows).lastOut?.key]).toEqual(["a", "b"]);
+  });
+  it("nothing today: no ends", () => {
+    expect(todayEnds(todayRows([], null, NOW, TZ))).toEqual({});
+  });
+  it("hours as a clock: 02:26, 00:00, 10:05", () => {
+    expect([clockDuration(146), clockDuration(0), clockDuration(605)]).toEqual(["02:26", "00:00", "10:05"]);
+  });
+  it("a log day: weekday name and the date with slashes", () => {
+    expect(dayLabel("2026-11-23", TZ)).toEqual({ weekday: "الاثنين", date: "2026/11/23" });
   });
 });

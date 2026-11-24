@@ -112,3 +112,19 @@ export function loadSummary(userId: string, store: Store | null = defaultStore()
     return null;
   }
 }
+
+/** Today's hours from the schedule, on the company's wall clock: "09:00 – 17:00", the off label on a day off, null when unknown. */
+export function todayShift(rows: ProfileSummary["schedule"], nowMs: number, timeZone: string, offLabel = "إجازة"): string | null {
+  if (!rows?.length) return null;
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(new Date(nowMs));
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+  const r = rows.find((x) => x.weekday === weekday);
+  if (!r) return null;
+  return r.is_workday && r.start_time && r.end_time ? `${r.start_time} – ${r.end_time}` : offLabel;
+}
+
+/** "Job title • department" for the Home and profile cards; null when the company shows neither. */
+export function jobLine(s: Pick<ProfileSummary, "employee"> | null | undefined): string | null {
+  const parts = [s?.employee?.job_title, s?.employee?.department].map((x) => x?.trim()).filter(Boolean);
+  return parts.length ? parts.join(" • ") : null;
+}

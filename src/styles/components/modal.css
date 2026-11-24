@@ -11,14 +11,12 @@
     width: min(100%, 380px);
     display: grid; gap: var(--space-3);
     padding: var(--space-6);
-    background: var(--color-surface); border-radius: var(--radius-xl);
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
     animation: pop-in var(--motion-base) var(--ease-out);
   }
-  .modal__title {
-    font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 700; color: var(--color-text);
-  }
-  .modal__text { color: var(--color-text-muted); line-height: 1.7; font-size: var(--font-size-md); }
+  .modal__title { font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text); }
+  .modal__text { color: var(--color-text-muted); line-height: 1.7; font-size: var(--font-size-sm); }
   .modal__actions { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
   .modal-backdrop.modal-backdrop--sheet { place-items: end center; padding: 0; }
   .modal-backdrop.modal-backdrop--sheet .modal {

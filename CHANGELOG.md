@@ -1,5 +1,19 @@
 # Changelog
 
+## Employee app redesign — «Stitch» design (2026-11-24) — branch `feature/ui-redesign-dawam`; local only, nothing deployed
+
+Omar's request (2026-11-24): change the whole app interface to the new design (stitch_arabic_hr_attendance_app: home, requests, profile), keep every service working, and bring everything the old app had and the design lacks into the new style.
+
+- **Look:** deep forest green `#1E352B` with emerald, white hairline cards (16 px corners, no shadows), IBM Plex Sans Arabic + IBM Plex Mono for clock, times and codes, Material Symbols icons (self-hosted SVG paths, `tools/gen-icons.py`). Light theme from the design; the dark theme is derived (same hues). All contrast pairs pass `palette.test.ts`.
+- **Navigation:** two tabs, «الرئيسية» and «الطلبات». «الإشعارات» is now a screen opened from the bell on Home and from the profile (`?tab=notifications` links still open it). The bell has a red dot while notifications or location are not set up.
+- **Home:** header (avatar + «وقتي» + company → profile; bell), hero card (date, live server clock, today's shift, name, job • department, employee number), «حضور اليوم» (status badge, check-in, check-out, total hours; every punch listed when one waits, was added by the admin or is under review), quick requests, «سجل الأيام السابقة» (scrolls inside, about four rows), punch pill above the tab bar (green with fingerprint / red check-out / grey when not allowed).
+- **Requests:** header «طلب جديد» button (was a floating button), «طلباتي / اعتمادات الفريق» switch (only for approvers and overtime managers), status filter pills, plain cards with the approval path in the footer, tinted «رفض / موافقة».
+- **Profile:** who card, «الحساب», «ملخص بياناتي», «تفضيلات التطبيق» (language, notifications, theme, fingerprint sign-in), red sign-out.
+- **Kept from the old app in the new style:** balances, permissions this month, overtime (mine and team, assign form), new-request form, holidays and reminders, failed punches, forgot-check-in, offline and sync messages, first-run setup, login, password change, device setup, light/dark/auto.
+- **Not from the design, on purpose:** the design's 30-day log needs a server change (the state sends the last 10 punches), so the log shows the days the server sends; times stay 12-hour with ص/م as before; no manager name on the profile (the app has no such data); app name stays «وقتي».
+- New pure helpers with tests: `todayShift`, `jobLine` (profileSummary), `todayEnds`, `clockDuration`, `dayLabel` (timecard). The hero test of `palette.test.ts` now accepts a solid hero colour. `@fontsource/readex-pro` removed, `@fontsource/ibm-plex-mono` added.
+- Checks: typecheck, 448 unit tests, stylelint, production build; built app under its CSP loads both fonts with no violation; screenshots of every screen in light and dark (mock API).
+
 ## Phase 28 — custom permissions for system admins, level «مخصص» (2026-11-16) — branch `feature/punch-mode-company-roles`; migration 28 NOT applied; panel 12.27 delivered as a zip (not installed); app not touched; nothing pushed
 
 Omar's request (2026-11-16): different permissions between system admins, chosen by the system manager; the «add company» half of the request was **skipped by him** («تخطى موضوع الشركات»). He chose custom permissions per admin (not only the three fixed levels). Hand-off, fingerprints, rollback proof and how to apply: `docs/PHASE28_RUN_LOCALLY.md`. Design: `docs/superpowers/specs/2026-11-16-admin-custom-permissions-design.md`.

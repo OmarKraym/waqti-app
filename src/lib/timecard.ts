@@ -133,3 +133,27 @@ export function formatDuration(minutes: number): string {
   const m = minutes % 60;
   return h > 0 ? `${h} س ${String(m).padStart(2, "0")} د` : `${m} د`;
 }
+
+/** The today card's two times: the first check-in and, when the day ends with one, the last check-out (pencil rows count). */
+export function todayEnds(rows: CardRow[]): { firstIn?: CardRow; lastOut?: CardRow } {
+  const filled = rows.filter((r) => r.kind !== "empty");
+  const firstIn = filled.find((r) => r.action === "check_in");
+  const last = filled[filled.length - 1];
+  const out: { firstIn?: CardRow; lastOut?: CardRow } = {};
+  if (firstIn) out.firstIn = firstIn;
+  if (last?.action === "check_out") out.lastOut = last;
+  return out;
+}
+
+/** Minutes as a clock: "02:26". */
+export function clockDuration(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** A log row's day (YYYY-MM-DD): the weekday in Arabic and "2026/11/23". */
+export function dayLabel(day: string, timeZone: string): { weekday: string; date: string } {
+  const noon = new Date(`${day}T12:00:00Z`);
+  const weekday = new Intl.DateTimeFormat("ar-LY", { timeZone, weekday: "long" }).format(noon);
+  return { weekday, date: day.replaceAll("-", "/") };
+}

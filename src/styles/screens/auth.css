@@ -3,37 +3,26 @@
   /* The new-request form and the overtime form hide the list, so they hide this button too. */
   /* ---------------------------------------------------------------- sign in */
   .auth {
-    position: relative; overflow: hidden;
     min-height: 100dvh;
     display: grid; place-items: center;
     padding: var(--space-8) var(--layout-gutter);
-    background: var(--hero-bg);
-  }
-  .auth::before {
-    /* A clock dial behind the card */
-    content: ""; position: absolute; width: var(--auth-dial-size); height: var(--auth-dial-size);
-    top: calc(50% - var(--auth-dial-size) / 2); inset-inline-start: calc(50% - var(--auth-dial-size) / 2);
-    background: url("../../dial.svg") center / contain no-repeat;
-    pointer-events: none;
+    background: var(--color-bg);
   }
   .auth__card {
     position: relative;
     width: 100%; max-width: 400px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
     padding: var(--space-8) var(--space-5) var(--space-5);
-    background: var(--color-surface); border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-modal);
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl);
   }
   .auth__head {
     display: grid; justify-items: center; gap: var(--space-2); text-align: center; margin-bottom: var(--space-2);
   }
-  .auth__head h1 {
-    font-family: var(--font-family-display); font-size: var(--font-size-2xl); font-weight: 700;
-  }
+  .auth__head h1 { font-size: var(--font-size-2xl); font-weight: 700; line-height: 1.3; }
   .auth__head .u-muted { font-size: var(--font-size-sm); max-width: 32ch; }
   .auth__logo {
-    border-radius: var(--radius-lg); margin-bottom: var(--space-1); box-shadow: 0 0 0 3px var(--color-surface), 0 0 0 4px var(--color-border);
+    border-radius: var(--radius-lg); margin-bottom: var(--space-1); border: 1px solid var(--color-border);
   }
-  .auth__card .btn.btn--block { min-height: 52px; border-radius: var(--radius-md); }
+  .auth__card .btn.btn--block { min-height: 52px; }
   .auth__or {
     display: flex; align-items: center; gap: var(--space-3);
     color: var(--color-text-muted); font-size: var(--font-size-sm); text-align: center;

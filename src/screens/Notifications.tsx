@@ -69,7 +69,7 @@ function HolidaysCard({ userId }: { userId: string }) {
   );
 }
 
-export function Notifications({ online, userId }: { online: boolean; userId: string }) {
+export function Notifications({ online, userId, onBack }: { online: boolean; userId: string; onBack?: () => void }) {
   const [push, setPush] = useState<PushState | null>(null);
   // The last saved choices are on this phone too: they show at once, survive an app update, and stay if the server is slow.
   // (`devices` is only known from the server; until it answers it is assumed fine so no false warning shows.)
@@ -174,7 +174,7 @@ export function Notifications({ online, userId }: { online: boolean; userId: str
 
   return (
     <>
-    <AppBar title="الإشعارات" />
+    <AppBar title="التنبيهات" sub="تذكير الحضور والانصراف والعطل الرسمية" onBack={onBack} />
     <main className="container notif">
       {!online && <Banner kind="warning">الإعدادات تحتاج اتصالًا بالإنترنت.</Banner>}
       {note && <Banner kind={note.kind} onClose={() => setNote(null)}>{note.text}</Banner>}

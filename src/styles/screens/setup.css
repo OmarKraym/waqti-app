@@ -10,10 +10,10 @@
   .setup__step {
     border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-3);
   }
-  .setup__step.setup__step--done { background: var(--color-success-tint); border-color: transparent; }
+  .setup__step.setup__step--done { background: var(--color-success-wash); border-color: var(--color-success-tint); }
   .setup__head { display: flex; align-items: center; gap: var(--space-3); }
   .setup__icon {
-    flex: none; width: 36px; height: 36px; padding: var(--space-2); border-radius: var(--radius-round); background: var(--color-accent-tint); color: var(--color-accent-text);
+    flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-round); background: var(--color-accent-tint); color: var(--color-accent-text);
   }
   .setup__icon .icon { width: 20px; height: 20px; }
   .setup__step.setup__step--done .setup__icon { background: var(--color-surface); color: var(--color-success-text); }

@@ -1,25 +1,33 @@
-import { statusHeadline } from "../../lib/statusHeadline";
-import type { CardRow } from "../../lib/timecard";
 import type { AttendanceState } from "../../lib/types";
+import { Icon } from "../../components";
 import { ServerClock } from "./ServerClock";
 
-/** The dial card: who, the server clock, today's status in one line. */
-export function StatusCard({ data, rows, offsetMs, nowMs }: { data: AttendanceState; rows: CardRow[]; offsetMs: number; nowMs: number }) {
-  const tz = data.company.timezone;
+/** The hero card: date and live server clock, today's shift, then who he is. */
+export function StatusCard({ data, offsetMs, shift, job }: {
+  data: AttendanceState; offsetMs: number;
+  /** Today's hours from the schedule ("09:00 – 17:00", or the day-off label); null when the company does not show it. */
+  shift: string | null;
+  /** "Job title • department"; null when the company does not show it. */
+  job: string | null;
+}) {
   return (
-    <section className={`status${data.open_session ? " status--present" : ""}`}>
-      <p className="status__who">
-        <span className="u-truncate">{data.employee.full_name}</span>
-        {data.employee.employee_number && <span className="status__number" dir="ltr">{data.employee.employee_number}</span>}
-      </p>
-      <ServerClock offsetMs={offsetMs} timeZone={tz} rows={rows} openStart={data.open_session?.started_at ?? null} />
-      <h2 className="status__head" aria-live="polite">
-        <span className="status__dot" aria-hidden="true" />
-        {statusHeadline(data, rows, nowMs, tz)}
-      </h2>
-      {data.leave_today && !rows.some((r) => r.kind !== "empty") && (
-        <p className="status__note">لا يُطلب منك البصم اليوم. وإن سجّلت حضورك يُلغى هذا اليوم من إجازتك.</p>
-      )}
+    <section className="card hero" aria-label="ملخص اليوم والوقت الحالي">
+      <div className="hero__top">
+        <ServerClock offsetMs={offsetMs} timeZone={data.company.timezone} />
+        {shift && (
+          <span className="tag" title="دوام اليوم">
+            <Icon name="clock" />
+            <span dir="ltr">{shift}</span>
+          </span>
+        )}
+      </div>
+      <div className="hero__who">
+        <div className="u-min-w-0">
+          <h1 className="hero__name u-truncate">{data.employee.full_name}</h1>
+          {job && <p className="hero__job">{job}</p>}
+        </div>
+        {data.employee.employee_number && <span className="code" dir="ltr">{data.employee.employee_number}</span>}
+      </div>
     </section>
   );
 }

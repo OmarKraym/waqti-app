@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupSchedule, loadSummary, money, saveSummary, serviceLength, summaryGroups } from "./profileSummary";
+import { groupSchedule, jobLine, loadSummary, money, saveSummary, serviceLength, summaryGroups, todayShift } from "./profileSummary";
 import type { ProfileSummary } from "./types";
 
 describe("serviceLength: time since hiring", () => {
@@ -95,5 +95,30 @@ describe("saved copy on this phone (per account)", () => {
     const bad = { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); }, removeItem: () => undefined };
     expect(() => saveSummary("u1", {}, 1, bad)).not.toThrow();
     expect(loadSummary("u1", bad)).toBeNull();
+  });
+});
+
+describe("home hero lines (redesign 2026-11)", () => {
+  const TZ = "Africa/Tripoli";
+  // 2026-11-24 is a Tuesday (weekday 2); 10:00 Tripoli time.
+  const NOW = Date.parse("2026-11-24T08:00:00Z");
+  const day = (weekday: number, start: string | null, end: string | null) => ({ weekday, is_workday: !!start, start_time: start, end_time: end });
+
+  it("today's shift: the hours of today's weekday in the company's time zone", () => {
+    expect(todayShift([day(2, "09:00", "17:00"), day(3, "08:00", "16:00")], NOW, TZ)).toBe("09:00 – 17:00");
+  });
+  it("today's shift: a day off reads as the off label; no schedule or no row for today = null", () => {
+    expect(todayShift([day(2, null, null)], NOW, TZ, "عطلة")).toBe("عطلة");
+    expect(todayShift(undefined, NOW, TZ)).toBeNull();
+    expect(todayShift([day(3, "08:00", "16:00")], NOW, TZ)).toBeNull();
+  });
+  it("the weekday follows the time zone, not UTC (23:30 UTC Monday is Tuesday in Tripoli)", () => {
+    expect(todayShift([day(2, "09:00", "17:00")], Date.parse("2026-11-23T23:30:00Z"), TZ)).toBe("09:00 – 17:00");
+  });
+  it("job line: title and department joined, either alone, nothing = null", () => {
+    expect(jobLine({ employee: { job_title: "محاسب", department: "المالية" } })).toBe("محاسب • المالية");
+    expect(jobLine({ employee: { job_title: "محاسب" } })).toBe("محاسب");
+    expect(jobLine({ employee: { department: " " } })).toBeNull();
+    expect(jobLine(null)).toBeNull();
   });
 });

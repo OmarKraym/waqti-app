@@ -119,6 +119,8 @@ const PAIRS: Array<[string, string, number, string]> = [
   ["--color-warning-text", "--color-surface", 4.5, "amber text on a card"],
   ["--color-on-warning", "--color-warning", 4.5, "count badge"],
   ["--color-focus", "--color-surface", 3, "focus ring"],
+  ["--color-text-on-sunken", "--color-surface-sunken", 4.5, "text on a grey chip (shift, employee number)"],
+  ["--color-accent-glow", "--color-accent", 3, "the fingerprint icon on the check-in button"],
 ];
 
 describe.each(Object.keys(themes) as Array<keyof typeof themes>)("contrast in the %s theme", (name) => {
@@ -132,9 +134,9 @@ describe.each(Object.keys(themes) as Array<keyof typeof themes>)("contrast in th
     expect(contrast(f!, b!)).toBeGreaterThanOrEqual(min);
   });
 
-  it("text on the hero card is readable over the whole gradient", () => {
+  it("text on the hero card is readable over its whole background (a solid colour since the 2026-11 redesign)", () => {
     const stops = (t["--hero-bg"].match(/#[0-9a-f]{6}/gi) ?? []);
-    expect(stops.length).toBeGreaterThanOrEqual(2);
+    expect(stops.length).toBeGreaterThanOrEqual(1);
     for (const stop of stops) {
       for (const [token, min] of [["--hero-text", 4.5], ["--hero-text-muted", 4.5], ["--hero-accent", 4.5], ["--hero-text-subtle", 3]] as const) {
         const fg = hex(t[token]);

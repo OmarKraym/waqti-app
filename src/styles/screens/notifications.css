@@ -8,9 +8,9 @@
     background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
   }
-  .notif-card .section__title { margin: 0; font-size: var(--font-size-md); }
+  .notif-card .section__title { margin: 0; }
   .state-line {
-    display: flex; align-items: flex-start; gap: var(--space-2-5); font-size: var(--font-size-sm); line-height: 1.7;
+    display: flex; align-items: flex-start; gap: var(--space-2-5); font-size: var(--font-size-body-sm); line-height: 1.7;
   }
   .state-line .icon { margin-top: var(--space-0-5); color: var(--color-text-muted); }
   .state-line.state-line--on { color: var(--color-success-text); font-weight: 600; }
@@ -31,11 +31,11 @@
   .rem-row__icon.rem-row__icon--in { background: var(--color-success-tint); color: var(--color-success-text); }
   .rem-row__icon.rem-row__icon--out { background: var(--color-danger-tint); color: var(--color-danger-text); }
   .rem-row__when { display: grid; gap: var(--space-2); }
-  .rem-row__when > span { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-muted); }
+  .rem-row__when > span { font-size: var(--font-size-xs); font-weight: 500; color: var(--color-text-muted); }
   .rem-row select {
     width: 100%; min-height: 48px; padding: 0 var(--space-4);
-    border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
-    background-color: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--font-size-md);
+    border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+    background-color: var(--color-bg); color: var(--color-text); font: inherit; font-size: var(--font-size-md);
   }
   .rem-row select:disabled { opacity: .5; cursor: not-allowed; }
   .rem-row.is-off .rem-row__icon { background: var(--color-surface-sunken); color: var(--color-text-faint); }

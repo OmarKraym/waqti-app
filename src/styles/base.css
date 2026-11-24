@@ -4,8 +4,8 @@
     background: var(--color-bg);
     color: var(--color-text);
     font-family: var(--font-family-body);
-    font-size: var(--font-size-md);
-    line-height: 1.5;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
   }
@@ -17,7 +17,7 @@
     to { transform: rotate(360deg); }
   }
   @keyframes sheet-up {
-    from { opacity: 0; transform: translateY(40px); }
+    from { opacity: .4; transform: translateY(100%); }
   }
   @keyframes fade-in {
     from { opacity: 0; }

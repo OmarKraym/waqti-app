@@ -20,14 +20,17 @@ import { TYPE_ICON } from "./shared";
 
 // ---------------------------------------------------------------- my requests
 
-export function MyRequests({ items, timeZone, online, onChanged }: {
-  items: RequestItem[]; timeZone: string; online: boolean; onChanged: (text: string, kind: "success" | "error") => void;
+export function MyRequests({ items, filtered = false, timeZone, online, onChanged }: {
+  items: RequestItem[];
+  /** A status filter is on: an empty list says so. */
+  filtered?: boolean;
+  timeZone: string; online: boolean; onChanged: (text: string, kind: "success" | "error") => void;
 }) {
   return (
     <section aria-labelledby="mine-title">
       <h2 id="mine-title" className="section__title">طلباتي</h2>
       {items.length === 0 ? (
-        <EmptyState>لا توجد طلبات بعد</EmptyState>
+        <EmptyState>{filtered ? "لا توجد طلبات ضمن هذا التصنيف حاليًا" : "لا توجد طلبات بعد"}</EmptyState>
       ) : (
         <ul className="req-list">
           {items.map((r) => (
@@ -82,9 +85,14 @@ export function MyRequestCard({ item, timeZone, online, onChanged }: {
           ))}
         </ol>
       )}
-      <p className="req-card__progress">{progressLine(item)}</p>
-      {chargedLine(item) && <p className="req-card__progress">{chargedLine(item)}</p>}
       {visibleNote(item) && <p className="req-card__reason">«{keepDatesTogether(visibleNote(item) ?? "")}»</p>}
+      <footer className="req-card__foot">
+        <Icon name="tree" />
+        <span>
+          {progressLine(item)}
+          {chargedLine(item) && <span className="req-card__charged">{chargedLine(item)}</span>}
+        </span>
+      </footer>
       {item.status === "pending" && (
         <Button variant="ghost" size="sm" className="req-card__cancel" onClick={() => setAsking(true)} disabled={busy || !online}>إلغاء الطلب</Button>
       )}

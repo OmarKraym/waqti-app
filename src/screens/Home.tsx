@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
 import { ERROR_TEXT } from "../lib/errors";
 import { failedOf, isQueuedEvent, pendingOf, withQueue } from "../lib/offlineQueue";
 import { windowText } from "../lib/punchWindow";
 import { holidayBanner, offLabel } from "../lib/calendar";
 import { earlierDays, todayRows } from "../lib/timecard";
+import { jobLine, loadSummary, saveSummary, todayShift } from "../lib/profileSummary";
+import { api } from "../lib/client";
+import type { ProfileSummary } from "../lib/types";
 import { effectiveAction, isPunchLocked, lockedText } from "../lib/punchMode";
 import type { RequestType } from "../lib/types";
 import { useAttendance } from "../hooks/useAttendance";
-import { Banner, Button, Icon, Modal } from "../components";
+import { Banner, Button, Icon, IconButton, Modal } from "../components";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
 import { EarlierDays } from "./home/EarlierDays";
@@ -21,11 +24,15 @@ import { Timecard } from "./home/Timecard";
 const OFFLINE_PUNCHES = false;
 
 /** The today screen: the container. What it does lives in useAttendance; what it shows lives in ./home/. */
-export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
+export function Home({ user, onNewRequest, onOpenProfile, onOpenNotifications, setupMissing = false, onInfo }: {
   user: SessionUser;
   onNewRequest: (type: RequestType) => void;
-  /** The app logo at the top opens the profile. */
+  /** The avatar at the top opens the profile. */
   onOpenProfile: () => void;
+  /** The bell at the top opens reminders and holidays. */
+  onOpenNotifications: () => void;
+  /** Notifications or location are not set up on this phone: a dot on the bell. */
+  setupMissing?: boolean;
   /** Who the employee is (shown on the profile screen). */
   onInfo: (info: ProfileInfo) => void;
 }) {
@@ -33,6 +40,15 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
   const { state, online } = a;
   const [confirmNoIn, setConfirmNoIn] = useState(false); // phase 13: confirm "check out without a check-in"
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
+  // Job title, department and today's hours come from "my data summary" (only what the company allows). The copy saved on
+  // this phone shows at once; it is refreshed once per visit when online (the profile refreshes it too).
+  const [summary, setSummary] = useState<ProfileSummary | null>(() => loadSummary(user.id)?.data ?? null);
+  useEffect(() => {
+    if (!a.online) return;
+    let alive = true;
+    api.getProfileSummary().then((fresh) => { if (!alive) return; saveSummary(user.id, fresh); setSummary(fresh); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [user.id, a.online]);
 
   if (state.phase === "loading") {
     return (
@@ -79,7 +95,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
   const canTap = !working && !a.bioBusy && !blocked && !waitingForCheckOut && (online || (allowQueue && !data.forgot_check_in));
   const tz = data.company.timezone;
   const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
-  const days = earlierDays(data.recent_events.filter((e) => !isQueuedEvent(e)), nowMs, tz);
+  const days = earlierDays(data.recent_events.filter((e) => !isQueuedEvent(e)), nowMs, tz, 10);
+  const initial = data.employee.full_name.trim().charAt(0) || "؟";
   const punchSub = a.bioBusy
     ? "أكّد بصمتك…"
     : blocked
@@ -98,12 +115,18 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <button className="logo-btn" onClick={onOpenProfile} aria-label="حسابي">
-          <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={36} height={36} />
+      <header className="appbar appbar--home">
+        <button className="who-btn" onClick={onOpenProfile} aria-label="فتح الملف الشخصي">
+          <span className="avatar avatar--sm" aria-hidden="true">{initial}</span>
+          <span className="who-btn__text">
+            <span className="who-btn__brand">وقتي</span>
+            <span className="who-btn__sub u-truncate">{data.company.name}</span>
+          </span>
         </button>
-        <h1 className="topbar__title u-truncate">{data.company.name}</h1>
-        <span aria-hidden="true" />
+        <span className="bell">
+          <IconButton icon="bell" label={setupMissing ? "التنبيهات — الإعداد غير مكتمل" : "التنبيهات"} onClick={onOpenNotifications} className="icon-btn--outlined" />
+          {setupMissing && <span className="bell__dot" aria-hidden="true" />}
+        </span>
       </header>
 
       <main className="container has-punch">
@@ -116,8 +139,8 @@ export function Home({ user, onNewRequest, onOpenProfile, onInfo }: {
           </Banner>
         )}
 
-        <StatusCard data={data} rows={rows} offsetMs={a.offsetMs} nowMs={nowMs} />
-        <Timecard rows={rows} timeZone={tz} freshId={a.freshId} />
+        <StatusCard data={data} offsetMs={a.offsetMs} shift={todayShift(summary?.schedule, nowMs, tz, offLabel(a.calendar))} job={jobLine(summary)} />
+        <Timecard data={data} rows={rows} offsetMs={a.offsetMs} freshId={a.freshId} />
 
         {a.setupNeeded ? (
           <DeviceSetup

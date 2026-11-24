@@ -19,5 +19,5 @@
   /* Switch rows: label (and an optional icon) at the start, the switch at the end, always one aligned line. */
   .switch-row { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; }
   .switch-row > .switch { margin-inline-start: auto; }
-  .switch-row__label { flex: 1; min-width: 0; font-weight: 700; color: var(--color-text); line-height: 1.4; }
+  .switch-row__label { flex: 1; min-width: 0; font-weight: 600; color: var(--color-text); line-height: 1.4; }
 }
