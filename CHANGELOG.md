@@ -1,5 +1,11 @@
 # Changelog
 
+## Dark theme: softer greens (2026-11-25)
+
+Omar: every green in dark mode had a slight, tiring glow. The dark theme now uses low-chroma sage greens instead of saturated mint
+(`#6ee7a0`, `#4ade80`, `#15803d` on near-black glow and vibrate): text and the clock `#8fc2a4` / `#a3cfb5`, icons and focus `#7fb495`,
+fills `#3e7a58`, tints `#1c2b24`. Light theme unchanged. All contrast pairs still pass `palette.test.ts`.
+
 ## Employee app redesign — «Stitch» design (2026-11-24) — branch `feature/ui-redesign-dawam`; local only, nothing deployed
 
 Omar's request (2026-11-24): change the whole app interface to the new design (stitch_arabic_hr_attendance_app: home, requests, profile), keep every service working, and bring everything the old app had and the design lacks into the new style.
