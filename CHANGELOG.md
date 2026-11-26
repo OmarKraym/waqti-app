@@ -1,5 +1,18 @@
 # Changelog
 
+## Fix: «إضافة موظف» in the admin panel (2026-11-26) — branch `fix/create-employee-trigger`; migration NOT applied yet
+
+Symptom: adding an employee from the panel always failed (create-employee answered 500 `create_failed`; the function log said
+`profile save failed employee_not_found`). No employee could be created since the multi-company change (last account: 2026-10-17).
+Cause: Supabase Auth's admin `createUser` inserts the user with `app_metadata = {provider, providers}` and writes the custom
+`app_metadata` (`company_id`, `company_role`) with an UPDATE afterwards (supabase/auth `internal/api/admin.go`, `adminUserCreate`).
+`on_auth_user_created` ran AFTER INSERT only, so it never saw `company_id` and created no employee row.
+Fix (`20261126100000_fix_create_employee_trigger.sql`): the same trigger also runs AFTER UPDATE OF `raw_app_meta_data`; on an update
+the function acts only when `company_id` has just appeared and the account has no employee row, so later updates of existing accounts
+(password change, reset) do nothing. Edge function and panel unchanged. Tests: `tests/fix_create_employee_trigger_tests.sql` (20;
+9 failed before the fix with the same `employee_not_found`), full suite 2020 passed, 1 known phase-15 clock failure. The rollback
+restores the production text byte for byte (md5 `5c1ebf4fe0f68ce9d92f8bc91c073685`).
+
 ## Dark theme: softer greens (2026-11-25)
 
 Omar: every green in dark mode had a slight, tiring glow. The dark theme now uses low-chroma sage greens instead of saturated mint
