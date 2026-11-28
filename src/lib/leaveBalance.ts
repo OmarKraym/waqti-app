@@ -55,3 +55,41 @@ export function customUsedTexts(kinds: CustomKind[]): string[] {
     .filter((k) => k.family === "leave" && k.balance && k.balance.used + k.balance.pending > 0)
     .map((k) => `${k.name}: ${formatDays(k.balance!.used + k.balance!.pending)} هذه السنة`);
 }
+
+export interface AnnualExplain {
+  /** One sentence: the year is earned day by day. */
+  lead: string;
+  /** The sum, line by line: what was earned (+), carried (+), taken (−), and what is left (total). */
+  rows: { label: string; value: string; sign: "plus" | "minus" | "total" }[];
+  /** What is still to come this year; null when the whole year is earned. */
+  note: string | null;
+}
+
+const num = (n: number) => String(Math.round(n * 10) / 10);
+
+/**
+ * Why the annual balance is what it is, for the dialog that opens when the number is tapped. The same sum as the server
+ * (phase 18a): earned up to as_of (+ carried) − used − used outside the app − waiting = remaining. Null on an older server.
+ */
+export function annualExplain(b: LeaveBalance): AnnualExplain | null {
+  if (b.earned === undefined || b.entitled === null || b.remaining === null) return null;
+  const carried = b.carried ?? 0;
+  const outside = b.used_outside ?? 0;
+  const yearDays = b.entitled - carried;
+  const earnedYear = b.earned - carried;
+  const when = b.as_of
+    ? new Intl.DateTimeFormat("ar-LY", { day: "numeric", month: "long", timeZone: "UTC", numberingSystem: "latn" }).format(new Date(`${b.as_of}T12:00:00Z`))
+    : "اليوم";
+  const rows: AnnualExplain["rows"] = [{ label: `ما اكتسبته حتى ${when}`, value: formatDays(earnedYear), sign: "plus" }];
+  if (carried > 0) rows.push({ label: "مرحّلة من السنة الماضية", value: formatDays(carried), sign: "plus" });
+  if (b.used > 0) rows.push({ label: "مستخدمة", value: formatDays(b.used), sign: "minus" });
+  if (outside > 0) rows.push({ label: "سجّلتها الإدارة خارج التطبيق", value: formatDays(outside), sign: "minus" });
+  if (b.pending > 0) rows.push({ label: "قيد الموافقة", value: formatDays(b.pending), sign: "minus" });
+  rows.push({ label: "المتاح لك الآن", value: formatDays(b.remaining), sign: "total" });
+  const rest = b.entitled - b.earned;
+  return {
+    lead: `رصيدك السنوي ${formatDays(yearDays)} لا يُعطى دفعة واحدة، بل يُكتسب يومًا بيوم على مدار السنة (نحو ${num(yearDays / 12)} يوم كل شهر).`,
+    rows,
+    note: rest > 0 ? `الباقي (${formatDays(rest)}) يُضاف تدريجيًا حتى نهاية السنة.` : null,
+  };
+}

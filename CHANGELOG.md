@@ -1,5 +1,13 @@
 # Changelog
 
+## Requests: «كيف حُسب رصيدك؟» (2026-11-28) — branch `feature/google-colors`; not deployed
+
+Omar: tapping the annual leave number should explain, short and clear, why it shows e.g. 27 days today when none was used.
+The number (with a «كيف حُسب؟» chip) opens a bottom sheet: one sentence (the year is earned day by day, about 2.5 days a month),
+then the sum line by line — earned up to today (+), carried from last year (+), used (−), recorded outside the app (−), waiting (−) —
+the total that matches the card, and how much is still to come this year. Same sum as the server (phase 18a); an older server
+without `earned` shows the card as before. New pure helper `annualExplain` with 4 tests (452 in all).
+
 ## Employee app: Google colours, name above the clock, no «طلب جديد» on Home (2026-11-28) — branch `feature/google-colors`; not deployed
 
 Omar's request: Google's colours in light and dark, each colour in its right place, calm on the eye; swap the name and the clock;
