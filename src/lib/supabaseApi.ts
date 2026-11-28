@@ -13,6 +13,7 @@ import { getDeviceKey } from "./deviceKey";
 import { SIGNOUT_REASON_KEY } from "./signoutReason";
 import { AppError, toKnownCode } from "./errors";
 import type {
+  AttendanceEvent,
   AttendanceState,
   InboxItem,
   NewRequest,
@@ -276,6 +277,40 @@ export function createSupabaseApi(url: string, key: string): WaqtiApi {
 
     getProfileSummary() {
       return rpc<ProfileSummary>("employee_profile_summary");
+    },
+
+    async getHistory(fromIso, toIso) {
+      // A plain read of my own rows: the database policy events_read_self only ever returns the signed-in employee's punches.
+      if (!navigator.onLine) throw new AppError("network", "offline");
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new AppError("network", "timeout")), RPC_TIMEOUT_MS);
+      });
+      let result;
+      try {
+        result = await Promise.race([
+          sb.from("attendance_events")
+            .select("id, event_type, occurred_at, needs_review, authentication_method, location_status")
+            .gte("occurred_at", fromIso).lt("occurred_at", toIso)
+            .order("occurred_at", { ascending: true })
+            .limit(2000),
+          timeout,
+        ]);
+      } catch (e) {
+        throw e instanceof AppError ? e : new AppError("network", String(e));
+      } finally {
+        clearTimeout(timer);
+      }
+      if (result.error) throw fromPostgrest(result.error);
+      type Row = { id: string; event_type: AttendanceEvent["action"]; occurred_at: string; needs_review: boolean | null; authentication_method: string | null; location_status: AttendanceEvent["location_status"] | null };
+      return ((result.data ?? []) as Row[]).map((r) => ({
+        id: r.id,
+        action: r.event_type,
+        server_time: r.occurred_at,
+        location_status: r.location_status ?? "inside",
+        needs_review: !!r.needs_review,
+        by_admin: r.authentication_method === "admin",
+      }));
     },
 
     punch(input: PunchInput) {

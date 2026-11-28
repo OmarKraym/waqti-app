@@ -326,6 +326,26 @@ export function createMockApi(): WaqtiApi {
       if (!user) throw new AppError("not_authenticated");
       if (q.get("device") === "locked") throw new AppError("device_locked"); // ?device=locked: another phone
     },
+    async getHistory(fromIso, toIso) {
+      await wait(400);
+      requireNetwork();
+      if (!user) throw new AppError("not_authenticated");
+      // The punches of this session, plus (with ?history=1) an older work history: Saturday to Thursday, 8:00–16:00 with small changes.
+      const older: AttendanceEvent[] = [];
+      if (q.get("history") === "1") {
+        for (let ago = 5; ago <= 150; ago++) {
+          const d = new Date(serverNow());
+          d.setUTCDate(d.getUTCDate() - ago);
+          if (d.getUTCDay() === 5) continue; // Friday off
+          const at = (h: number, m: number) => { const x = new Date(d); x.setUTCHours(h - 2, m, 0, 0); return x.toISOString(); };
+          older.push({ id: `o${ago}i`, action: "check_in", server_time: at(8, (ago * 7) % 20), location_status: "inside", needs_review: ago % 23 === 0 });
+          if (ago % 17 !== 0) older.push({ id: `o${ago}o`, action: "check_out", server_time: at(16, (ago * 11) % 15), location_status: "inside", needs_review: false });
+        }
+      }
+      return [...events, ...older]
+        .filter((e) => e.server_time >= fromIso && e.server_time < toIso && !("queued" in e))
+        .sort((a, b) => (a.server_time < b.server_time ? -1 : 1));
+    },
     async getProfileSummary() {
       await wait(300);
       requireNetwork();

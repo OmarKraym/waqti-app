@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
  * A centred question on a dimmed screen. Esc or a tap outside closes it (onClose); the first button is focused
  * (put the safe choice first in `children`), and focus goes back to where it was when it closes.
  */
-export function Modal({ title, children, onClose, busy, sheet }: {
+export function Modal({ title, children, onClose, busy, sheet, className }: {
   title: string;
   /** Slide up from the bottom of the screen instead of sitting in the middle. */
   sheet?: boolean;
@@ -12,6 +12,8 @@ export function Modal({ title, children, onClose, busy, sheet }: {
   onClose: () => void;
   /** While something is being sent: Esc and the backdrop do nothing. */
   busy?: boolean;
+  /** A layout hook of the dialog (e.g. a tall sheet that scrolls inside). */
+  className?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,7 +32,7 @@ export function Modal({ title, children, onClose, busy, sheet }: {
   };
   return (
     <div className={`modal-backdrop${sheet ? " modal-backdrop--sheet" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={box} onKeyDown={onKey}>
+      <div className={`modal${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={box} onKeyDown={onKey}>
         <h2 id="modal-title" className="modal__title">{title}</h2>
         {children}
       </div>

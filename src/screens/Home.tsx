@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
 import { ERROR_TEXT } from "../lib/errors";
-import { failedOf, isQueuedEvent, pendingOf, withQueue } from "../lib/offlineQueue";
+import { failedOf, pendingOf, withQueue } from "../lib/offlineQueue";
 import { windowText } from "../lib/punchWindow";
 import { holidayBanner, offLabel } from "../lib/calendar";
-import { earlierDays, todayRows } from "../lib/timecard";
+import { todayRows } from "../lib/timecard";
 import { jobLine, loadSummary, saveSummary, todayShift } from "../lib/profileSummary";
 import { api } from "../lib/client";
 import type { ProfileSummary } from "../lib/types";
@@ -13,7 +13,7 @@ import { useAttendance } from "../hooks/useAttendance";
 import { Banner, Button, Icon, IconButton, Modal } from "../components";
 import { DeviceSetup } from "./DeviceSetup";
 import { ConfirmSignOut, type ProfileInfo } from "./Profile";
-import { EarlierDays } from "./home/EarlierDays";
+import { HistoryButton, HistorySheet } from "./home/History";
 import { FailedPunches } from "./home/FailedPunches";
 import { PunchButton } from "./home/PunchButton";
 import { StatusCard } from "./home/StatusCard";
@@ -36,6 +36,7 @@ export function Home({ user, onOpenProfile, onOpenNotifications, setupMissing = 
   const a = useAttendance({ user, onInfo });
   const { state, online } = a;
   const [confirmNoIn, setConfirmNoIn] = useState(false); // phase 13: confirm "check out without a check-in"
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false); // only used by the load-error screen (the profile has its own button)
   // Job title, department and today's hours come from "my data summary" (only what the company allows). The copy saved on
   // this phone shows at once; it is refreshed once per visit when online (the profile refreshes it too).
@@ -92,7 +93,6 @@ export function Home({ user, onOpenProfile, onOpenNotifications, setupMissing = 
   const canTap = !working && !a.bioBusy && !blocked && !waitingForCheckOut && (online || (allowQueue && !data.forgot_check_in));
   const tz = data.company.timezone;
   const rows = todayRows(data.recent_events, data.open_session?.started_at ?? null, nowMs, tz);
-  const days = earlierDays(data.recent_events.filter((e) => !isQueuedEvent(e)), nowMs, tz, 10);
   const initial = data.employee.full_name.trim().charAt(0) || "؟";
   const punchSub = a.bioBusy
     ? "أكّد بصمتك…"
@@ -195,7 +195,8 @@ export function Home({ user, onOpenProfile, onOpenNotifications, setupMissing = 
         )}
 
         <FailedPunches failed={failedOf(a.queue)} timeZone={tz} onDismiss={a.dismissFailed} />
-        <EarlierDays days={days} timeZone={tz} />
+        <HistoryButton onOpen={() => setHistoryOpen(true)} />
+        {historyOpen && <HistorySheet timeZone={tz} online={online} onClose={() => setHistoryOpen(false)} />}
       </main>
     </div>
   );

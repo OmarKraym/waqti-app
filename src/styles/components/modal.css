@@ -19,6 +19,8 @@
   .modal__text { color: var(--color-text-muted); line-height: 1.7; font-size: var(--font-size-sm); }
   .modal__actions { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
   .modal-backdrop.modal-backdrop--sheet { place-items: end center; padding: 0; }
+  /* A tall sheet (the attendance log): its content scrolls inside, the page behind never moves */
+  .modal.modal--tall { max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; }
   .modal-backdrop.modal-backdrop--sheet .modal {
     width: min(100%, 480px);
     border-end-start-radius: 0; border-end-end-radius: 0;

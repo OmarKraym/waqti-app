@@ -1,5 +1,6 @@
 import type { Calendar } from "./calendar";
 import type {
+  AttendanceEvent,
   AttendanceState,
   Decision,
   InboxItem,
@@ -35,6 +36,8 @@ export interface WaqtiApi {
   getCalendar(): Promise<Calendar | null>;
   /** My own data, only the parts my company allows (phase 16c). */
   getProfileSummary(): Promise<ProfileSummary>;
+  /** My own punches between two instants (the attendance log of a period I pick). Read-only; the database only gives my rows. */
+  getHistory(fromIso: string, toIso: string): Promise<AttendanceEvent[]>;
   punch(input: PunchInput): Promise<PunchResult>;
   /** Fingerprint steps (Edge Function "webauthn"): register this phone, get a ticket for one punch, or sign in. */
   webauthn(

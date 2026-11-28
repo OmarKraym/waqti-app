@@ -1,5 +1,15 @@
 # Changelog
 
+## Home: «سجل الدوام» becomes a button with a period picker (2026-11-28) — branch `feature/attendance-history`; not deployed
+
+Omar: the earlier-days log should be a button that opens a window where the employee picks two dates and sees those days; and Home
+should be less crowded. The inline log is gone from Home; one quiet row «سجل الدوام» opens a tall bottom sheet: «من» / «إلى» (opens on
+the last 30 days up to yesterday; at most 92 days; no future day), «عرض», a totals line («25 يومًا حضور · المجموع 191 س 10 د») and
+one row per day (first check-in – last check-out, time worked, «للمراجعة» / «بدون انصراف» / «أضافه المدير»).
+Data: a direct read of `attendance_events` for the signed-in employee — the existing policy `events_read_self` (employee_id = auth.uid())
+already allows exactly this, so no database change. New `lib/history.ts` (period rules, query window, totals) with 6 tests; mock API
+serves a five-month history with `?history=1`. Modal gets an optional `className` (`modal--tall` scrolls inside).
+
 ## Requests: «كيف حُسب رصيدك؟» (2026-11-28) — branch `feature/google-colors`; not deployed
 
 Omar: tapping the annual leave number should explain, short and clear, why it shows e.g. 27 days today when none was used.
