@@ -126,7 +126,7 @@ export function Home({ user, onOpenProfile, onOpenNotifications, setupMissing = 
         </span>
       </header>
 
-      <main className="container has-punch">
+      <main className="container has-punch home">
         {holidayBanner(a.calendar) && <Banner kind="success">{holidayBanner(a.calendar)}</Banner>}
         {!online && (
           <Banner kind={allowQueue ? "warning" : "error"}>

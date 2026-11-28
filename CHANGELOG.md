@@ -1,5 +1,12 @@
 # Changelog
 
+## Home: blocks spread evenly over the screen (2026-11-28) — branch `feature/attendance-history`; not deployed
+
+Omar: distribute the elements on the screen in a balance that is easy on the eye. Home's main column now fills the screen height
+and shares the free space evenly: the hero card on top, «حضور اليوم» in the middle, «سجل الدوام» above the punch button (with room
+for it). The hero and today cards get 20 px padding and 16 px inner gaps. On a short phone, or when messages show, the gaps fall
+back to 16 px and the page scrolls. Checked at 360×740, 390×844, 430×932 and after a check-in.
+
 ## Home: «سجل الدوام» becomes a button with a period picker (2026-11-28) — branch `feature/attendance-history`; not deployed
 
 Omar: the earlier-days log should be a button that opens a window where the employee picks two dates and sees those days; and Home

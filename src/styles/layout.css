@@ -53,7 +53,13 @@
   .with-tabs .container { padding-bottom: calc(var(--size-tabbar) + var(--space-8) + env(safe-area-inset-bottom)); }
   /* Room under the last block so the floating button never hides it */
   .with-tabs .container.has-punch {
-    padding-bottom: calc(var(--size-tabbar) + var(--size-float) + var(--space-8) + var(--space-6) + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--size-tabbar) + var(--size-float) + var(--space-8) + var(--space-4) + env(safe-area-inset-bottom));
+  }
+  /* Home: the blocks share the height of the screen evenly (the time on top, today in the middle, the log just above the
+     punch button). On a short phone, or with messages, the gaps fall back to 16 px and the page scrolls. */
+  .container.home {
+    display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-4);
+    min-height: calc(100dvh - var(--size-appbar) - env(safe-area-inset-top));
   }
   .section__title {
     display: flex; align-items: center; gap: var(--space-2);
