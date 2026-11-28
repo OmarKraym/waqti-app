@@ -25,9 +25,9 @@ function tone(data: AttendanceState, rows: CardRow[]): "success" | "warning" | "
 }
 
 /** One of the three cells: label over a time. A punch still on the phone is grey and dashed; the newest one flashes. */
-function Cell({ label, row, timeZone, freshId }: { label: string; row?: CardRow; timeZone: string; freshId: string | null }) {
+function Cell({ label, kind, row, timeZone, freshId }: { label: string; kind: "in" | "out"; row?: CardRow; timeZone: string; freshId: string | null }) {
   return (
-    <div className="today__cell">
+    <div className={`today__cell today__cell--${kind}`}>
       <span className="today__label">{label}</span>
       {row?.time ? (
         <span className={`today__time${row.kind === "pencil" ? " is-pencil" : ""}${row.key === freshId ? " is-fresh" : ""}`} dir="ltr">
@@ -58,8 +58,8 @@ export function Timecard({ data, rows, offsetMs, freshId }: { data: AttendanceSt
         </span>
       </header>
       <div className="today__cells">
-        <Cell label="وقت الحضور" row={firstIn} timeZone={tz} freshId={freshId} />
-        <Cell label="وقت الانصراف" row={lastOut} timeZone={tz} freshId={freshId} />
+        <Cell label="وقت الحضور" kind="in" row={firstIn} timeZone={tz} freshId={freshId} />
+        <Cell label="وقت الانصراف" kind="out" row={lastOut} timeZone={tz} freshId={freshId} />
         <div className="today__cell">
           <span className="today__label">إجمالي الساعات</span>
           <span className={`today__time${worked > 0 ? "" : " is-empty"}`} dir="ltr">{clockDuration(worked)}</span>
@@ -73,7 +73,7 @@ export function Timecard({ data, rows, offsetMs, freshId }: { data: AttendanceSt
                 <Icon name={r.action === "check_in" ? "arrive" : "leave"} />
                 {r.action === "check_in" ? "حضور" : "انصراف"}
               </span>
-              <span className="today__item-time" dir="ltr">{formatTime(r.time!, tz)}</span>
+              <span className={`today__item-time today__item-time--${r.action === "check_in" ? "in" : "out"}`} dir="ltr">{formatTime(r.time!, tz)}</span>
               {r.kind === "pencil" && <span className="note-chip"><Icon name="phone" />لم يُرسل بعد</span>}
               {r.kind === "stamped" && r.byAdmin && <span className="note-chip">أضافه المدير</span>}
               {r.kind === "stamped" && r.needsReview && (

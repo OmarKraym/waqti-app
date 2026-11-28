@@ -26,9 +26,9 @@ export function LogList({ days, timeZone }: { days: DayRow[]; timeZone: string }
             <div className="log__end">
               {/* Each time is isolated (it ends in ص / م); the range reads in Arabic order: check-in, then check-out. */}
               <span className="log__times">
-                <bdi>{d.firstIn ? formatTime(d.firstIn, timeZone) : "--:--"}</bdi>
+                <bdi className={d.firstIn ? "log__in" : undefined}>{d.firstIn ? formatTime(d.firstIn, timeZone) : "--:--"}</bdi>
                 <span className="log__dash" aria-hidden="true"> - </span>
-                <bdi>{d.lastOut ? formatTime(d.lastOut, timeZone) : "--:--"}</bdi>
+                <bdi className={d.lastOut ? "log__out" : undefined}>{d.lastOut ? formatTime(d.lastOut, timeZone) : "--:--"}</bdi>
               </span>
               <span className={`pill pill--${b.tone}`}>{b.text}</span>
             </div>

@@ -1,5 +1,11 @@
 # Changelog
 
+## Check-in times in green, check-out times in red (2026-11-28) — branch `feature/attendance-history`; not deployed
+
+Omar: colour the check-in and check-out text green and red. Today's card (وقت الحضور / وقت الانصراف), the list of today's
+punches, and every row of «سجل الدوام» show check-in times in the green text colour and check-out times in the red one
+(`--color-success-text` / `--color-danger-text`, light and dark). Empty slots and punches not sent yet stay grey.
+
 ## Home: blocks spread evenly over the screen (2026-11-28) — branch `feature/attendance-history`; not deployed
 
 Omar: distribute the elements on the screen in a balance that is easy on the eye. Home's main column now fills the screen height

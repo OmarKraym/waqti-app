@@ -43,6 +43,11 @@
     font-variant-numeric: tabular-nums; color: var(--color-text); white-space: nowrap;
   }
   .today__time.is-empty { color: var(--color-text-muted); }
+  /* Check-in in green, check-out in red (a time not sent yet stays grey and dashed) */
+  .today__cell--in .today__time:not(.is-empty, .is-pencil) { color: var(--color-success-text); }
+  .today__cell--out .today__time:not(.is-empty, .is-pencil) { color: var(--color-danger-text); }
+  .today__kind.today__kind--in, .today__item-time--in { color: var(--color-success-text); }
+  .today__kind.today__kind--out, .today__item-time--out { color: var(--color-danger-text); }
   .today__time.is-pencil {
     color: var(--color-text-muted); text-decoration: underline dashed var(--color-text-faint) 1.5px; text-underline-offset: 5px;
   }
@@ -93,6 +98,8 @@
   }
   .log__date { color: var(--color-text-muted); }
   .log__dash { color: var(--color-text-muted); }
+  .log__in { color: var(--color-success-text); }
+  .log__out { color: var(--color-danger-text); }
   .log__by-admin { font-size: var(--font-size-2xs); font-weight: 500; color: var(--color-text-muted); }
   .log__end { display: flex; align-items: center; gap: var(--space-3); flex: none; }
 
