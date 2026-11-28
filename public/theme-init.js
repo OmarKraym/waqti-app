@@ -7,7 +7,7 @@
     var shown = choice === "light" || choice === "dark" ? choice : dark ? "dark" : "light";
     if (choice === "light" || choice === "dark") document.documentElement.setAttribute("data-theme", choice);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", shown === "dark" ? "#0b1410" : "#f8fafc");
+    if (meta) meta.setAttribute("content", shown === "dark" ? "#202124" : "#f8f9fa");
   } catch (e) {
     /* storage blocked: the page follows the phone's setting */
   }

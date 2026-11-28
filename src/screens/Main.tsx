@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SessionUser } from "../lib/api";
-import { type Draft } from "../lib/requests";
-import type { RequestType } from "../lib/types";
 import { api } from "../lib/client";
 import { readPushState } from "../lib/push";
 import { ensureSubscription, geoPermission } from "../lib/permissions";
@@ -50,8 +48,6 @@ export function Main({ user }: { user: SessionUser }) {
   const online = useOnline();
   const requests = useRequests(user.id);
   const count = requests.overview?.inbox_count ?? 0;
-  // "New request" from the today screen: open the requests tab on the form, with the type already chosen.
-  const [compose, setCompose] = useState<{ n: number; type: RequestType; draft?: Draft } | null>(null);
 
   // Profile screen (opened from the logo). It gets its own history entry, so the phone's back button closes it.
   const [profile, setProfile] = useState(false);
@@ -84,10 +80,6 @@ export function Main({ user }: { user: SessionUser }) {
   const openNotifications = () => {
     if (profile) closeProfile();
     go("notifications");
-  };
-  const newRequest = (type: RequestType, draft?: Draft) => {
-    setCompose((c) => ({ n: (c?.n ?? 0) + 1, type, draft }));
-    go("requests");
   };
 
   useEffect(() => {
@@ -149,13 +141,13 @@ export function Main({ user }: { user: SessionUser }) {
       )}
       <div hidden={profile || tab !== "today"}>
         <Home
-          user={user} onNewRequest={newRequest} onOpenProfile={openProfile} onInfo={setInfo}
+          user={user} onOpenProfile={openProfile} onInfo={setInfo}
           onOpenNotifications={openNotifications} setupMissing={missing}
         />
       </div>
       {visited.has("requests") && (
         <div className="app" hidden={profile || tab !== "requests"}>
-          <Requests data={requests} online={online} compose={compose} />
+          <Requests data={requests} online={online} />
         </div>
       )}
       {visited.has("notifications") && (

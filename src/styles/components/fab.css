@@ -1,5 +1,5 @@
 /* components/fab (design 2026-11): the punch button, the main action of Home, a pill above the tab bar.
-   Check in = forest green with an emerald fingerprint; check out = red; not now = grey. Solid colours: content scrolls under it. */
+   Colours (Google): check in = green, check out = red, not now = grey; the text and icon take the fill's own on-colour. Solid colours: content scrolls under it. */
 @layer components {
   .punch {
     position: fixed; z-index: var(--z-fab);
@@ -18,14 +18,13 @@
     width: max-content; max-width: min(calc(100vw - 2 * var(--layout-gutter)), 380px);
     padding-inline: var(--space-6) var(--space-8);
   }
-  .punch.punch--in { background: var(--color-accent); box-shadow: var(--punch-in-shadow); }
+  .punch.punch--in { background: var(--color-success); box-shadow: var(--punch-in-shadow); }
   .punch.punch--out { background: var(--punch-out-bg); box-shadow: var(--punch-out-shadow); }
-  .punch.punch--in:hover:not(:disabled) { background: var(--color-accent-hover); }
+  .punch.punch--in:hover:not(:disabled) { background: var(--color-success-hover); }
   .punch.punch--out:hover:not(:disabled) { background: var(--punch-out-bg-hover); }
   .punch:disabled { background: var(--color-disabled); box-shadow: none; cursor: not-allowed; }
   .punch__icon { flex: none; display: grid; place-items: center; }
   .punch__icon .icon { width: 26px; height: 26px; }
-  .punch.punch--in:not(:disabled) .punch__icon { color: var(--color-accent-glow); }
   .punch__text { display: grid; gap: 0; min-width: 0; }
   .punch__label { font-size: var(--font-size-title-sm); font-weight: 600; line-height: 1.45; }
   .punch__sub { font-size: var(--font-size-xs); line-height: 1.4; opacity: .92; }

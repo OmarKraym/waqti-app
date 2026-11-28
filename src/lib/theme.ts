@@ -8,7 +8,7 @@ export type ResolvedTheme = "light" | "dark";
 export const THEME_KEY = "waqti-theme";
 
 /** Browser bar colour per theme. Must equal --bg in styles.css (src/lib/palette.test.ts checks it). */
-export const THEME_COLOR: Record<ResolvedTheme, string> = { light: "#f8fafc", dark: "#0b1410" };
+export const THEME_COLOR: Record<ResolvedTheme, string> = { light: "#f8f9fa", dark: "#202124" };
 
 export const THEME_CHOICES: readonly ThemeChoice[] = ["auto", "light", "dark"];
 export const THEME_LABEL: Record<ThemeChoice, string> = { auto: "تلقائي", light: "فاتح", dark: "داكن" };

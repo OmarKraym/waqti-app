@@ -9,7 +9,6 @@ import { jobLine, loadSummary, saveSummary, todayShift } from "../lib/profileSum
 import { api } from "../lib/client";
 import type { ProfileSummary } from "../lib/types";
 import { effectiveAction, isPunchLocked, lockedText } from "../lib/punchMode";
-import type { RequestType } from "../lib/types";
 import { useAttendance } from "../hooks/useAttendance";
 import { Banner, Button, Icon, IconButton, Modal } from "../components";
 import { DeviceSetup } from "./DeviceSetup";
@@ -17,16 +16,14 @@ import { ConfirmSignOut, type ProfileInfo } from "./Profile";
 import { EarlierDays } from "./home/EarlierDays";
 import { FailedPunches } from "./home/FailedPunches";
 import { PunchButton } from "./home/PunchButton";
-import { QuickRequests } from "./home/QuickRequests";
 import { StatusCard } from "./home/StatusCard";
 import { Timecard } from "./home/Timecard";
 
 const OFFLINE_PUNCHES = false;
 
 /** The today screen: the container. What it does lives in useAttendance; what it shows lives in ./home/. */
-export function Home({ user, onNewRequest, onOpenProfile, onOpenNotifications, setupMissing = false, onInfo }: {
+export function Home({ user, onOpenProfile, onOpenNotifications, setupMissing = false, onInfo }: {
   user: SessionUser;
-  onNewRequest: (type: RequestType) => void;
   /** The avatar at the top opens the profile. */
   onOpenProfile: () => void;
   /** The bell at the top opens reminders and holidays. */
@@ -198,7 +195,6 @@ export function Home({ user, onNewRequest, onOpenProfile, onOpenNotifications, s
         )}
 
         <FailedPunches failed={failedOf(a.queue)} timeZone={tz} onDismiss={a.dismissFailed} />
-        <QuickRequests online={online} onNewRequest={onNewRequest} />
         <EarlierDays days={days} timeZone={tz} />
       </main>
     </div>

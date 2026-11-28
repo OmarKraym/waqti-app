@@ -1,5 +1,19 @@
 # Changelog
 
+## Employee app: Google colours, name above the clock, no «طلب جديد» on Home (2026-11-28) — branch `feature/google-colors`; not deployed
+
+Omar's request: Google's colours in light and dark, each colour in its right place, calm on the eye; swap the name and the clock;
+remove «طلب جديد» from Home; a gentle visual hierarchy (clock and today's card first, then the log and the name).
+- **Colours (Google):** blue `#1a73e8` = action and brand (buttons, active tab, links, avatar, focus); green `#188038` = check-in,
+  present, approved; red `#d93025` = check-out, reject, errors; yellow `#f9ab00` = waiting, warnings, counts; greys `#202124`…`#f8f9fa`
+  for text and surfaces. Dark follows Google's dark theme: page `#202124`, cards `#303134`, pastel fills (`#8ab4f8`, `#81c995`,
+  `#f28b82`, `#fdd663`) with dark text, so nothing glows. The clock is plain text colour. All contrast pairs pass `palette.test.ts`.
+- **Home:** the name and job are now on top of the hero card (15 px), the date, clock (32 px) and today's shift under them; today's
+  card title 17 px and its times 18 px; the log is a step quieter (weekday 14 px). Quick request tiles removed from Home (new requests
+  stay on the Requests tab); `QuickRequests.tsx` and its styles deleted, and the unused new-request path from Home to Requests.
+- The punch button is green to check in and red to check out (was dark green / red).
+- Checks: typecheck, 448 tests, stylelint, build; screenshots of every screen, light and dark (mock API).
+
 ## Fix: «إضافة موظف» in the admin panel (2026-11-26) — branch `fix/create-employee-trigger`; migration NOT applied yet
 
 Symptom: adding an employee from the panel always failed (create-employee answered 500 `create_failed`; the function log said
